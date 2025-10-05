@@ -877,7 +877,7 @@ export class AppComponent implements AfterViewInit, OnInit {
   }
 
   private refreshQueueEntries() {
-    const entries = Array.from(this.downloads.queue.entries());
+    const entries = Array.from(this.downloads.queue.entries()).filter(([, download]) => !!download);
     let filtered = entries;
     if (this.queueFilter === 'active') {
       filtered = entries.filter(([, download]) => download.status === 'downloading' || download.status === 'preparing');
@@ -888,7 +888,7 @@ export class AppComponent implements AfterViewInit, OnInit {
   }
 
   private refreshCompletedEntries() {
-    const entries = Array.from(this.downloads.done.entries());
+    const entries = Array.from(this.downloads.done.entries()).filter(([, download]) => !!download);
     let filtered = entries;
     if (this.completedFilter === 'finished') {
       filtered = entries.filter(([, download]) => download.status === 'finished');

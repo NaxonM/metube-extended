@@ -64,6 +64,43 @@ export class DownloadsService {
 
   configuration = {};
   customDirs = {};
+  private readonly fallbackPrefix = 'dl';
+  private counter = 0;
+
+  private normalizeDownload(download: Download | null | undefined, key?: string): Download | undefined {
+    if (!download) {
+      return undefined;
+    }
+
+    if (typeof download.timestamp !== 'number') {
+      download.timestamp = Date.now();
+    }
+
+    if (!download.history_key) {
+      if (key) {
+        download.history_key = key;
+      } else if (download.url) {
+        download.history_key = `${download.url}::${download.timestamp}`;
+      } else {
+        this.counter += 1;
+        download.history_key = `${this.fallbackPrefix}-${this.counter}-${download.timestamp}`;
+      }
+    }
+
+    if (!download.title || download.title.trim().length === 0) {
+      if (download.filename && download.filename.trim().length > 0) {
+        download.title = download.filename.trim();
+      } else if (download.url && download.url.trim().length > 0) {
+        download.title = download.url.trim();
+      } else if (download.id && download.id.trim().length > 0) {
+        download.title = download.id.trim();
+      } else {
+        download.title = 'Unknown download';
+      }
+    }
+
+    return download;
+  }
 
   constructor(private http: HttpClient, private socket: MeTubeSocket) {
     socket.fromEvent('all').subscribe((strdata: string) => {
@@ -71,25 +108,30 @@ export class DownloadsService {
       const data: [Array<[string, Download]>, Array<[string, Download]>] = JSON.parse(strdata);
       this.queue.clear();
       data[0].forEach(([key, download]) => {
-        this.queue.set(key, download);
+        const normalized = this.normalizeDownload(download, key);
+        if (!normalized) {
+          return;
+        }
+        this.queue.set(normalized.url ?? key, normalized);
       });
       this.done.clear();
       data[1].forEach(([key, download]) => {
-        const mapKey = download.history_key || key;
-        if (!download.history_key) {
-          download.history_key = mapKey;
+        const normalized = this.normalizeDownload(download, key);
+        if (!normalized) {
+          return;
         }
-        this.done.set(mapKey, download);
+        this.done.set(normalized.history_key, normalized);
       });
       this.queueChanged.next(null);
       this.doneChanged.next(null);
     });
     socket.fromEvent('added').subscribe((strdata: string) => {
       const data: Download = JSON.parse(strdata);
-      if (!data.history_key) {
-        data.history_key = `${data.url}::${data.timestamp ?? Date.now()}`;
+      const normalized = this.normalizeDownload(data);
+      if (!normalized) {
+        return;
       }
-      this.queue.set(data.url, data);
+      this.queue.set(normalized.url ?? normalized.history_key, normalized);
       this.queueChanged.next(null);
     });
     socket.fromEvent('updated').subscribe((strdata: string) => {
@@ -100,28 +142,33 @@ export class DownloadsService {
       }
       data.checked = dl?.checked;
       data.deleting = dl?.deleting;
-      this.queue.set(data.url, data);
+      const normalized = this.normalizeDownload(data);
+      if (!normalized) {
+        return;
+      }
+      this.queue.set(normalized.url ?? normalized.history_key, normalized);
       this.queueChanged.next(null);
       this.updated.next(null);
     });
     socket.fromEvent('completed').subscribe((strdata: string) => {
       const data: Download = JSON.parse(strdata);
-      const key = data.history_key || `${data.url}::${data.timestamp ?? Date.now()}`;
-      if (!data.history_key) {
-        data.history_key = key;
+      const normalized = this.normalizeDownload(data);
+      if (!normalized) {
+        return;
       }
-      this.queue.delete(data.url);
+      const queueKey = normalized.url ?? normalized.history_key;
+      this.queue.delete(queueKey);
 
-      const existing = this.done.get(key) || this.done.get(data.url);
+      const existing = this.done.get(normalized.history_key) || this.done.get(queueKey);
       if (existing) {
-        data.checked = existing.checked;
-        data.deleting = existing.deleting;
-        if (key !== data.url) {
-          this.done.delete(data.url);
+        normalized.checked = existing.checked;
+        normalized.deleting = existing.deleting;
+        if (normalized.history_key !== queueKey) {
+          this.done.delete(queueKey);
         }
       }
 
-      this.done.set(key, data);
+      this.done.set(normalized.history_key, normalized);
       this.queueChanged.next(null);
       this.doneChanged.next(null);
     });
@@ -150,29 +197,34 @@ export class DownloadsService {
     });
     socket.fromEvent('renamed').subscribe((strdata: string) => {
       const data: Download = JSON.parse(strdata);
-      const key = data.history_key || data.url;
-      let existing: Download | undefined = this.done.get(key);
-
-      if (!existing && data.history_key && this.done.has(data.url)) {
-        existing = this.done.get(data.url);
-        this.done.delete(data.url);
-      }
-
-      if (!existing) {
+      const normalized = this.normalizeDownload(data);
+      if (!normalized) {
         return;
       }
 
-      existing = {
+      const key = normalized.history_key || normalized.url;
+      let existing: Download | undefined = this.done.get(key);
+
+      const urlKey = normalized.url ?? normalized.history_key;
+
+      if (!existing && normalized.history_key && this.done.has(urlKey)) {
+        existing = this.done.get(urlKey);
+        this.done.delete(urlKey);
+      }
+
+      if (!existing) {
+        this.done.set(key, normalized);
+        this.doneChanged.next(null);
+        return;
+      }
+
+      const merged = {
         ...existing,
-        filename: data.filename ?? data.title ?? existing.filename,
-        title: data.title ?? existing.title,
-        msg: data.msg ?? existing.msg,
-        error: data.error ?? existing.error,
-        size: data.size ?? existing.size,
-        history_key: data.history_key ?? existing.history_key
+        ...normalized,
+        history_key: normalized.history_key ?? existing.history_key
       };
 
-      this.done.set(key, existing);
+      this.done.set(key, merged);
       this.doneChanged.next(null);
     });
     socket.fromEvent('configuration').subscribe((strdata: string) => {
