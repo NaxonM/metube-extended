@@ -239,10 +239,51 @@
                   </div>
                 </div>
               </div>
-              <div class="row" *ngIf="isAdmin">
-                <div class="col-12">
-                  <hr class="my-3">
-                  <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="row" *ngIf="isAdmin">
+            <div class="col-12 col-lg-6">
+              <hr class="my-3">
+              <div class="card shadow-sm mb-4">
+                <div class="card-header d-flex align-items-center gap-2">
+                  <fa-icon [icon]="faTachometerAlt" class="text-primary"></fa-icon>
+                  <span class="fw-semibold">Proxy Download Limits</span>
+                </div>
+                <div class="card-body">
+                  <p class="small text-muted">Configure the maximum size allowed for direct proxy downloads. These settings apply to all users.</p>
+
+                  <div *ngIf="proxySettingsLoading" class="d-flex align-items-center gap-2 py-2">
+                    <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+                    <span>Loading settings…</span>
+                  </div>
+
+                  <div *ngIf="!proxySettingsLoading">
+                    <div class="form-check form-switch mb-3">
+                      <input class="form-check-input" type="checkbox" id="proxyLimitToggle" [checked]="proxyLimitEnabled" (change)="onProxyLimitToggle($event.target.checked)" [disabled]="proxySettingsSaving || proxySettingsLoading">
+                      <label class="form-check-label" for="proxyLimitToggle">Enforce download size limit</label>
+                    </div>
+
+                    <div class="mb-3">
+                      <label class="form-label" for="proxyLimitMb">Maximum size (MB)</label>
+                      <input id="proxyLimitMb" type="number" class="form-control" min="0" [value]="proxyLimitMb" (input)="onProxyLimitMbChange($event.target.value)" (change)="onProxyLimitMbChange($event.target.value)" (blur)="onProxyLimitMbChange($event.target.value)" [disabled]="proxySettingsSaving || proxySettingsLoading || !proxyLimitEnabled">
+                      <small class="text-muted">Set to 0 for unlimited downloads.</small>
+                    </div>
+
+                    <div *ngIf="proxySettingsError" class="alert alert-danger py-2" role="alert">
+                      {{ proxySettingsError }}
+                    </div>
+
+                    <div class="d-flex justify-content-end">
+                      <button type="button" class="btn btn-primary" (click)="saveProxySettings()" [disabled]="proxySettingsSaving || proxySettingsLoading || !proxySettingsDirty">
+                        <span *ngIf="proxySettingsSaving" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Save changes
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <div class="d-flex justify-content-between align-items-center mb-2">
                     <div class="d-flex align-items-center gap-2">
                       <fa-icon [icon]="faUserShield" class="text-info"></fa-icon>
                       <h5 class="mb-0">User Management</h5>

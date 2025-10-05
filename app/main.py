@@ -714,6 +714,54 @@ async def admin_delete_user(request):
     user_store.delete_user(user_id)
     return web.json_response({'status': 'deleted'})
 
+
+@routes.get(config.URL_PREFIX + 'admin/proxy-settings')
+async def admin_get_proxy_settings(request):
+    session = await get_session(request)
+    ensure_admin(session)
+    data = await proxy_settings.get()
+    return web.json_response({
+        'limit_enabled': bool(data.get('limit_enabled', False)),
+        'limit_mb': int(data.get('limit_mb', 0))
+    })
+
+
+@routes.post(config.URL_PREFIX + 'admin/proxy-settings')
+async def admin_set_proxy_settings(request):
+    session = await get_session(request)
+    ensure_admin(session)
+
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError:
+        raise web.HTTPBadRequest(text='Invalid JSON payload')
+
+    limit_enabled = payload.get('limit_enabled')
+    limit_mb = payload.get('limit_mb')
+
+    updates = {}
+    if limit_enabled is not None:
+        if not isinstance(limit_enabled, bool):
+            raise web.HTTPBadRequest(text='limit_enabled must be a boolean')
+        updates['limit_enabled'] = limit_enabled
+
+    if limit_mb is not None:
+        try:
+            limit_mb_int = max(int(limit_mb), 0)
+        except (TypeError, ValueError):
+            raise web.HTTPBadRequest(text='limit_mb must be a non-negative integer')
+        updates['limit_mb'] = limit_mb_int
+
+    if updates:
+        await proxy_settings.update(**updates)
+
+    data = await proxy_settings.get()
+    return web.json_response({
+        'limit_enabled': bool(data.get('limit_enabled', False)),
+        'limit_mb': int(data.get('limit_mb', 0))
+    })
+
+
 @routes.get(config.URL_PREFIX + 'history')
 async def history(request):
     _session, _, queue = await get_user_context(request)

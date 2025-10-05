@@ -5,7 +5,7 @@ import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAl
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { CookieService } from 'ngx-cookie-service';
 
-import { Download, DownloadsService, Status, CurrentUser, ManagedUser, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse } from './downloads.service';
+import { Download, DownloadsService, Status, CurrentUser, ManagedUser, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, ProxySettings } from './downloads.service';
 import { MasterCheckboxComponent } from './master-checkbox.component';
 import { Formats, Format, Quality } from './formats';
 import { Theme, Themes } from './theme';
@@ -53,6 +53,14 @@ export class AppComponent implements AfterViewInit, OnInit {
   adminUsers: ManagedUser[] = [];
   adminLoading = false;
   adminError = '';
+
+  proxySettingsLoading = false;
+  proxySettingsSaving = false;
+  proxySettingsError = '';
+  proxyLimitEnabled = false;
+  proxyLimitMb = 0;
+  proxySettingsDirty = false;
+  private proxySettingsSnapshot: ProxySettings | null = null;
 
   streamModalOpen = false;
   streamSource: string | null = null;
@@ -655,8 +663,10 @@ export class AppComponent implements AfterViewInit, OnInit {
       this.isAdmin = !!user && user.role === 'admin';
       if (this.isAdmin) {
         this.refreshUsers();
+        this.refreshProxySettings();
       } else {
         this.adminUsers = [];
+        this.resetProxySettingsState();
       }
     });
   }
@@ -670,6 +680,101 @@ export class AppComponent implements AfterViewInit, OnInit {
       this.adminUsers = (response?.users ?? []).slice().sort((a, b) => a.username.localeCompare(b.username));
       this.adminLoading = false;
     });
+  }
+
+  refreshProxySettings(): void {
+    if (!this.isAdmin) {
+      return;
+    }
+    this.proxySettingsLoading = true;
+    this.proxySettingsError = '';
+    this.downloads.getProxySettings().subscribe(result => {
+      this.proxySettingsLoading = false;
+      if ((result as any)?.status === 'error') {
+        this.proxySettingsError = (result as any).msg || 'Unable to load proxy settings.';
+        return;
+      }
+      const settings = result as ProxySettings;
+      this.proxyLimitEnabled = !!settings.limit_enabled;
+      this.proxyLimitMb = this.normalizeProxyLimitMb(settings.limit_mb);
+      this.proxySettingsSnapshot = {
+        limit_enabled: this.proxyLimitEnabled,
+        limit_mb: this.proxyLimitMb
+      };
+      this.proxySettingsDirty = false;
+    }, () => {
+      this.proxySettingsLoading = false;
+      this.proxySettingsError = 'Unable to load proxy settings.';
+    });
+  }
+
+  saveProxySettings(): void {
+    if (!this.isAdmin || this.proxySettingsSaving || !this.proxySettingsDirty) {
+      return;
+    }
+    this.proxySettingsSaving = true;
+    this.proxySettingsError = '';
+    const payload: Partial<ProxySettings> = {
+      limit_enabled: this.proxyLimitEnabled,
+      limit_mb: this.normalizeProxyLimitMb(this.proxyLimitMb)
+    };
+    this.downloads.updateProxySettings(payload).subscribe(result => {
+      this.proxySettingsSaving = false;
+      if ((result as any)?.status === 'error') {
+        this.proxySettingsError = (result as any).msg || 'Unable to save proxy settings.';
+        return;
+      }
+      const settings = result as ProxySettings;
+      this.proxyLimitEnabled = !!settings.limit_enabled;
+      this.proxyLimitMb = this.normalizeProxyLimitMb(settings.limit_mb);
+      this.proxySettingsSnapshot = {
+        limit_enabled: this.proxyLimitEnabled,
+        limit_mb: this.proxyLimitMb
+      };
+      this.proxySettingsDirty = false;
+    }, () => {
+      this.proxySettingsSaving = false;
+      this.proxySettingsError = 'Unable to save proxy settings.';
+    });
+  }
+
+  onProxyLimitToggle(enabled: boolean): void {
+    this.proxyLimitEnabled = enabled;
+    this.updateProxyDirtyState();
+  }
+
+  onProxyLimitMbChange(value: any): void {
+    this.proxyLimitMb = this.normalizeProxyLimitMb(value);
+    this.updateProxyDirtyState();
+  }
+
+  private updateProxyDirtyState(): void {
+    if (!this.proxySettingsSnapshot) {
+      this.proxySettingsDirty = true;
+      return;
+    }
+    this.proxySettingsDirty = (
+      this.proxyLimitEnabled !== this.proxySettingsSnapshot.limit_enabled ||
+      this.normalizeProxyLimitMb(this.proxyLimitMb) !== this.proxySettingsSnapshot.limit_mb
+    );
+  }
+
+  private resetProxySettingsState(): void {
+    this.proxySettingsLoading = false;
+    this.proxySettingsSaving = false;
+    this.proxySettingsError = '';
+    this.proxyLimitEnabled = false;
+    this.proxyLimitMb = 0;
+    this.proxySettingsDirty = false;
+    this.proxySettingsSnapshot = null;
+  }
+
+  private normalizeProxyLimitMb(value: any): number {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric < 0) {
+      return 0;
+    }
+    return Math.floor(numeric);
   }
 
   promptCreateUser(): void {

@@ -44,6 +44,11 @@ export interface ProxyAddResponse extends Status {
   id?: string;
 }
 
+export interface ProxySettings {
+  limit_enabled: boolean;
+  limit_mb: number;
+}
+
 export interface Download {
   id: string;
   title: string;
@@ -341,6 +346,18 @@ export class DownloadsService {
   public deleteUser(userId: string) {
     return this.http.delete('admin/users/' + userId).pipe(
       catchError(this.handleHTTPError)
+    );
+  }
+
+  public getProxySettings() {
+    return this.http.get<ProxySettings>('admin/proxy-settings').pipe(
+      catchError(() => of({limit_enabled: false, limit_mb: 0}))
+    );
+  }
+
+  public updateProxySettings(settings: Partial<ProxySettings>) {
+    return this.http.post<ProxySettings>('admin/proxy-settings', settings).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<ProxySettings & Status>(error))
     );
   }
 
