@@ -34,10 +34,11 @@ class DownloadQueueNotifier:
         raise NotImplementedError
 
 class DownloadInfo:
-    def __init__(self, id, title, url, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookiefile=None, user_id=None):
+    def __init__(self, id, title, url, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookiefile=None, user_id=None, original_url=None, provider='ytdlp'):
         self.id = id if len(custom_name_prefix) == 0 else f'{custom_name_prefix}.{id}'
         self.title = title if len(custom_name_prefix) == 0 else f'{custom_name_prefix}.{title}'
         self.url = url
+        self.original_url = original_url or url
         self.quality = quality
         self.format = format
         self.folder = folder
@@ -51,6 +52,7 @@ class DownloadInfo:
         self.playlist_item_limit = playlist_item_limit
         self.cookiefile = cookiefile
         self.user_id = user_id
+        self.provider = provider
 
 class Download:
     manager = None
@@ -420,7 +422,8 @@ class DownloadQueue:
             log.debug('Processing as a video')
             key = entry.get('webpage_url') or entry['url']
             if not self.queue.exists(key):
-                dl = DownloadInfo(entry['id'], entry.get('title') or entry['id'], key, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookie_path, self.user_id)
+                original_url = entry.get('webpage_url') or entry.get('url') or key
+                dl = DownloadInfo(entry['id'], entry.get('title') or entry['id'], key, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookie_path, self.user_id, original_url=original_url)
                 await self.__add_download(dl, auto_start, cookie_path)
             return {'status': 'ok'}
         return {'status': 'error', 'msg': f'Unsupported resource "{etype}"'}
@@ -436,7 +439,11 @@ class DownloadQueue:
         try:
             entry = await asyncio.get_running_loop().run_in_executor(None, self.__extract_info, url, playlist_strict_mode)
         except yt_dlp.utils.YoutubeDLError as exc:
-            return {'status': 'error', 'msg': str(exc)}
+            msg = str(exc)
+            lowered = msg.lower()
+            if 'unsupported url' in lowered or 'not a valid url' in lowered or 'url does not exist' in lowered:
+                return {'status': 'unsupported', 'msg': msg}
+            return {'status': 'error', 'msg': msg}
         return await self.__add_entry(entry, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already, cookie_path)
 
     async def start_pending(self, ids):

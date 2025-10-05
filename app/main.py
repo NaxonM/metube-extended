@@ -21,6 +21,7 @@ import mimetypes
 from watchfiles import DefaultFilter, Change, awatch
 
 from ytdl import DownloadQueueNotifier, DownloadQueue
+from proxy_downloads import ProxyDownloadManager, ProxySettingsStore
 from yt_dlp.version import __version__ as yt_dlp_version
 from auth import setup_auth
 from users import UserStore
@@ -65,9 +66,11 @@ class Config:
         'ADMIN_PASSWORD': '',
         'SECRET_KEY': '',
         'LOGIN_RATELIMIT': '10/minute',
+        'PROXY_DOWNLOAD_LIMIT_ENABLED': 'false',
+        'PROXY_DOWNLOAD_LIMIT_MB': '0',
     }
 
-    _BOOLEAN = ('DOWNLOAD_DIRS_INDEXABLE', 'CUSTOM_DIRS', 'CREATE_CUSTOM_DIRS', 'DELETE_FILE_ON_TRASHCAN', 'DEFAULT_OPTION_PLAYLIST_STRICT_MODE', 'HTTPS', 'ENABLE_ACCESSLOG')
+    _BOOLEAN = ('DOWNLOAD_DIRS_INDEXABLE', 'CUSTOM_DIRS', 'CREATE_CUSTOM_DIRS', 'DELETE_FILE_ON_TRASHCAN', 'DEFAULT_OPTION_PLAYLIST_STRICT_MODE', 'HTTPS', 'ENABLE_ACCESSLOG', 'PROXY_DOWNLOAD_LIMIT_ENABLED')
 
     def __init__(self):
         for k, v in self._DEFAULTS.items():
@@ -123,6 +126,17 @@ class Config:
         return (True, '')
 
 config = Config()
+
+try:
+    default_proxy_limit_mb = int(getattr(config, 'PROXY_DOWNLOAD_LIMIT_MB', 0))
+except (TypeError, ValueError):
+    default_proxy_limit_mb = 0
+
+proxy_settings = ProxySettingsStore(
+    os.path.join(config.STATE_DIR, 'proxy_settings.json'),
+    bool(getattr(config, 'PROXY_DOWNLOAD_LIMIT_ENABLED', False)),
+    max(default_proxy_limit_mb, 0)
+)
 
 user_store_path = os.path.join(config.STATE_DIR, 'users.json')
 user_store = UserStore(user_store_path)
@@ -202,10 +216,13 @@ class UserNotifier(DownloadQueueNotifier):
 
 
 class DownloadManager:
-    def __init__(self, config, sio_server: socketio.AsyncServer):
+    def __init__(self, config, sio_server: socketio.AsyncServer, proxy_settings: ProxySettingsStore):
         self.config = config
         self.sio = sio_server
         self._queues: Dict[str, DownloadQueue] = {}
+        self._proxy_queues: Dict[str, ProxyDownloadManager] = {}
+        self._notifiers: Dict[str, UserNotifier] = {}
+        self.proxy_settings = proxy_settings
         self._lock = asyncio.Lock()
 
     def _state_dir_for(self, user_id: str) -> str:
@@ -221,14 +238,34 @@ class DownloadManager:
             if user_id in self._queues:
                 return self._queues[user_id]
 
-            notifier = UserNotifier(self.sio, user_id)
+            notifier = self._notifiers.get(user_id)
+            if notifier is None:
+                notifier = UserNotifier(self.sio, user_id)
+                self._notifiers[user_id] = notifier
+
             queue = DownloadQueue(self.config, notifier, state_dir=self._state_dir_for(user_id), user_id=user_id)
             await queue.initialize()
             self._queues[user_id] = queue
+
+            proxy_queue = ProxyDownloadManager(self.config, notifier, queue, self._state_dir_for(user_id), user_id, self.proxy_settings)
+            self._proxy_queues[user_id] = proxy_queue
+
             return queue
 
+    async def get_proxy_queue(self, user_id: str) -> ProxyDownloadManager:
+        if user_id not in self._proxy_queues:
+            await self.get_queue(user_id)
+        return self._proxy_queues[user_id]
 
-download_manager = DownloadManager(config, sio)
+    async def get_combined_state(self, user_id: str):
+        queue = await self.get_queue(user_id)
+        proxy_queue = await self.get_proxy_queue(user_id)
+        primary_queue, primary_done = queue.get()
+        proxy_queue_items, proxy_done_items = proxy_queue.get()
+        return primary_queue + proxy_queue_items, primary_done + proxy_done_items
+
+
+download_manager = DownloadManager(config, sio, proxy_settings)
 
 
 async def get_user_context(request):
@@ -367,6 +404,21 @@ async def add(request):
     playlist_item_limit = int(playlist_item_limit)
 
     status = await queue.add(url, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, cookie_path=cookie_path)
+
+    if status.get('status') == 'unsupported':
+        proxy_config = await proxy_settings.get()
+        status['proxy'] = {
+            'url': url,
+            'quality': quality,
+            'format': format,
+            'folder': folder or '',
+            'custom_name_prefix': custom_name_prefix or '',
+            'playlist_strict_mode': playlist_strict_mode,
+            'playlist_item_limit': playlist_item_limit,
+            'auto_start': auto_start,
+            'size_limit_mb': proxy_config.get('limit_mb', 0),
+            'limit_enabled': proxy_config.get('limit_enabled', False)
+        }
     return web.Response(text=serializer.encode(status))
 
 @routes.post(config.URL_PREFIX + 'delete')
@@ -377,8 +429,26 @@ async def delete(request):
     if not ids or where not in ['queue', 'done']:
         log.error("Bad request: missing 'ids' or incorrect 'where' value")
         raise web.HTTPBadRequest()
-    _session, _, queue = await get_user_context(request)
-    status = await (queue.cancel(ids) if where == 'queue' else queue.clear(ids))
+    _session, user_id, queue = await get_user_context(request)
+    proxy_queue = await download_manager.get_proxy_queue(user_id)
+
+    if where == 'queue':
+        primary = await queue.cancel(ids)
+        secondary = await proxy_queue.cancel(ids)
+        status = primary if primary.get('status') == 'error' else secondary if secondary.get('status') == 'error' else {'status': 'ok'}
+    else:
+        primary = await queue.clear(ids)
+        secondary = await proxy_queue.clear(ids)
+        deleted = (primary.get('deleted') or []) + (secondary.get('deleted') or [])
+        missing = (primary.get('missing') or []) + (secondary.get('missing') or [])
+        status = {'status': 'ok', 'deleted': deleted, 'missing': missing}
+        errors = {}
+        if primary.get('status') == 'error':
+            errors.update(primary.get('errors') or {})
+        if secondary.get('status') == 'error':
+            errors.update(secondary.get('errors') or {})
+        if errors:
+            status.update({'status': 'error', 'errors': errors, 'msg': 'Some files could not be removed from disk.'})
     log.info(f"Download delete request processed for ids: {ids}, where: {where}")
     return web.Response(text=serializer.encode(status))
 
@@ -387,8 +457,11 @@ async def start(request):
     post = await request.json()
     ids = post.get('ids')
     log.info(f"Received request to start pending downloads for ids: {ids}")
-    _session, _, queue = await get_user_context(request)
-    status = await queue.start_pending(ids)
+    _session, user_id, queue = await get_user_context(request)
+    proxy_queue = await download_manager.get_proxy_queue(user_id)
+    primary = await queue.start_pending(ids)
+    secondary = await proxy_queue.start_jobs(ids)
+    status = primary if primary.get('status') == 'error' else secondary
     return web.Response(text=serializer.encode(status))
 
 @routes.post(config.URL_PREFIX + 'rename')
@@ -399,8 +472,11 @@ async def rename(request):
     if not id or new_name is None:
         log.error("Bad request: missing 'id' or 'new_name'")
         raise web.HTTPBadRequest()
-    _session, _, queue = await get_user_context(request)
+    _session, user_id, queue = await get_user_context(request)
     status = await queue.rename(id, new_name)
+    if status.get('status') == 'error' and 'Download not found' in (status.get('msg') or ''):
+        proxy_queue = await download_manager.get_proxy_queue(user_id)
+        status = await proxy_queue.rename(id, new_name)
     log.info(f"Rename request processed for id: {id}")
     return web.Response(text=serializer.encode(status))
 
@@ -601,26 +677,35 @@ async def history(request):
 
 @routes.get(config.URL_PREFIX + 'stream')
 async def stream_download(request):
-    _session, _, queue = await get_user_context(request)
+    _session, user_id, queue = await get_user_context(request)
+    proxy_queue = await download_manager.get_proxy_queue(user_id)
     download_id = request.query.get('id')
     if not download_id:
         raise web.HTTPBadRequest(text='Missing id parameter')
 
-    if not queue.done.exists(download_id):
+    download = queue.done.get(download_id) if queue.done.exists(download_id) else None
+    proxy_job = proxy_queue.get_done(download_id)
+
+    if download is None and proxy_job is None:
         raise web.HTTPNotFound(text='Download not found')
 
-    download = queue.done.get(download_id)
-    info = download.info
-
-    if not info.filename:
-        raise web.HTTPNotFound(text='File not available for streaming')
-
-    directory = queue._resolve_download_directory(info)
-    if not directory:
-        raise web.HTTPNotFound(text='Download directory unavailable')
-
-    file_path = os.path.abspath(os.path.normpath(os.path.join(directory, info.filename)))
-    base_directory = os.path.abspath(directory)
+    if download is not None:
+        info = download.info
+        if not info.filename:
+            raise web.HTTPNotFound(text='File not available for streaming')
+        directory = queue._resolve_download_directory(info)
+        if not directory:
+            raise web.HTTPNotFound(text='Download directory unavailable')
+        file_path = os.path.abspath(os.path.normpath(os.path.join(directory, info.filename)))
+        base_directory = os.path.abspath(directory)
+    else:
+        info = proxy_job.info
+        file_path = proxy_job.file_path
+        if not file_path:
+            raise web.HTTPNotFound(text='File not available for streaming')
+        file_path = os.path.abspath(os.path.normpath(file_path))
+        directory = queue._resolve_download_directory(info)
+        base_directory = os.path.abspath(directory or os.path.dirname(file_path))
 
     try:
         if os.path.commonpath([file_path, base_directory]) != base_directory:
@@ -730,8 +815,8 @@ async def connect(sid, environ):
     room = f'user:{user_id}'
     await sio.enter_room(sid, room)
 
-    queue = await download_manager.get_queue(user_id)
-    await sio.emit('all', serializer.encode(queue.get()), to=sid)
+    queue_state = await download_manager.get_combined_state(user_id)
+    await sio.emit('all', serializer.encode(queue_state), to=sid)
     await sio.emit('configuration', serializer.encode(config), to=sid)
     if config.CUSTOM_DIRS:
         await sio.emit('custom_dirs', serializer.encode(get_custom_dirs()), to=sid)
