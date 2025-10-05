@@ -631,11 +631,69 @@ async def stream_download(request):
         raise web.HTTPNotFound(text='File not found')
 
     mime_type, _ = mimetypes.guess_type(file_path)
-    headers = {'Content-Disposition': f'inline; filename="{os.path.basename(file_path)}"'}
+    file_size = os.path.getsize(file_path)
+    range_header = request.headers.get('Range')
+
+    if range_header:
+        match = re.match(r'bytes=(\d*)-(\d*)$', range_header.strip())
+        if not match:
+            raise web.HTTPRequestRangeNotSatisfiable(headers={'Content-Range': f'bytes */{file_size}'})
+
+        start_str, end_str = match.groups()
+        if start_str:
+            start = int(start_str)
+            if start >= file_size:
+                raise web.HTTPRequestRangeNotSatisfiable(headers={'Content-Range': f'bytes */{file_size}'})
+        elif end_str:
+            suffix = int(end_str)
+            if suffix <= 0:
+                raise web.HTTPRequestRangeNotSatisfiable(headers={'Content-Range': f'bytes */{file_size}'})
+            start = max(file_size - suffix, 0)
+        else:
+            raise web.HTTPRequestRangeNotSatisfiable(headers={'Content-Range': f'bytes */{file_size}'})
+
+        if end_str:
+            end = min(int(end_str), file_size - 1)
+        else:
+            end = file_size - 1
+
+        if end < start:
+            raise web.HTTPRequestRangeNotSatisfiable(headers={'Content-Range': f'bytes */{file_size}'})
+
+        chunk_length = end - start + 1
+        headers = {
+            'Content-Disposition': f'inline; filename="{os.path.basename(file_path)}"',
+            'Content-Range': f'bytes {start}-{end}/{file_size}',
+            'Content-Length': str(chunk_length),
+            'Accept-Ranges': 'bytes',
+        }
+
+        response = web.StreamResponse(status=206, headers=headers)
+        response.content_type = mime_type or 'application/octet-stream'
+        await response.prepare(request)
+
+        chunk_size = 256 * 1024
+        with open(file_path, 'rb') as fh:
+            fh.seek(start)
+            remaining = chunk_length
+            while remaining > 0:
+                read_size = min(chunk_size, remaining)
+                data = await asyncio.to_thread(fh.read, read_size)
+                if not data:
+                    break
+                remaining -= len(data)
+                await response.write(data)
+
+        await response.write_eof()
+        return response
+
+    headers = {
+        'Content-Disposition': f'inline; filename="{os.path.basename(file_path)}"',
+        'Accept-Ranges': 'bytes',
+    }
 
     response = web.FileResponse(path=file_path, headers=headers)
-    if mime_type:
-        response.content_type = mime_type
+    response.content_type = mime_type or 'application/octet-stream'
     return response
 
 @sio.event
