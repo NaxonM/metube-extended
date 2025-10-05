@@ -133,9 +133,17 @@ export class AppComponent implements AfterViewInit, OnInit {
     // Subscribe to download updates
     this.downloads.queueChanged.subscribe(() => {
       this.updateMetrics();
+      if (this.queueMasterCheckbox) {
+        this.queueMasterCheckbox.selectionChanged();
+      }
+      this.queueSelectionCount = 0;
     });
     this.downloads.doneChanged.subscribe(() => {
       this.updateMetrics();
+      if (this.doneMasterCheckbox) {
+        this.doneMasterCheckbox.selectionChanged();
+      }
+      this.doneSelectionCount = 0;
     });
     // Subscribe to real-time updates
     this.downloads.updated.subscribe(() => {
@@ -160,29 +168,6 @@ export class AppComponent implements AfterViewInit, OnInit {
   }
 
   ngAfterViewInit() {
-    this.downloads.queueChanged.subscribe(() => {
-      if (this.queueMasterCheckbox) {
-        this.queueMasterCheckbox.selectionChanged();
-      }
-      this.queueSelectionCount = 0;
-    });
-    this.downloads.doneChanged.subscribe(() => {
-      if (this.doneMasterCheckbox) {
-        this.doneMasterCheckbox.selectionChanged();
-      }
-      let completed = 0;
-      let failed = 0;
-      this.downloads.done.forEach(dl => {
-        if (dl.status === 'finished') {
-          completed++;
-        } else if (dl.status === 'error') {
-          failed++;
-        }
-      });
-      this.hasCompletedDownloads = completed > 0;
-      this.hasFailedDownloads = failed > 0;
-      this.doneSelectionCount = 0;
-    });
     this.fetchVersionInfo();
   }
 
@@ -866,11 +851,13 @@ export class AppComponent implements AfterViewInit, OnInit {
     this.queuedDownloads = Array.from(this.downloads.queue.values()).filter(d => d.status === 'pending').length;
     this.completedDownloads = Array.from(this.downloads.done.values()).filter(d => d.status === 'finished').length;
     this.failedDownloads = Array.from(this.downloads.done.values()).filter(d => d.status === 'error').length;
-    
+    this.hasCompletedDownloads = this.completedDownloads > 0;
+    this.hasFailedDownloads = this.failedDownloads > 0;
+
     // Calculate total speed from downloading items
     const downloadingItems = Array.from(this.downloads.queue.values())
       .filter(d => d.status === 'downloading');
-    
+
     this.totalSpeed = downloadingItems.reduce((total, item) => total + (item.speed || 0), 0);
     this.refreshQueueEntries();
     this.refreshCompletedEntries();
