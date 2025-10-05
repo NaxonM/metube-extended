@@ -419,6 +419,8 @@ async def add(request):
             'size_limit_mb': proxy_config.get('limit_mb', 0),
             'limit_enabled': proxy_config.get('limit_enabled', False)
         }
+        if not status.get('msg'):
+            status['msg'] = 'This URL is not supported by yt-dlp. You can still download it directly through the server.'
     return web.Response(text=serializer.encode(status))
 
 @routes.post(config.URL_PREFIX + 'delete')

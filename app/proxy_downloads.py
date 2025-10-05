@@ -430,12 +430,28 @@ class ProxyDownloadManager:
 
                     filename = _guess_filename_from_headers(resp.headers, str(resp.url))
                     original_extension = os.path.splitext(urlparse(job.source_url).path)[1]
-                    if not os.path.splitext(filename)[1] and original_extension:
-                        filename = f"{filename}{original_extension}"
-                    if not os.path.splitext(filename)[1] and job.content_type:
-                        ext = mimetypes.guess_extension(job.content_type.split(';')[0])
-                        if ext:
-                            filename = f"{filename}{ext}"
+
+                    def _replace_extension(name: str, new_ext: Optional[str]) -> str:
+                        base, _ = os.path.splitext(name)
+                        return f"{base}{new_ext}" if new_ext else name
+
+                    invalid_exts = {'', '.unknown_video', '.unknown_audio', '.unknown'}
+                    current_ext = os.path.splitext(filename)[1].lower()
+
+                    if current_ext in invalid_exts and original_extension:
+                        filename = _replace_extension(filename, original_extension)
+                        current_ext = os.path.splitext(filename)[1].lower()
+
+                    if (current_ext in invalid_exts) and job.content_type:
+                        guess = mimetypes.guess_extension(job.content_type.split(';')[0])
+                        if guess:
+                            filename = _replace_extension(filename, guess)
+                            current_ext = os.path.splitext(filename)[1].lower()
+
+                    if current_ext in invalid_exts:
+                        filename = _sanitize_filename(filename)
+                        if original_extension:
+                            filename = _replace_extension(filename, original_extension)
 
                     filename, file_path = _ensure_unique_path(directory, filename)
                     job.file_path = file_path
