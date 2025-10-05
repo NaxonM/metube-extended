@@ -101,6 +101,7 @@ export class DownloadsService {
       data.checked = dl?.checked;
       data.deleting = dl?.deleting;
       this.queue.set(data.url, data);
+      this.queueChanged.next(null);
       this.updated.next(null);
     });
     socket.fromEvent('completed').subscribe((strdata: string) => {

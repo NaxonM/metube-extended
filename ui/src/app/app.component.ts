@@ -292,7 +292,7 @@ export class AppComponent implements AfterViewInit, OnInit {
   }
 
   trackDownloadEntry(index: number, entry: { key: string; value: Download }) {
-    return entry.value.history_key || entry.value.id || entry.key;
+    return entry.key;
   }
 
   addDownload(url?: string, quality?: string, format?: string, folder?: string, customNamePrefix?: string, playlistStrictMode?: boolean, playlistItemLimit?: number, autoStart?: boolean) {
@@ -884,12 +884,7 @@ export class AppComponent implements AfterViewInit, OnInit {
     } else if (this.queueFilter === 'pending') {
       filtered = entries.filter(([, download]) => download.status === 'pending');
     }
-    const deduped = new Map<string, { key: string; value: Download }>();
-    filtered.forEach(([key, value]) => {
-      const uniqueKey = value.id || key;
-      deduped.set(uniqueKey, { key, value });
-    });
-    this.filteredQueue = Array.from(deduped.values());
+    this.filteredQueue = filtered.map(([key, value]) => ({ key, value }));
   }
 
   private refreshCompletedEntries() {
@@ -902,19 +897,9 @@ export class AppComponent implements AfterViewInit, OnInit {
     }
 
     const mapped = filtered.map(([key, value]) => ({ key, value }));
-    const dedupBy = (list: Array<{ key: string; value: Download }>) => {
-      const deduped = new Map<string, { key: string; value: Download }>();
-      list.forEach(entry => {
-        const uniqueKey = entry.value.history_key || entry.key || entry.value.id;
-        deduped.set(uniqueKey, entry);
-      });
-      return Array.from(deduped.values());
-    };
-
-    const deduped = dedupBy(mapped);
 
     if (this.completedSort === 'largest') {
-      this.filteredCompleted = deduped
+      this.filteredCompleted = mapped
         .slice()
         .sort((a, b) => {
           const sizeA = a.value.size ?? -1;
@@ -934,7 +919,7 @@ export class AppComponent implements AfterViewInit, OnInit {
         }
         return 2;
       };
-      this.filteredCompleted = deduped
+      this.filteredCompleted = mapped
         .slice()
         .sort((a, b) => {
           const diff = rank(a.value) - rank(b.value);
@@ -946,7 +931,7 @@ export class AppComponent implements AfterViewInit, OnInit {
       return;
     }
 
-    this.filteredCompleted = deduped
+    this.filteredCompleted = mapped
       .slice()
       .sort((a, b) => {
         const timestampA = typeof a.value.timestamp === 'number' ? a.value.timestamp : 0;
