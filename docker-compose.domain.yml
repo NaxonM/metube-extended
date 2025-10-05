@@ -38,6 +38,7 @@ services:
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "${ACME_JSON_PATH}:/acme.json"
+      - "${CLOUDFLARE_TOKEN_PATH}:/.cf_token:ro"
     environment:
       - "CLOUDFLARE_DNS_API_TOKEN_FILE=/.cf_token"
     env_file:

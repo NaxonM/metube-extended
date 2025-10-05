@@ -193,6 +193,10 @@ EOF
         echo "$config_cf_token" > ".cf_token"
         chmod 600 ".cf_token"
         log_success "Cloudflare token saved to .cf_token with restricted permissions."
+
+        cat <<EOF >> "$ENV_FILE"
+CLOUDFLARE_TOKEN_PATH="$(pwd)/.cf_token"
+EOF
     fi
 }
 
@@ -278,6 +282,7 @@ install_system() {
         fi
         # Prepend env var for compose command
         export ACME_JSON_PATH="$PERSISTENT_DATA_DIR/acme.json"
+        export CLOUDFLARE_TOKEN_PATH="$(pwd)/.cf_token"
         log "Enabling domain setup."
     else
         compose_files="$compose_files -f docker-compose.ip.yml"
