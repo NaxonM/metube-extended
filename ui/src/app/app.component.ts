@@ -292,7 +292,7 @@ export class AppComponent implements AfterViewInit, OnInit {
   }
 
   trackDownloadEntry(index: number, entry: { key: string; value: Download }) {
-    return entry.key;
+    return entry.value.id || entry.key;
   }
 
   addDownload(url?: string, quality?: string, format?: string, folder?: string, customNamePrefix?: string, playlistStrictMode?: boolean, playlistItemLimit?: number, autoStart?: boolean) {
@@ -855,7 +855,12 @@ export class AppComponent implements AfterViewInit, OnInit {
     } else if (this.queueFilter === 'pending') {
       filtered = entries.filter(([, download]) => download.status === 'pending');
     }
-    this.filteredQueue = filtered.map(([key, value]) => ({ key, value }));
+    const deduped = new Map<string, { key: string; value: Download }>();
+    filtered.forEach(([key, value]) => {
+      const uniqueKey = value.id || key;
+      deduped.set(uniqueKey, { key, value });
+    });
+    this.filteredQueue = Array.from(deduped.values());
   }
 
   private refreshCompletedEntries() {
@@ -868,9 +873,17 @@ export class AppComponent implements AfterViewInit, OnInit {
     }
 
     const mapped = filtered.map(([key, value]) => ({ key, value }));
+    const dedupBy = (list: Array<{ key: string; value: Download }>) => {
+      const deduped = new Map<string, { key: string; value: Download }>();
+      list.forEach(entry => {
+        const uniqueKey = entry.value.id || entry.key;
+        deduped.set(uniqueKey, entry);
+      });
+      return Array.from(deduped.values());
+    };
 
     if (this.completedSort === 'largest') {
-      this.filteredCompleted = mapped
+      this.filteredCompleted = dedupBy(mapped)
         .slice()
         .sort((a, b) => {
           const sizeA = a.value.size ?? -1;
@@ -890,7 +903,7 @@ export class AppComponent implements AfterViewInit, OnInit {
         }
         return 2;
       };
-      this.filteredCompleted = mapped
+      this.filteredCompleted = dedupBy(mapped)
         .slice()
         .sort((a, b) => {
           const diff = rank(a.value) - rank(b.value);
@@ -902,6 +915,6 @@ export class AppComponent implements AfterViewInit, OnInit {
       return;
     }
 
-    this.filteredCompleted = mapped;
+    this.filteredCompleted = dedupBy(mapped);
   }
 }
