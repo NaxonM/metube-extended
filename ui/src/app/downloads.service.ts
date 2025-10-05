@@ -82,8 +82,8 @@ export class DownloadsService {
     socket.fromEvent('updated').subscribe((strdata: string) => {
       let data: Download = JSON.parse(strdata);
       let dl: Download = this.queue.get(data.url);
-      data.checked = dl.checked;
-      data.deleting = dl.deleting;
+      data.checked = dl?.checked;
+      data.deleting = dl?.deleting;
       this.queue.set(data.url, data);
       this.updated.next(null);
     });

@@ -477,9 +477,10 @@ class DownloadQueue:
                 continue
 
             dl = self.done.get(id)
-            filename = dl.info.filename or dl.info.title
+            info_filename = getattr(dl.info, 'filename', None)
+            filename = info_filename or getattr(dl.info, 'title', None) or id
             directory = self._resolve_download_directory(dl.info)
-            file_path = os.path.join(directory, dl.info.filename) if (directory and dl.info.filename) else None
+            file_path = os.path.join(directory, info_filename) if (directory and info_filename) else None
 
             if file_path and os.path.exists(file_path):
                 try:
