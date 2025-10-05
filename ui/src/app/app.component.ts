@@ -10,7 +10,6 @@ import { MasterCheckboxComponent } from './master-checkbox.component';
 import { Formats, Format, Quality } from './formats';
 import { Theme, Themes } from './theme';
 import {KeyValue} from "@angular/common";
-import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 
 @Component({
     selector: 'app-root',
@@ -56,7 +55,7 @@ export class AppComponent implements AfterViewInit, OnInit {
   adminError = '';
 
   streamModalOpen = false;
-  streamSource: SafeResourceUrl | null = null;
+  streamSource: string | null = null;
   streamMimeType = '';
   streamTitle = '';
   streamType: 'audio' | 'video' = 'video';
@@ -105,7 +104,7 @@ export class AppComponent implements AfterViewInit, OnInit {
   faRightFromBracket = faRightFromBracket;
   faPlay = faPlay;
 
-  constructor(public downloads: DownloadsService, private cookieService: CookieService, private http: HttpClient, private sanitizer: DomSanitizer) {
+  constructor(public downloads: DownloadsService, private cookieService: CookieService, private http: HttpClient) {
     this.format = cookieService.get('metube_format') || 'any';
     // Needs to be set or qualities won't automatically be set
     this.setQualities()
@@ -328,8 +327,7 @@ export class AppComponent implements AfterViewInit, OnInit {
     this.streamTitle = download.title || download.filename;
     this.streamMimeType = mimeType;
     this.streamType = this.getStreamType(mimeType, download);
-    const streamUrl = this.buildStreamLink(key);
-    this.streamSource = this.sanitizer.bypassSecurityTrustResourceUrl(streamUrl);
+    this.streamSource = this.buildStreamLink(key);
     this.streamModalOpen = true;
 
     setTimeout(() => {

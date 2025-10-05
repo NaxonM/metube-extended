@@ -384,12 +384,10 @@
         </div>
         <div class="modal-body">
           <div *ngIf="streamSource; else noStreamAvailable">
-            <video *ngIf="streamType === 'video'" #streamVideo controls class="w-100" preload="metadata">
-              <source [src]="streamSource" [attr.type]="streamMimeType || null">
+            <video *ngIf="streamType === 'video'" #streamVideo controls class="w-100" preload="metadata" playsinline [src]="streamSource">
               Your browser does not support the video tag.
             </video>
-            <audio *ngIf="streamType === 'audio'" #streamAudio controls class="w-100" preload="metadata">
-              <source [src]="streamSource" [attr.type]="streamMimeType || null">
+            <audio *ngIf="streamType === 'audio'" #streamAudio controls class="w-100" preload="metadata" [src]="streamSource">
               Your browser does not support the audio element.
             </audio>
           </div>
