@@ -398,6 +398,13 @@
   flex-direction: column
   gap: 1rem
 
+.admin-card .card-header
+  gap: .75rem
+  flex-wrap: wrap
+
+.admin-card .card-header > button
+  flex-shrink: 0
+
 .admin-row
   border: 1px solid var(--bs-border-color)
   border-radius: .75rem
@@ -514,3 +521,10 @@
   .bulk-toolbar
     flex-direction: column
     align-items: flex-start
+
+@media (min-width: 768px)
+  .admin-card .card-header
+    flex-wrap: nowrap
+
+  .admin-card .card-header > button
+    margin-left: auto
