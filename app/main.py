@@ -17,6 +17,7 @@ import json
 import pathlib
 import re
 import uuid
+import mimetypes
 from watchfiles import DefaultFilter, Change, awatch
 
 from ytdl import DownloadQueueNotifier, DownloadQueue
@@ -44,7 +45,7 @@ class Config:
         'OUTPUT_TEMPLATE': '%(title)s.%(ext)s',
         'OUTPUT_TEMPLATE_CHAPTER': '%(title)s - %(section_number)s %(section_title)s.%(ext)s',
         'OUTPUT_TEMPLATE_PLAYLIST': '%(playlist_title)s/%(title)s.%(ext)s',
-        'DEFAULT_OPTION_PLAYLIST_STRICT_MODE' : 'false',
+        'DEFAULT_OPTION_PLAYLIST_STRICT_MODE' : 'true',
         'DEFAULT_OPTION_PLAYLIST_ITEM_LIMIT' : '0',
         'YTDL_OPTIONS': '{}',
         'YTDL_OPTIONS_FILE': '',
@@ -595,6 +596,48 @@ async def history(request):
 
     log.info("Sending download history")
     return web.Response(text=serializer.encode(history))
+
+
+@routes.get(config.URL_PREFIX + 'stream')
+async def stream_download(request):
+    _session, _, queue = await get_user_context(request)
+    download_id = request.query.get('id')
+    if not download_id:
+        raise web.HTTPBadRequest(text='Missing id parameter')
+
+    if not queue.done.exists(download_id):
+        raise web.HTTPNotFound(text='Download not found')
+
+    download = queue.done.get(download_id)
+    info = download.info
+
+    if not info.filename:
+        raise web.HTTPNotFound(text='File not available for streaming')
+
+    directory = queue._resolve_download_directory(info)
+    if not directory:
+        raise web.HTTPNotFound(text='Download directory unavailable')
+
+    file_path = os.path.abspath(os.path.normpath(os.path.join(directory, info.filename)))
+    base_directory = os.path.abspath(directory)
+
+    try:
+        if os.path.commonpath([file_path, base_directory]) != base_directory:
+            raise web.HTTPForbidden(text='Invalid file path')
+    except ValueError:
+        raise web.HTTPForbidden(text='Invalid file path')
+
+    if not os.path.isfile(file_path):
+        raise web.HTTPNotFound(text='File not found')
+
+    mime_type, _ = mimetypes.guess_type(file_path)
+    headers = {'Content-Disposition': f'inline; filename="{os.path.basename(file_path)}"'}
+
+    response_kwargs = {'headers': headers}
+    if mime_type:
+        response_kwargs['content_type'] = mime_type
+
+    return web.FileResponse(path=file_path, **response_kwargs)
 
 @sio.event
 async def connect(sid, environ):

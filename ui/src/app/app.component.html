@@ -161,25 +161,6 @@
                 </div>
                 <div class="col-md-6">
                   <div class="input-group">
-                    <span class="input-group-text">Download Folder</span>
-                    <ng-select [items]="customDirs$ | async" 
-                              placeholder="Default" 
-                              [addTag]="allowCustomDir.bind(this)" 
-                              addTagText="Create directory" 
-                              bindLabel="folder" 
-                              [(ngModel)]="folder" 
-                              [disabled]="addInProgress || downloads.loading"
-                              [virtualScroll]="true"
-                              [clearable]="true"
-                              [loading]="downloads.loading"
-                              [searchable]="true"
-                              [closeOnSelect]="true"
-                              ngbTooltip="Choose where to save downloads. Type to create a new folder.">
-                    </ng-select>
-                  </div>
-                </div>
-                <div class="col-md-6">
-                  <div class="input-group">
                     <span class="input-group-text">Custom Name Prefix</span>
                     <input type="text" 
                            class="form-control" 
@@ -392,6 +373,36 @@
       </div>
     </div>
   </div>
+
+  <!-- Stream Modal -->
+  <div class="modal fade" tabindex="-1" role="dialog" [ngClass]="{'show': streamModalOpen}" [ngStyle]="{'display': streamModalOpen ? 'block' : 'none'}">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">{{ streamTitle || 'Stream media' }}</h5>
+          <button type="button" class="btn-close" aria-label="Close" (click)="closeStreamModal()"></button>
+        </div>
+        <div class="modal-body">
+          <div *ngIf="streamSource; else noStreamAvailable">
+            <video *ngIf="streamType === 'video'" #streamVideo controls class="w-100" preload="metadata">
+              <source [src]="streamSource" [attr.type]="streamMimeType || null">
+              Your browser does not support the video tag.
+            </video>
+            <audio *ngIf="streamType === 'audio'" #streamAudio controls class="w-100" preload="metadata">
+              <source [src]="streamSource" [attr.type]="streamMimeType || null">
+              Your browser does not support the audio element.
+            </audio>
+          </div>
+          <ng-template #noStreamAvailable>
+            <p class="text-muted mb-0">No media available for streaming.</p>
+          </ng-template>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeStreamModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
   
 
   <div *ngIf="downloads.loading" class="alert alert-info" role="alert">
@@ -484,6 +495,7 @@
             <div class="d-flex">
               <button *ngIf="download.value.status == 'error'" type="button" class="btn btn-link" (click)="retryDownload(download.key, download.value)"><fa-icon [icon]="faRedoAlt"></fa-icon></button>
               <button *ngIf="download.value.filename" type="button" class="btn btn-link" (click)="renameDownload(download.key, download.value)"><fa-icon [icon]="faPen"></fa-icon></button>
+              <button *ngIf="download.value.filename && download.value.status == 'finished'" type="button" class="btn btn-link" (click)="openStream(download.value)"><fa-icon [icon]="faPlay"></fa-icon></button>
               <a *ngIf="download.value.filename" href="{{buildDownloadLink(download.value)}}" download class="btn btn-link"><fa-icon [icon]="faDownload"></fa-icon></a>
               <a href="{{download.value.url}}" target="_blank" class="btn btn-link"><fa-icon [icon]="faExternalLinkAlt"></fa-icon></a>
               <button type="button" class="btn btn-link" (click)="delDownload('done', download.key)"><fa-icon [icon]="faTrashAlt"></fa-icon></button>

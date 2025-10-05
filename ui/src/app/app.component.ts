@@ -1,16 +1,16 @@
 import { Component, ViewChild, ElementRef, AfterViewInit, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { faTrashAlt, faCheckCircle, faTimesCircle, IconDefinition } from '@fortawesome/free-regular-svg-icons';
-import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt, faPen, faCookieBite, faUserShield, faUserPlus, faUserSlash, faKey, faRightFromBracket } from '@fortawesome/free-solid-svg-icons';
+import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt, faPen, faCookieBite, faUserShield, faUserPlus, faUserSlash, faKey, faRightFromBracket, faPlay } from '@fortawesome/free-solid-svg-icons';
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { CookieService } from 'ngx-cookie-service';
-import { map, Observable, of, distinctUntilChanged } from 'rxjs';
 
 import { Download, DownloadsService, Status, CurrentUser, ManagedUser } from './downloads.service';
 import { MasterCheckboxComponent } from './master-checkbox.component';
 import { Formats, Format, Quality } from './formats';
 import { Theme, Themes } from './theme';
 import {KeyValue} from "@angular/common";
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 
 @Component({
     selector: 'app-root',
@@ -24,15 +24,14 @@ export class AppComponent implements AfterViewInit, OnInit {
   qualities: Quality[];
   quality: string;
   format: string;
-  folder: string;
+  folder = '';
   customNamePrefix: string;
   autoStart: boolean;
-  playlistStrictMode: boolean;
+  playlistStrictMode: boolean = true;
   playlistItemLimit: number;
   addInProgress = false;
   themes: Theme[] = Themes;
   activeTheme: Theme;
-  customDirs$: Observable<string[]>;
   showBatchPanel: boolean = false; 
   batchImportModalOpen = false;
   batchImportText = '';
@@ -56,6 +55,12 @@ export class AppComponent implements AfterViewInit, OnInit {
   adminLoading = false;
   adminError = '';
 
+  streamModalOpen = false;
+  streamSource: SafeResourceUrl | null = null;
+  streamMimeType = '';
+  streamTitle = '';
+  streamType: 'audio' | 'video' = 'video';
+
   // Download metrics
   activeDownloads = 0;
   queuedDownloads = 0;
@@ -72,6 +77,8 @@ export class AppComponent implements AfterViewInit, OnInit {
   @ViewChild('doneClearFailed') doneClearFailed: ElementRef;
   @ViewChild('doneRetryFailed') doneRetryFailed: ElementRef;
   @ViewChild('doneDownloadSelected') doneDownloadSelected: ElementRef;
+  @ViewChild('streamVideo') streamVideo?: ElementRef<HTMLVideoElement>;
+  @ViewChild('streamAudio') streamAudio?: ElementRef<HTMLAudioElement>;
 
   faTrashAlt = faTrashAlt;
   faCheckCircle = faCheckCircle;
@@ -96,8 +103,9 @@ export class AppComponent implements AfterViewInit, OnInit {
   faUserSlash = faUserSlash;
   faKey = faKey;
   faRightFromBracket = faRightFromBracket;
+  faPlay = faPlay;
 
-  constructor(public downloads: DownloadsService, private cookieService: CookieService, private http: HttpClient) {
+  constructor(public downloads: DownloadsService, private cookieService: CookieService, private http: HttpClient, private sanitizer: DomSanitizer) {
     this.format = cookieService.get('metube_format') || 'any';
     // Needs to be set or qualities won't automatically be set
     this.setQualities()
@@ -122,7 +130,6 @@ export class AppComponent implements AfterViewInit, OnInit {
   ngOnInit() {
     this.getConfiguration();
     this.getYtdlOptionsUpdateTime();
-    this.customDirs$ = this.getMatchingCustomDir();
     this.setTheme(this.activeTheme);
     this.refreshCookiesStatus();
     this.loadCurrentUser();
@@ -162,39 +169,6 @@ export class AppComponent implements AfterViewInit, OnInit {
 
   qualityChanged() {
     this.cookieService.set('metube_quality', this.quality, { expires: 3650 });
-    // Re-trigger custom directory change
-    this.downloads.customDirsChanged.next(this.downloads.customDirs);
-  }
-
-  showAdvanced() {
-    return this.downloads.configuration['CUSTOM_DIRS'];
-  }
-
-  allowCustomDir(tag: string) {
-    if (this.downloads.configuration['CREATE_CUSTOM_DIRS']) {
-      return tag;
-    }
-    return false;
-  }
-
-  isAudioType() {
-    return this.quality == 'audio' || this.format == 'mp3'  || this.format == 'm4a' || this.format == 'opus' || this.format == 'wav' || this.format == 'flac';
-  }
-
-  getMatchingCustomDir() : Observable<string[]> {
-    return this.downloads.customDirsChanged.asObservable().pipe(
-      map((output) => {
-        // Keep logic consistent with app/ytdl.py
-        if (this.isAudioType()) {
-          console.debug("Showing audio-specific download directories");
-          return output["audio_download_dir"];
-        } else {
-          console.debug("Showing default download directories");
-          return output["download_dir"];
-        }
-      }),
-      distinctUntilChanged((prev, curr) => JSON.stringify(prev) === JSON.stringify(curr))
-    );
   }
 
   getYtdlOptionsUpdateTime() {
@@ -248,8 +222,6 @@ export class AppComponent implements AfterViewInit, OnInit {
     this.cookieService.set('metube_format', this.format, { expires: 3650 });
     // Updates to use qualities available
     this.setQualities()
-    // Re-trigger custom directory change
-    this.downloads.customDirsChanged.next(this.downloads.customDirs);
   }
 
   autoStartChanged() {
@@ -344,6 +316,108 @@ export class AppComponent implements AfterViewInit, OnInit {
         alert(`Error renaming file: ${status.msg}`);
       }
     });
+  }
+
+  openStream(download: Download): void {
+    if (!download || !download.filename) {
+      alert('This file is not available for streaming.');
+      return;
+    }
+
+    const mimeType = this.getMimeType(download.filename);
+    this.streamTitle = download.title || download.filename;
+    this.streamMimeType = mimeType;
+    this.streamType = this.getStreamType(mimeType, download);
+    const streamUrl = this.buildStreamLink(download);
+    this.streamSource = this.sanitizer.bypassSecurityTrustResourceUrl(streamUrl);
+    this.streamModalOpen = true;
+
+    setTimeout(() => {
+      if (this.streamType === 'audio') {
+        this.streamAudio?.nativeElement?.load();
+      } else {
+        this.streamVideo?.nativeElement?.load();
+      }
+    }, 0);
+  }
+
+  closeStreamModal(): void {
+    const videoEl = this.streamVideo?.nativeElement;
+    const audioEl = this.streamAudio?.nativeElement;
+    if (videoEl) {
+      videoEl.pause();
+      videoEl.currentTime = 0;
+    }
+    if (audioEl) {
+      audioEl.pause();
+      audioEl.currentTime = 0;
+    }
+    this.streamModalOpen = false;
+    this.streamSource = null;
+    this.streamTitle = '';
+    this.streamMimeType = '';
+    this.streamType = 'video';
+  }
+
+  private getStreamType(mimeType: string, download: Download): 'audio' | 'video' {
+    if (mimeType.startsWith('audio/')) {
+      return 'audio';
+    }
+    if (mimeType.startsWith('video/')) {
+      return 'video';
+    }
+    const filename = (download.filename || '').toLowerCase();
+    const audioExtensions = ['.mp3', '.m4a', '.aac', '.opus', '.ogg', '.oga', '.wav', '.flac'];
+    if (download.quality === 'audio' || audioExtensions.some(ext => filename.endsWith(ext))) {
+      return 'audio';
+    }
+    return 'video';
+  }
+
+  private getMimeType(filename: string): string {
+    const ext = (filename.split('.').pop() || '').toLowerCase();
+    switch (ext) {
+      case 'mp4':
+      case 'm4v':
+        return 'video/mp4';
+      case 'webm':
+        return 'video/webm';
+      case 'mkv':
+        return 'video/x-matroska';
+      case 'mov':
+        return 'video/quicktime';
+      case 'avi':
+        return 'video/x-msvideo';
+      case 'flv':
+        return 'video/x-flv';
+      case 'mp3':
+        return 'audio/mpeg';
+      case 'm4a':
+        return 'audio/mp4';
+      case 'aac':
+        return 'audio/aac';
+      case 'ogg':
+      case 'oga':
+        return 'audio/ogg';
+      case 'opus':
+        return 'audio/ogg; codecs=opus';
+      case 'wav':
+        return 'audio/wav';
+      case 'flac':
+        return 'audio/flac';
+      default:
+        return '';
+    }
+  }
+
+  private buildStreamLink(download: Download): string {
+    const encoded = encodeURIComponent(download.url);
+    const relative = `stream?id=${encoded}`;
+    try {
+      return new URL(relative, window.location.href).toString();
+    } catch {
+      return relative;
+    }
   }
 
   openCookiesModal(): void {
