@@ -17,7 +17,7 @@ COPY pyproject.toml uv.lock docker-entrypoint.sh ./
 RUN sed -i 's/\r$//g' docker-entrypoint.sh && \
     chmod +x docker-entrypoint.sh && \
     apk add --update ffmpeg aria2 coreutils shadow su-exec curl tini deno && \
-    apk add --update --virtual .build-deps gcc g++ musl-dev uv && \
+    apk add --update --virtual .build-deps gcc g++ musl-dev linux-headers uv && \
     UV_PROJECT_ENVIRONMENT=/usr/local uv sync --frozen --no-dev --compile-bytecode && \
     apk del .build-deps && \
     rm -rf /var/cache/apk/* && \
