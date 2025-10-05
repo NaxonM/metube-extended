@@ -203,7 +203,7 @@
                 </div>
               </div>
 
-              <ng-container *ngIf="getFilteredQueue() as queue">
+              <ng-container *ngIf="filteredQueue as queue">
                 <div *ngIf="queue.length; else emptyQueueState" class="queue-list" role="list">
                   <article class="queue-item" role="listitem" *ngFor="let entry of queue; trackBy: trackDownloadEntry" [class.queue-item--deleting]="entry.value.deleting">
                   <div class="queue-item-selection">
@@ -313,7 +313,7 @@
                 </div>
               </div>
 
-              <ng-container *ngIf="getFilteredCompleted() as completed">
+              <ng-container *ngIf="filteredCompleted as completed">
                 <div *ngIf="completed.length; else emptyCompletedState" class="completed-list" role="list">
                   <article class="completed-item" role="listitem" *ngFor="let entry of completed; trackBy: trackDownloadEntry" [class.completed-item--error]="entry.value.status === 'error'" [class.completed-item--deleting]="entry.value.deleting">
                   <div class="completed-selection">

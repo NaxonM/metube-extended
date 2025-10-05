@@ -116,6 +116,8 @@ export class AppComponent implements AfterViewInit, OnInit {
   hasFailedDownloads = false;
   toasts: ToastMessage[] = [];
   readonly loadingPlaceholders = [0, 1, 2];
+  filteredQueue: Array<{ key: string; value: Download }> = [];
+  filteredCompleted: Array<{ key: string; value: Download }> = [];
 
   private toastCounter = 0;
 
@@ -139,6 +141,8 @@ export class AppComponent implements AfterViewInit, OnInit {
     this.downloads.updated.subscribe(() => {
       this.updateMetrics();
     });
+    this.refreshQueueEntries();
+    this.refreshCompletedEntries();
   }
 
   ngOnInit() {
@@ -266,74 +270,25 @@ export class AppComponent implements AfterViewInit, OnInit {
 
   setQueueFilter(filter: QueueFilter) {
     this.queueFilter = filter;
+    this.refreshQueueEntries();
   }
 
   setCompletedFilter(filter: CompletedFilter) {
     this.completedFilter = filter;
+    this.refreshCompletedEntries();
   }
 
   getFilteredQueue(): Array<{ key: string; value: Download }> {
-    const entries = Array.from(this.downloads.queue.entries());
-    if (this.queueFilter === 'active') {
-      return entries
-        .filter(([, download]) => download.status === 'downloading' || download.status === 'preparing')
-        .map(([key, value]) => ({ key, value }));
-    }
-    if (this.queueFilter === 'pending') {
-      return entries
-        .filter(([, download]) => download.status === 'pending')
-        .map(([key, value]) => ({ key, value }));
-    }
-    return entries.map(([key, value]) => ({ key, value }));
+    return this.filteredQueue;
   }
 
   setCompletedSort(sort: CompletedSort) {
     this.completedSort = sort;
+    this.refreshCompletedEntries();
   }
 
   getFilteredCompleted(): Array<{ key: string; value: Download }> {
-    const entries = Array.from(this.downloads.done.entries());
-    let filtered = entries;
-    if (this.completedFilter === 'finished') {
-      filtered = entries.filter(([, download]) => download.status === 'finished');
-    } else if (this.completedFilter === 'error') {
-      filtered = entries.filter(([, download]) => download.status === 'error');
-    }
-
-    const mapped = filtered.map(([key, value]) => ({ key, value }));
-
-    if (this.completedSort === 'largest') {
-      return mapped
-        .slice()
-        .sort((a, b) => {
-          const sizeA = a.value.size ?? -1;
-          const sizeB = b.value.size ?? -1;
-          return sizeB - sizeA;
-        });
-    }
-
-    if (this.completedSort === 'status') {
-      const rank = (download: Download) => {
-        if (download.status === 'error') {
-          return 0;
-        }
-        if (download.status === 'finished') {
-          return 1;
-        }
-        return 2;
-      };
-      return mapped
-        .slice()
-        .sort((a, b) => {
-          const diff = rank(a.value) - rank(b.value);
-          if (diff !== 0) {
-            return diff;
-          }
-          return (b.value.size ?? 0) - (a.value.size ?? 0);
-        });
-    }
-
-    return mapped;
+    return this.filteredCompleted;
   }
 
   trackDownloadEntry(index: number, entry: { key: string; value: Download }) {
@@ -888,5 +843,65 @@ export class AppComponent implements AfterViewInit, OnInit {
       .filter(d => d.status === 'downloading');
     
     this.totalSpeed = downloadingItems.reduce((total, item) => total + (item.speed || 0), 0);
+    this.refreshQueueEntries();
+    this.refreshCompletedEntries();
+  }
+
+  private refreshQueueEntries() {
+    const entries = Array.from(this.downloads.queue.entries());
+    let filtered = entries;
+    if (this.queueFilter === 'active') {
+      filtered = entries.filter(([, download]) => download.status === 'downloading' || download.status === 'preparing');
+    } else if (this.queueFilter === 'pending') {
+      filtered = entries.filter(([, download]) => download.status === 'pending');
+    }
+    this.filteredQueue = filtered.map(([key, value]) => ({ key, value }));
+  }
+
+  private refreshCompletedEntries() {
+    const entries = Array.from(this.downloads.done.entries());
+    let filtered = entries;
+    if (this.completedFilter === 'finished') {
+      filtered = entries.filter(([, download]) => download.status === 'finished');
+    } else if (this.completedFilter === 'error') {
+      filtered = entries.filter(([, download]) => download.status === 'error');
+    }
+
+    const mapped = filtered.map(([key, value]) => ({ key, value }));
+
+    if (this.completedSort === 'largest') {
+      this.filteredCompleted = mapped
+        .slice()
+        .sort((a, b) => {
+          const sizeA = a.value.size ?? -1;
+          const sizeB = b.value.size ?? -1;
+          return sizeB - sizeA;
+        });
+      return;
+    }
+
+    if (this.completedSort === 'status') {
+      const rank = (download: Download) => {
+        if (download.status === 'error') {
+          return 0;
+        }
+        if (download.status === 'finished') {
+          return 1;
+        }
+        return 2;
+      };
+      this.filteredCompleted = mapped
+        .slice()
+        .sort((a, b) => {
+          const diff = rank(a.value) - rank(b.value);
+          if (diff !== 0) {
+            return diff;
+          }
+          return (b.value.size ?? 0) - (a.value.size ?? 0);
+        });
+      return;
+    }
+
+    this.filteredCompleted = mapped;
   }
 }
