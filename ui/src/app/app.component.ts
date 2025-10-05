@@ -1,7 +1,7 @@
 import { Component, ViewChild, ElementRef, AfterViewInit, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { faTrashAlt, faCheckCircle, faTimesCircle, IconDefinition } from '@fortawesome/free-regular-svg-icons';
-import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt, faPen, faCookieBite, faUserShield, faUserPlus, faUserSlash, faKey, faRightFromBracket, faPlay } from '@fortawesome/free-solid-svg-icons';
+import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt, faPen, faCookieBite, faUserShield, faUserPlus, faUserSlash, faKey, faRightFromBracket, faPlay, faWindowMinimize, faWindowRestore, faArrowsLeftRight } from '@fortawesome/free-solid-svg-icons';
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { CookieService } from 'ngx-cookie-service';
 
@@ -59,6 +59,8 @@ export class AppComponent implements AfterViewInit, OnInit {
   streamMimeType = '';
   streamTitle = '';
   streamType: 'audio' | 'video' = 'video';
+  streamMinimized = false;
+  streamDockSide: 'left' | 'right' = 'right';
 
   // Download metrics
   activeDownloads = 0;
@@ -103,6 +105,9 @@ export class AppComponent implements AfterViewInit, OnInit {
   faKey = faKey;
   faRightFromBracket = faRightFromBracket;
   faPlay = faPlay;
+  faWindowMinimize = faWindowMinimize;
+  faWindowRestore = faWindowRestore;
+  faArrowsLeftRight = faArrowsLeftRight;
 
   constructor(public downloads: DownloadsService, private cookieService: CookieService, private http: HttpClient) {
     this.format = cookieService.get('metube_format') || 'any';
@@ -329,6 +334,8 @@ export class AppComponent implements AfterViewInit, OnInit {
     this.streamType = this.getStreamType(mimeType, download);
     this.streamSource = this.buildStreamLink(key);
     this.streamModalOpen = true;
+    this.streamMinimized = false;
+    this.streamDockSide = 'right';
 
     setTimeout(() => {
       if (this.streamType === 'audio') {
@@ -355,6 +362,26 @@ export class AppComponent implements AfterViewInit, OnInit {
     this.streamTitle = '';
     this.streamMimeType = '';
     this.streamType = 'video';
+    this.streamMinimized = false;
+  }
+
+  minimizeStream(side: 'left' | 'right' = this.streamDockSide): void {
+    if (!this.streamModalOpen) {
+      return;
+    }
+    this.streamDockSide = side;
+    this.streamMinimized = true;
+  }
+
+  restoreStream(): void {
+    if (!this.streamModalOpen) {
+      return;
+    }
+    this.streamMinimized = false;
+  }
+
+  toggleStreamDock(): void {
+    this.streamDockSide = this.streamDockSide === 'left' ? 'right' : 'left';
   }
 
   private getStreamType(mimeType: string, download: Download): 'audio' | 'video' {

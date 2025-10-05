@@ -213,6 +213,42 @@ main
   audio
     width: 100%
 
+  &.minimized
+    background-color: transparent
+    pointer-events: none
+
+    .modal-dialog
+      pointer-events: auto
+
+    .modal-dialog.minimized
+      position: fixed
+      bottom: 1rem
+      width: min(420px, 90vw)
+      max-width: none
+      margin: 0
+      transform: none
+
+    .modal-dialog.dock-left
+      left: 1rem
+      right: auto
+
+    .modal-dialog.dock-right
+      right: 1rem
+      left: auto
+
+    .modal-content
+      border-radius: 0.75rem
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35)
+
+    .modal-body
+      padding: 1rem
+
+    video
+      max-height: 45vh
+
+    audio
+      width: 100%
+
 .download-metrics
   display: flex
   align-items: center
