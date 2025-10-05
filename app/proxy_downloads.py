@@ -258,7 +258,20 @@ class ProxyDownloadManager:
             log.error(f'Proxy probe failed for {url}: {exc!r}')
             return {'status': 'error', 'msg': str(exc)}
 
-    async def add_job(self, *, url: str, title: Optional[str], folder: str, custom_name_prefix: str = '', size_limit_override: Optional[int] = None, auto_start: bool = True) -> Dict:
+    async def add_job(
+        self,
+        *,
+        url: str,
+        title: Optional[str],
+        folder: str,
+        custom_name_prefix: str = '',
+        size_limit_override: Optional[int] = None,
+        auto_start: bool = True,
+        provider: str = 'proxy',
+        quality_label: str = 'proxy',
+        format_id: str = 'proxy',
+        original_url: Optional[str] = None,
+    ) -> Dict:
         display_title = title or _guess_filename_from_headers({}, url)
         job_id = uuid.uuid4().hex
         storage_key = f'proxy:{job_id}'
@@ -267,8 +280,8 @@ class ProxyDownloadManager:
             job_id,
             display_title,
             storage_key,
-            'proxy',
-            'proxy',
+            quality_label,
+            format_id,
             folder or '',
             custom_name_prefix or '',
             error=None,
@@ -276,8 +289,8 @@ class ProxyDownloadManager:
             playlist_item_limit=0,
             cookiefile=None,
             user_id=self.user_id,
-            original_url=url,
-            provider='proxy'
+            original_url=original_url or url,
+            provider=provider
         )
 
         info.status = 'pending'

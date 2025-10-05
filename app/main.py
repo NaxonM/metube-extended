@@ -6,9 +6,11 @@ import sys
 import asyncio
 import secrets
 import time
+from contextlib import suppress
 from pathlib import Path
 from typing import Dict, Optional
 from aiohttp import web
+from aiohttp.client_exceptions import ClientConnectionResetError
 from aiohttp.log import access_logger
 import ssl
 import socket
@@ -24,6 +26,12 @@ from watchfiles import DefaultFilter, Change, awatch
 
 from ytdl import DownloadQueueNotifier, DownloadQueue
 from proxy_downloads import ProxyDownloadManager, ProxySettingsStore
+from hqporner import (
+    HQPornerError,
+    HQPornerUnsupportedError,
+    is_hqporner_url,
+    resolve_hqporner_video,
+)
 from yt_dlp.version import __version__ as yt_dlp_version
 from auth import setup_auth
 from users import UserStore
@@ -370,6 +378,58 @@ def get_cookie_path_for_session(session) -> str:
     identity = get_session_identity(session)
     return os.path.join(directory, f"{identity}.txt")
 
+
+async def add_hqporner_download(
+    proxy_queue: ProxyDownloadManager,
+    url: str,
+    quality: str,
+    format_id: Optional[str],
+    folder: Optional[str],
+    custom_name_prefix: Optional[str],
+    auto_start: bool,
+) -> Dict:
+    requested_format = (format_id or '').lower()
+    if requested_format and requested_format not in ('', 'any', 'mp4'):
+        return {
+            'status': 'error',
+            'msg': 'HQPorner downloads currently support MP4 format only.',
+        }
+
+    normalized_quality = (quality or '').lower()
+    if normalized_quality in ('audio', 'thumbnail'):
+        return {
+            'status': 'error',
+            'msg': 'Audio-only and thumbnail downloads are not available for HQPorner videos.',
+        }
+
+    try:
+        video = await resolve_hqporner_video(url, quality or 'best')
+    except HQPornerUnsupportedError as exc:
+        return {'status': 'error', 'msg': str(exc)}
+    except HQPornerError as exc:
+        log.error('Failed to resolve HQPorner download for %s: %s', url, exc)
+        return {
+            'status': 'error',
+            'msg': 'Unable to process HQPorner download at this time.',
+        }
+
+    title = f"{video.title} ({video.quality_label})"
+    result = await proxy_queue.add_job(
+        url=video.download_url,
+        title=title,
+        folder=folder or '',
+        custom_name_prefix=custom_name_prefix or '',
+        auto_start=auto_start,
+        provider='hqporner',
+        quality_label=video.quality_label,
+        format_id='mp4',
+        original_url=video.page_url,
+    )
+
+    if result.get('status') == 'ok' and 'msg' not in result:
+        result['msg'] = 'HQPorner download added to the queue.'
+    return result
+
 @routes.post(config.URL_PREFIX + 'add')
 async def add(request):
     log.info("Received request to add download")
@@ -388,6 +448,7 @@ async def add(request):
     auto_start = post.get('auto_start')
 
     session, user_id, queue = await get_user_context(request)
+    proxy_queue: Optional[ProxyDownloadManager] = None
     cookie_path = session.get('cookie_file')
     if cookie_path:
         user_cookie_dir = ensure_cookie_directory(user_id)
@@ -405,7 +466,29 @@ async def add(request):
 
     playlist_item_limit = int(playlist_item_limit)
 
-    status = await queue.add(url, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, cookie_path=cookie_path)
+    if is_hqporner_url(url):
+        proxy_queue = await download_manager.get_proxy_queue(user_id)
+        status = await add_hqporner_download(
+            proxy_queue,
+            url,
+            quality,
+            format,
+            folder,
+            custom_name_prefix,
+            auto_start,
+        )
+    else:
+        status = await queue.add(
+            url,
+            quality,
+            format,
+            folder,
+            custom_name_prefix,
+            playlist_strict_mode,
+            playlist_item_limit,
+            auto_start,
+            cookie_path=cookie_path,
+        )
 
     if status.get('status') == 'unsupported':
         proxy_config = await proxy_settings.get()
@@ -913,7 +996,11 @@ async def stream_download(request):
 
         response = web.StreamResponse(status=206, headers=headers)
         response.content_type = mime_type or 'application/octet-stream'
-        await response.prepare(request)
+        try:
+            await response.prepare(request)
+        except (ClientConnectionResetError, ConnectionResetError, ConnectionError):
+            log.debug('Client disconnected before stream preparation', exc_info=True)
+            return response
 
         chunk_size = 256 * 1024
         with open(file_path, 'rb') as fh:
@@ -925,9 +1012,14 @@ async def stream_download(request):
                 if not data:
                     break
                 remaining -= len(data)
-                await response.write(data)
+                try:
+                    await response.write(data)
+                except (ClientConnectionResetError, ConnectionResetError, ConnectionError):
+                    log.debug('Client disconnected during stream', exc_info=True)
+                    break
 
-        await response.write_eof()
+        with suppress(ClientConnectionResetError, ConnectionResetError, ConnectionError):
+            await response.write_eof()
         return response
 
     headers = {
