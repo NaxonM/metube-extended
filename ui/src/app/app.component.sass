@@ -1,211 +1,516 @@
-.button-toggle-theme:focus, .button-toggle-theme:active
-    box-shadow: none
-    outline: 0px
-
-.add-url-box
-    max-width: 960px
-    margin: 4rem auto
-
-.add-url-component
-    margin: 0.5rem auto
-
-.add-url-group
-    width: 100%
-
-button.add-url
-    width: 100%
-
-.folder-dropdown-menu
-    width: 500px
-    max-width: calc(100vw - 3rem)
-
-.folder-dropdown-menu .input-group
-    display: flex
-    padding-left: 5px
-    padding-right: 5px
-
-.metube-section-header
-    font-size: 1.8rem
-    font-weight: 300
-    position: relative
-    background: var(--bs-secondary-bg)
-    padding: 0.5rem 0
-    margin-top: 3.5rem
-
-.metube-section-header:before
-    content: ""
-    position: absolute
-    top: 0
-    bottom: 0
-    left: -9999px
-    right: 0
-    border-left: 9999px solid var(--bs-secondary-bg)
-    box-shadow: 9999px 0 0 var(--bs-secondary-bg)
-
-button:hover
-    text-decoration: none
-
-th
-    border-top: 0
-    border-bottom-width: 3px !important
-    vertical-align: middle !important
-    white-space: nowrap
-
-td
-    vertical-align: middle
-
-.disabled
-    opacity: 0.5
-    pointer-events: none
-
-.form-switch
-  input
-    margin-top: 5px
-
-.download-progressbar
-    width: 12rem
-    margin-left: auto
-
-.batch-panel
-  margin-top: 15px
-  border: 1px solid #ccc
-  border-radius: 8px
-  padding: 15px
-  background-color: #fff
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1)
-
-.batch-panel-header
-  border-bottom: 1px solid #eee
-  padding-bottom: 8px
-  margin-bottom: 15px
-  h4
-    font-size: 1.5rem
-    margin: 0
-
-.batch-panel-body
-  textarea.form-control
-    resize: vertical
-
-.batch-status
-  font-size: 0.9rem
-  color: #555
-
-.d-flex.my-3
-  margin-top: 1rem
-  margin-bottom: 1rem
-
-.modal.fade.show
-  background-color: rgba(0, 0, 0, 0.5)
-
-.modal-header
-  border-bottom: 1px solid #eee
-
-.modal-body
-  textarea.form-control
-    resize: vertical
-
-.add-url
-  display: inline-flex
-  align-items: center
-  justify-content: center
-
-  .spinner-border
-    margin-right: 0.5rem
-
-::ng-deep .ng-select
-    flex: 1
-    .ng-select-container
-        min-height: 38px
-    .ng-value
-        white-space: nowrap
-        overflow: visible
-    .ng-dropdown-panel
-        .ng-dropdown-panel-items
-            max-height: 300px
-            .ng-option
-                white-space: nowrap
-                overflow: visible
-                text-overflow: ellipsis
-
 :host
   display: flex
   flex-direction: column
   min-height: 100vh
 
-main
-  flex-grow: 1
+.dashboard-main
+  flex: 1
+  background: var(--bs-body-bg)
 
-.footer
-  width: 100%
-  padding: 10px 0
-  background: linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.1))
+.toast-stack
+  position: fixed
+  top: 1.5rem
+  right: 1.5rem
+  display: flex
+  flex-direction: column
+  gap: 0.75rem
+  z-index: 1080
 
-  .footer-content
-    display: flex
-    justify-content: center
-    align-items: center
-    gap: 20px
-    color: #fff
-    font-size: 0.9rem
-
-    .version-item
-      display: flex
-      align-items: center
-      gap: 8px
-
-      .version-label
-        font-size: 0.75rem
-        text-transform: uppercase
-        letter-spacing: 0.5px
-        opacity: 0.7
-
-      .version-value
-        font-family: monospace
-        font-size: 0.85rem
-        padding: 2px 6px
-        background: rgba(255,255,255,0.1)
-        border-radius: 4px
-
-    .version-separator
-      width: 1px
-      height: 16px
-      background: rgba(255,255,255,0.2)
-      margin: 0 4px
-
-    .github-link
-      display: flex
-      align-items: center
-      gap: 6px
-      color: #fff
-      text-decoration: none
-      font-size: 0.85rem
-      padding: 2px 8px
-      border-radius: 4px
-      transition: background-color 0.2s ease
-
-      &:hover
-        background: rgba(255,255,255,0.1)
-        color: #fff
-        text-decoration: none
-
-      i
-        font-size: 1rem
-
-.download-metrics
+.app-toast
   display: flex
   align-items: center
-  gap: 16px
-  margin-left: 24px
+  justify-content: space-between
+  gap: 1rem
+  min-width: 18rem
+  max-width: 24rem
+  padding: 0.75rem 1rem
+  border-radius: 0.75rem
+  color: #fff
+  background: var(--bs-primary)
+  box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.25)
+  animation: toast-in 200ms ease-out
 
-  .metric
-    display: flex
-    align-items: center
-    gap: 6px
-    font-size: 0.9rem
-    color: #adb5bd
+  &.toast-success
+    background: var(--bs-success)
 
-    fa-icon
-      font-size: 1rem
+  &.toast-info
+    background: var(--bs-info)
 
-    span
-      white-space: nowrap
+  &.toast-warning
+    background: var(--bs-warning)
+    color: #212529
+
+    .btn-close
+      filter: none
+
+  &.toast-danger
+    background: var(--bs-danger)
+
+  .btn-close
+    filter: invert(1)
+    opacity: .9
+
+    &:hover
+      opacity: 1
+
+@keyframes toast-in
+  from
+    transform: translateY(-10px)
+    opacity: 0
+  to
+    transform: translateY(0)
+    opacity: 1
+
+.dashboard-header
+  padding: 1.5rem 0
+  background: radial-gradient(circle at top left, rgba(13,110,253,0.45), transparent 55%), var(--bs-dark)
+  color: #fff
+
+.header-inner
+  display: flex
+  align-items: center
+  justify-content: space-between
+  flex-wrap: wrap
+  gap: 1.5rem
+
+.brand
+  display: flex
+  align-items: center
+  gap: 1rem
+
+.brand-copy
+  display: flex
+  flex-direction: column
+  gap: 0.25rem
+
+.brand-title
+  font-size: 1.5rem
+  font-weight: 600
+
+.brand-subtitle
+  font-size: .875rem
+  opacity: .75
+
+.metrics
+  display: flex
+  flex-wrap: wrap
+  gap: 1rem
+
+.metric
+  display: inline-flex
+  align-items: center
+  gap: .5rem
+  font-size: .95rem
+  color: rgba(255,255,255,.75)
+  padding: .35rem .75rem
+  border-radius: 999px
+  border: 1px solid rgba(255,255,255,.15)
+  backdrop-filter: blur(6px)
+
+  &--primary
+    border-color: rgba(13,110,253,.35)
+
+  &--warning
+    border-color: rgba(255,193,7,.35)
+
+  &--success
+    border-color: rgba(25,135,84,.35)
+
+  &--danger
+    border-color: rgba(220,53,69,.35)
+
+  &--info
+    border-color: rgba(13,202,240,.35)
+
+.header-actions
+  display: flex
+  align-items: center
+  flex-wrap: wrap
+  gap: 1rem
+
+.user-summary
+  display: flex
+  flex-direction: column
+  align-items: flex-end
+  gap: .15rem
+  font-size: .875rem
+
+.summary-label
+  color: rgba(255,255,255,.65)
+
+.summary-value
+  font-weight: 600
+  display: inline-flex
+  align-items: center
+  gap: .4rem
+
+.theme-dropdown .dropdown-menu
+  min-width: 12rem
+
+.dashboard-grid
+  display: grid
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px)
+  gap: 1.5rem
+
+.main-column
+  display: flex
+  flex-direction: column
+  gap: 1.5rem
+
+.side-column
+  display: flex
+  flex-direction: column
+  gap: 1.5rem
+
+.card
+  border: none
+  border-radius: 1rem
+
+.card-title
+  margin-bottom: .25rem
+  font-size: 1.1rem
+  font-weight: 600
+
+.card-subtitle
+  margin: 0
+  font-size: .9rem
+  color: var(--bs-secondary-color)
+
+.download-form .advanced-toggle
+  height: 100%
+
+.section-controls
+  display: flex
+  flex-wrap: wrap
+  gap: .5rem
+  justify-content: flex-end
+
+.sort-group
+  .btn
+    min-width: 5rem
+
+.advanced-panel
+  background: var(--bs-tertiary-bg)
+  border-radius: .75rem
+  padding: 1.25rem
+  margin-top: .5rem
+
+.utility-actions
+  margin-top: 1rem
+  display: flex
+  flex-wrap: wrap
+  gap: .75rem
+
+  .btn
+    flex: 1 1 12rem
+    justify-content: flex-start
+
+.bulk-toolbar
+  display: flex
+  align-items: center
+  justify-content: space-between
+  gap: 1rem
+  padding-bottom: 1rem
+  border-bottom: 1px solid var(--bs-border-color)
+
+.bulk-selection
+  display: flex
+  align-items: center
+  gap: .75rem
+
+.bulk-actions
+  display: flex
+  flex-wrap: wrap
+  gap: .75rem
+
+.queue-list, .completed-list
+  display: flex
+  flex-direction: column
+  gap: .75rem
+  margin-top: 1rem
+
+.skeleton-list
+  display: flex
+  flex-direction: column
+  gap: .75rem
+  margin-top: .75rem
+
+.skeleton-row
+  position: relative
+  border-radius: .75rem
+  height: 4rem
+  background: var(--bs-secondary-bg)
+  overflow: hidden
+
+.skeleton-row::after
+  content: ''
+  position: absolute
+  inset: 0
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)
+  animation: skeleton-loading 1.2s ease-in-out infinite
+
+@keyframes skeleton-loading
+  0%
+    transform: translateX(-100%)
+  100%
+    transform: translateX(100%)
+
+.queue-item, .completed-item
+  display: grid
+  grid-template-columns: auto minmax(0, 1fr) auto
+  gap: 1rem
+  padding: 1rem
+  border: 1px solid var(--bs-border-color)
+  border-radius: .75rem
+  background: var(--bs-body-bg)
+  transition: transform 120ms ease, box-shadow 120ms ease
+
+.queue-item:hover, .completed-item:hover
+  transform: translateY(-2px)
+  box-shadow: 0 0.75rem 1.5rem rgba(0,0,0,0.08)
+
+.queue-item--deleting, .completed-item--deleting
+  opacity: .5
+  pointer-events: none
+
+.queue-item-header, .completed-header
+  display: flex
+  align-items: center
+  justify-content: space-between
+  gap: .75rem
+  margin-bottom: .5rem
+
+.queue-item-title, .completed-title
+  margin: 0
+  font-size: 1rem
+  font-weight: 600
+  color: var(--bs-body-color)
+
+.queue-item-title a, .completed-title a
+  color: inherit
+  text-decoration: none
+
+.queue-item-title a:hover, .completed-title a:hover
+  text-decoration: underline
+
+.status-chip
+  text-transform: capitalize
+  font-size: .75rem
+  font-weight: 600
+  padding: .25rem .6rem
+  border-radius: 999px
+  background: var(--bs-secondary-bg)
+  color: var(--bs-secondary-color)
+
+.status-preparing
+  background: rgba(13,110,253,.12)
+  color: #0d6efd
+
+.status-downloading
+  background: rgba(25,135,84,.12)
+  color: #198754
+
+.status-pending
+  background: rgba(255,193,7,.12)
+  color: #ffb000
+
+.queue-item-progress ngb-progressbar
+  width: 100%
+
+.queue-item-meta
+  display: flex
+  flex-wrap: wrap
+  gap: 1rem
+  font-size: .85rem
+  color: var(--bs-secondary-color)
+
+.queue-item-actions, .completed-actions
+  display: flex
+  align-items: center
+  gap: .5rem
+
+.btn-icon
+  width: 2.5rem
+  height: 2.5rem
+  border-radius: 50%
+  display: inline-flex
+  align-items: center
+  justify-content: center
+  border: 1px solid var(--bs-border-color)
+  color: var(--bs-body-color)
+  background: transparent
+  transition: all 120ms ease
+
+.btn-icon:hover
+  background: var(--bs-primary)
+  color: #fff
+  border-color: var(--bs-primary)
+
+.btn-icon:focus-visible
+  outline: 2px solid var(--bs-primary)
+  outline-offset: 2px
+
+.completed-item--error
+  border-color: rgba(220,53,69,.35)
+
+.completed-meta span
+  margin-right: .4rem
+
+.completed-meta span:last-child
+  margin-right: 0
+
+.completed-messages
+  display: flex
+  flex-direction: column
+  gap: .25rem
+
+.completed-thumb
+  width: 3rem
+  height: 3rem
+  border-radius: .5rem
+  overflow: hidden
+  margin-right: .75rem
+  flex-shrink: 0
+
+.completed-thumb img
+  width: 100%
+  height: 100%
+  object-fit: cover
+
+.empty-state
+  display: flex
+  flex-direction: column
+  align-items: center
+  justify-content: center
+  text-align: center
+  padding: 2.5rem 1rem
+  border: 1px dashed var(--bs-border-color)
+  border-radius: .75rem
+  background: var(--bs-tertiary-bg)
+
+.empty-icon
+  font-size: 2rem
+  margin-bottom: .75rem
+  color: var(--bs-secondary-color)
+
+.admin-list
+  display: flex
+  flex-direction: column
+  gap: 1rem
+
+.admin-row
+  border: 1px solid var(--bs-border-color)
+  border-radius: .75rem
+  padding: 1rem
+  display: flex
+  flex-direction: column
+  gap: .75rem
+  background: var(--bs-body-bg)
+
+.admin-row--disabled
+  opacity: .6
+
+.admin-row-main
+  display: flex
+  justify-content: space-between
+  gap: 1rem
+  flex-wrap: wrap
+
+.admin-name
+  display: flex
+  align-items: center
+  gap: .5rem
+
+.admin-tags
+  display: flex
+  align-items: center
+  gap: .5rem
+
+.admin-actions
+  display: flex
+  flex-wrap: wrap
+  gap: .5rem
+
+.system-info
+  margin: 0 0 1.5rem
+  display: flex
+  flex-direction: column
+  gap: .75rem
+
+.system-info-row
+  display: flex
+  justify-content: space-between
+  font-size: .9rem
+
+.system-info-row dt
+  font-weight: 600
+
+.system-info-row dd
+  margin: 0
+  color: var(--bs-secondary-color)
+
+.dashboard-footer
+  padding: 1.75rem 0
+  background: var(--bs-dark)
+  color: rgba(255,255,255,.75)
+
+.footer-content
+  display: flex
+  align-items: center
+  justify-content: space-between
+  gap: 1rem
+  flex-wrap: wrap
+
+.footer-brand
+  font-weight: 600
+
+.footer-metadata
+  display: inline-flex
+  align-items: center
+  gap: .5rem
+  font-size: .9rem
+
+.footer-link
+  color: rgba(255,255,255,.85)
+  text-decoration: none
+
+.footer-link:hover
+  color: #fff
+  text-decoration: none
+
+@media (max-width: 1199.98px)
+  .dashboard-grid
+    grid-template-columns: minmax(0, 1fr)
+
+  .side-column
+    order: -1
+
+@media (max-width: 767.98px)
+  .header-inner
+    flex-direction: column
+    align-items: flex-start
+
+  .metrics
+    width: 100%
+    justify-content: space-between
+
+  .header-actions
+    width: 100%
+    justify-content: space-between
+
+  .section-controls
+    width: 100%
+    justify-content: flex-start
+
+  .utility-actions .btn
+    flex: 1 1 100%
+
+  .queue-item, .completed-item
+    grid-template-columns: minmax(0, 1fr)
+
+  .queue-item-actions, .completed-actions
+    justify-content: flex-end
+
+  .bulk-toolbar
+    flex-direction: column
+    align-items: flex-start

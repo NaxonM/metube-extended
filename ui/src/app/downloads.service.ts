@@ -27,6 +27,7 @@ export interface Download {
   filename: string;
   error?: string;
   size?: number;
+  thumbnail?: string;
   checked?: boolean;
   deleting?: boolean;
 }
