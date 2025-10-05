@@ -277,7 +277,7 @@ export class AppComponent implements AfterViewInit, OnInit {
   }
 
   trackDownloadEntry(index: number, entry: { key: string; value: Download }) {
-    return entry.key;
+    return entry.value.id;
   }
 
   addDownload(url?: string, quality?: string, format?: string, folder?: string, customNamePrefix?: string, playlistStrictMode?: boolean, playlistItemLimit?: number, autoStart?: boolean) {
