@@ -420,6 +420,10 @@ class DownloadQueue:
             return {'status': 'ok'}
         elif etype == 'video' or (etype.startswith('url') and 'id' in entry and 'title' in entry):
             log.debug('Processing as a video')
+            ext = str(entry.get('ext') or '').lower()
+            if ext in ('unknown_video', 'unknown_audio', 'unknown'):
+                log.info('Entry extension reported as unknown; delegating to proxy download workflow')
+                return {'status': 'unsupported', 'msg': 'This URL looks like a direct file download and is not supported by yt-dlp.'}
             key = entry.get('webpage_url') or entry['url']
             if not self.queue.exists(key):
                 original_url = entry.get('webpage_url') or entry.get('url') or key
