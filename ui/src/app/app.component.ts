@@ -265,8 +265,16 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     this.cookieService.set('metube_auto_start', this.autoStart ? 'true' : 'false', { expires: 3650 });
   }
 
-  toggleAdminTools() {
+  toggleAdminTools(): void {
     this.adminToolsOpen = !this.adminToolsOpen;
+    if (!this.isAdmin) {
+      return;
+    }
+    if (this.adminToolsOpen) {
+      this.startSystemStatsPolling();
+    } else {
+      this.stopSystemStatsPolling();
+    }
   }
 
   queueSelectionChanged(checked: number) {
@@ -682,7 +690,11 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       if (this.isAdmin) {
         this.refreshUsers();
         this.refreshProxySettings();
-        this.startSystemStatsPolling();
+        if (this.adminToolsOpen) {
+          this.startSystemStatsPolling();
+        } else {
+          this.stopSystemStatsPolling();
+        }
       } else {
         this.adminUsers = [];
         this.resetProxySettingsState();
@@ -799,7 +811,7 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   startSystemStatsPolling(): void {
-    if (!this.isAdmin) {
+    if (!this.isAdmin || !this.adminToolsOpen) {
       return;
     }
     this.stopSystemStatsPolling();
@@ -816,14 +828,14 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   refreshSystemStats(): void {
-    if (!this.isAdmin) {
+    if (!this.isAdmin || !this.adminToolsOpen) {
       return;
     }
     this.fetchSystemStats();
   }
 
   private fetchSystemStats(): void {
-    if (!this.isAdmin || this.systemStatsRequestActive) {
+    if (!this.isAdmin || !this.adminToolsOpen || this.systemStatsRequestActive) {
       return;
     }
     this.systemStatsRequestActive = true;

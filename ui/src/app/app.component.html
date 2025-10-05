@@ -255,9 +255,8 @@
          class="collapse admin-panel-wrapper"
          [ngbCollapse]="!adminToolsOpen">
       <div class="admin-panel">
-        <div class="row g-3">
-          <div class="col-12 col-lg-4">
-            <div class="admin-card">
+        <div class="admin-grid">
+          <div class="admin-card admin-card--compact">
               <div class="admin-card-header d-flex align-items-center gap-2">
                 <fa-icon [icon]="faTachometerAlt" class="text-primary"></fa-icon>
                 <span class="fw-semibold">Proxy download limits</span>
@@ -295,8 +294,7 @@
             </div>
           </div>
 
-          <div class="col-12 col-lg-4">
-            <div class="admin-card">
+          <div class="admin-card admin-card--compact">
               <div class="admin-card-header d-flex align-items-center gap-2">
                 <fa-icon [icon]="faTachometerAlt" class="text-success"></fa-icon>
                 <span class="fw-semibold">System resource monitor</span>
@@ -375,8 +373,7 @@
             </div>
           </div>
 
-          <div class="col-12 col-lg-8">
-            <div class="admin-card">
+          <div class="admin-card admin-card--wide">
             <div class="admin-card-header d-flex justify-content-between align-items-center">
               <div class="d-flex align-items-center gap-2">
                 <fa-icon [icon]="faUserShield" class="text-info"></fa-icon>
@@ -443,7 +440,6 @@
                   </tr>
                 </tbody>
               </table>
-            </div>
             </div>
           </div>
         </div>
