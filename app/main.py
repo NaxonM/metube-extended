@@ -5,6 +5,7 @@ import os
 import sys
 import asyncio
 import secrets
+import time
 from pathlib import Path
 from typing import Dict, Optional
 from aiohttp import web
@@ -18,6 +19,7 @@ import pathlib
 import re
 import uuid
 import mimetypes
+import psutil
 from watchfiles import DefaultFilter, Change, awatch
 
 from ytdl import DownloadQueueNotifier, DownloadQueue
@@ -760,6 +762,46 @@ async def admin_set_proxy_settings(request):
         'limit_enabled': bool(data.get('limit_enabled', False)),
         'limit_mb': int(data.get('limit_mb', 0))
     })
+
+
+@routes.get(config.URL_PREFIX + 'admin/system-stats')
+async def admin_system_stats(request):
+    session = await get_session(request)
+    ensure_admin(session)
+
+    cpu_percent = await asyncio.to_thread(psutil.cpu_percent, interval=0.1)
+    memory = psutil.virtual_memory()
+    swap = psutil.swap_memory()
+    net = psutil.net_io_counters()
+    now = time.time()
+    uptime_seconds = max(now - psutil.boot_time(), 0.0)
+
+    payload = {
+        'cpu': {
+            'percent': cpu_percent,
+            'cores': psutil.cpu_count(logical=False) or psutil.cpu_count(logical=True) or 1,
+            'threads': psutil.cpu_count() or 1,
+        },
+        'memory': {
+            'percent': memory.percent,
+            'used': memory.used,
+            'available': memory.available,
+            'total': memory.total,
+        },
+        'swap': {
+            'percent': swap.percent,
+            'used': swap.used,
+            'total': swap.total,
+        },
+        'network': {
+            'bytes_sent': net.bytes_sent,
+            'bytes_recv': net.bytes_recv,
+        },
+        'uptime_seconds': uptime_seconds,
+        'timestamp': now,
+    }
+
+    return web.json_response(payload)
 
 
 @routes.get(config.URL_PREFIX + 'history')

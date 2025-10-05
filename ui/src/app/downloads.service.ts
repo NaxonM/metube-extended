@@ -49,6 +49,34 @@ export interface ProxySettings {
   limit_mb: number;
 }
 
+export interface SystemStats {
+  cpu: {
+    percent: number;
+    cores: number;
+    threads: number;
+  };
+  memory: {
+    percent: number;
+    used: number;
+    available: number;
+    total: number;
+  };
+  swap: {
+    percent: number;
+    used: number;
+    total: number;
+  };
+  network: {
+    bytes_sent: number;
+    bytes_recv: number;
+  };
+  uptime_seconds: number;
+  timestamp: number;
+}
+
+export type ProxySettingsResponse = ProxySettings & Partial<Status>;
+export type SystemStatsResponse = SystemStats & Partial<Status>;
+
 export interface Download {
   id: string;
   title: string;
@@ -350,18 +378,24 @@ export class DownloadsService {
   }
 
   public getProxySettings() {
-    return this.http.get<ProxySettings>('admin/proxy-settings').pipe(
-      catchError(() => of({limit_enabled: false, limit_mb: 0}))
+    return this.http.get<ProxySettingsResponse>('admin/proxy-settings').pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<ProxySettingsResponse>(error))
     );
   }
 
   public updateProxySettings(settings: Partial<ProxySettings>) {
-    return this.http.post<ProxySettings>('admin/proxy-settings', settings).pipe(
-      catchError((error: HttpErrorResponse) => this.handleTypedError<ProxySettings & Status>(error))
+    return this.http.post<ProxySettingsResponse>('admin/proxy-settings', settings).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<ProxySettingsResponse>(error))
     );
   }
 
-  private handleTypedError<T extends Status>(error: HttpErrorResponse) {
+  public getSystemStats() {
+    return this.http.get<SystemStatsResponse>('admin/system-stats').pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<SystemStatsResponse>(error))
+    );
+  }
+
+  private handleTypedError<T extends Partial<Status>>(error: HttpErrorResponse) {
     const msg = error.error instanceof ErrorEvent ? error.error.message : error.error;
     return of({status: 'error', msg} as T);
   }

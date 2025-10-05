@@ -1,11 +1,11 @@
-import { Component, ViewChild, ElementRef, AfterViewInit, OnInit } from '@angular/core';
+import { Component, ViewChild, ElementRef, AfterViewInit, OnInit, OnDestroy } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { faTrashAlt, faCheckCircle, faTimesCircle, IconDefinition } from '@fortawesome/free-regular-svg-icons';
 import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt, faPen, faCookieBite, faUserShield, faUserPlus, faUserSlash, faKey, faRightFromBracket, faPlay, faWindowMinimize, faWindowRestore, faArrowsLeftRight } from '@fortawesome/free-solid-svg-icons';
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { CookieService } from 'ngx-cookie-service';
 
-import { Download, DownloadsService, Status, CurrentUser, ManagedUser, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, ProxySettings } from './downloads.service';
+import { Download, DownloadsService, Status, CurrentUser, ManagedUser, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, ProxySettings, SystemStats } from './downloads.service';
 import { MasterCheckboxComponent } from './master-checkbox.component';
 import { Formats, Format, Quality } from './formats';
 import { Theme, Themes } from './theme';
@@ -17,7 +17,7 @@ import {KeyValue} from "@angular/common";
     styleUrls: ['./app.component.sass'],
     standalone: false
 })
-export class AppComponent implements AfterViewInit, OnInit {
+export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   addUrl: string;
   formats: Format[] = Formats;
   qualities: Quality[];
@@ -61,6 +61,14 @@ export class AppComponent implements AfterViewInit, OnInit {
   proxyLimitMb = 0;
   proxySettingsDirty = false;
   private proxySettingsSnapshot: ProxySettings | null = null;
+
+  systemStats: SystemStats | null = null;
+  systemStatsError = '';
+  systemStatsLoading = false;
+  systemStatsRates = {sentPerSec: 0, recvPerSec: 0};
+  private systemStatsIntervalId: number | null = null;
+  private previousSystemStats: SystemStats | null = null;
+  systemStatsRequestActive = false;
 
   streamModalOpen = false;
   streamSource: string | null = null;
@@ -182,6 +190,11 @@ export class AppComponent implements AfterViewInit, OnInit {
       this.doneRetryFailed.nativeElement.disabled = failed === 0;
     });
     this.fetchVersionInfo();
+  }
+
+  ngOnDestroy(): void {
+    this.stopSystemStatsPolling();
+    this.resetSystemStatsState();
   }
 
   // workaround to allow fetching of Map values in the order they were inserted
@@ -664,9 +677,12 @@ export class AppComponent implements AfterViewInit, OnInit {
       if (this.isAdmin) {
         this.refreshUsers();
         this.refreshProxySettings();
+        this.startSystemStatsPolling();
       } else {
         this.adminUsers = [];
         this.resetProxySettingsState();
+        this.stopSystemStatsPolling();
+        this.resetSystemStatsState();
       }
     });
   }
@@ -775,6 +791,124 @@ export class AppComponent implements AfterViewInit, OnInit {
       return 0;
     }
     return Math.floor(numeric);
+  }
+
+  startSystemStatsPolling(): void {
+    if (!this.isAdmin) {
+      return;
+    }
+    this.stopSystemStatsPolling();
+    this.fetchSystemStats();
+    this.systemStatsIntervalId = window.setInterval(() => this.fetchSystemStats(), 5000);
+  }
+
+  stopSystemStatsPolling(): void {
+    if (this.systemStatsIntervalId !== null) {
+      window.clearInterval(this.systemStatsIntervalId);
+      this.systemStatsIntervalId = null;
+    }
+    this.systemStatsRequestActive = false;
+  }
+
+  refreshSystemStats(): void {
+    if (!this.isAdmin) {
+      return;
+    }
+    this.fetchSystemStats();
+  }
+
+  private fetchSystemStats(): void {
+    if (!this.isAdmin || this.systemStatsRequestActive) {
+      return;
+    }
+    this.systemStatsRequestActive = true;
+    if (!this.systemStats) {
+      this.systemStatsLoading = true;
+    }
+    this.downloads.getSystemStats().subscribe(result => {
+      this.systemStatsRequestActive = false;
+      this.systemStatsLoading = false;
+      if ((result as any)?.status === 'error') {
+        this.systemStatsError = (result as any).msg || 'Unable to load system statistics.';
+        return;
+      }
+      const data = result as SystemStats;
+      this.systemStatsError = '';
+      const previous = this.previousSystemStats;
+      if (previous && data.timestamp > previous.timestamp) {
+        const delta = data.timestamp - previous.timestamp;
+        const sentDelta = data.network.bytes_sent - previous.network.bytes_sent;
+        const recvDelta = data.network.bytes_recv - previous.network.bytes_recv;
+        this.systemStatsRates = {
+          sentPerSec: delta > 0 ? Math.max(sentDelta / delta, 0) : 0,
+          recvPerSec: delta > 0 ? Math.max(recvDelta / delta, 0) : 0
+        };
+      } else {
+        this.systemStatsRates = {sentPerSec: 0, recvPerSec: 0};
+      }
+      this.systemStats = data;
+      this.previousSystemStats = data;
+    }, () => {
+      this.systemStatsRequestActive = false;
+      this.systemStatsLoading = false;
+      this.systemStatsError = 'Unable to load system statistics.';
+    });
+  }
+
+  private resetSystemStatsState(): void {
+    this.systemStats = null;
+    this.previousSystemStats = null;
+    this.systemStatsRates = {sentPerSec: 0, recvPerSec: 0};
+    this.systemStatsError = '';
+    this.systemStatsLoading = false;
+    this.systemStatsRequestActive = false;
+  }
+
+  formatRate(value: number): string {
+    if (!Number.isFinite(value) || value <= 0) {
+      return '0 B/s';
+    }
+    return `${this.formatBytes(value)} /s`;
+  }
+
+  formatDuration(seconds: number | null | undefined): string {
+    const total = Number(seconds);
+    if (!Number.isFinite(total) || total <= 0) {
+      return '—';
+    }
+    let remaining = Math.floor(total);
+    const parts: string[] = [];
+    const days = Math.floor(remaining / 86400);
+    if (days) {
+      parts.push(`${days}d`);
+      remaining -= days * 86400;
+    }
+    const hours = Math.floor(remaining / 3600);
+    if (hours || parts.length) {
+      parts.push(`${hours}h`);
+      remaining -= hours * 3600;
+    }
+    const minutes = Math.floor(remaining / 60);
+    if (minutes || parts.length) {
+      parts.push(`${minutes}m`);
+      remaining -= minutes * 60;
+    }
+    if (!parts.length || parts.length < 3) {
+      parts.push(`${remaining}s`);
+    }
+    return parts.slice(0, 3).join(' ');
+  }
+
+  formatTimestampLocal(epochSeconds: number | null | undefined): string {
+    const value = Number(epochSeconds);
+    if (!Number.isFinite(value)) {
+      return '—';
+    }
+    const date = new Date(value * 1000);
+    if (Number.isNaN(date.getTime())) {
+      return '—';
+    }
+    return date.toLocaleTimeString();
   }
 
   promptCreateUser(): void {
