@@ -6,6 +6,110 @@
     max-width: 960px
     margin: 4rem auto
 
+.advanced-card
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.1)
+    background-color: var(--bs-card-bg)
+    border-radius: 1rem
+    padding: 2rem
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15)
+
+.advanced-layout
+    display: grid
+    gap: 1.75rem
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr))
+
+.advanced-section-title
+    font-size: 0.75rem
+    text-transform: uppercase
+    letter-spacing: 0.08em
+    color: rgba(var(--bs-body-color-rgb), 0.7)
+    margin-bottom: 0.75rem
+
+.advanced-switch
+    padding-left: 2.5rem
+    .form-check-input
+        margin-left: -2.5rem
+
+.advanced-divider
+    margin: 2rem 0 1.5rem
+    border-top: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+
+.advanced-actions
+    display: flex
+    flex-wrap: wrap
+    gap: 0.75rem
+
+.advanced-action
+    display: inline-flex
+    align-items: center
+    justify-content: flex-start
+    gap: 0.6rem
+    flex: 1 1 200px
+    padding: 0.65rem 1rem
+
+.advanced-action fa-icon
+    font-size: 0.9rem
+
+.admin-panel
+    margin-top: 2.5rem
+    padding: 2rem
+    border-radius: 1rem
+    background: var(--bs-card-bg)
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+
+.admin-panel-header
+    display: flex
+    align-items: center
+    gap: 0.5rem
+    margin-bottom: 1.5rem
+    text-transform: uppercase
+    font-size: 0.78rem
+    letter-spacing: 0.08em
+    color: rgba(var(--bs-body-color-rgb), 0.6)
+
+.admin-card
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.1)
+    border-radius: 0.75rem
+    padding: 1.5rem
+    background: var(--bs-card-bg)
+    height: 100%
+    display: flex
+    flex-direction: column
+    gap: 1rem
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12)
+
+.admin-card-header
+    font-size: 0.9rem
+    text-transform: uppercase
+    letter-spacing: 0.06em
+    color: rgba(var(--bs-body-color-rgb), 0.75)
+
+.admin-stats-grid
+    display: grid
+    gap: 0.9rem
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr))
+
+.stat-tile
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+    border-radius: 0.75rem
+    padding: 0.9rem 1rem
+    background: var(--bs-card-bg)
+
+.stat-wide
+    grid-column: span 2
+
+@media (max-width: 767.98px)
+    .advanced-card
+        padding: 1.5rem
+    .admin-panel
+        padding: 1.5rem
+    .admin-stats-grid
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr))
+    .advanced-actions
+        flex-direction: column
+    .advanced-action
+        width: 100%
+
 .add-url-component
     margin: 0.5rem auto
 
