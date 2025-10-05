@@ -338,20 +338,21 @@ export class DownloadsService {
 
     return this.http.post<any>('delete', {where: where, ids: ids}).pipe(
       tap(result => {
-        if (!result || result.status === 'error') {
+        if (!result || result.status !== 'ok') {
           ids.forEach(id => {
             const entry = (this as any)[where]?.get(id);
             if (entry) {
               entry.deleting = false;
             }
           });
-        }
-
-        if (where !== 'done' || !result) {
+          if (where === 'done') {
+            const errors = result?.errors ? Object.values(result.errors).join('\n') : (result?.msg || 'Unknown error.');
+            alert('Unable to remove one or more files:\n' + errors);
+          }
           return;
         }
-
-        if (result.status === 'ok') {
+        // success
+        if (where === 'done') {
           const deleted: string[] = result.deleted || [];
           const missing: string[] = result.missing || [];
           let messageParts: string[] = [];
@@ -365,10 +366,13 @@ export class DownloadsService {
             messageParts.push('Selected downloads removed.');
           }
           alert(messageParts.join('\n\n'));
-        } else {
-          const errors = result.errors ? Object.values(result.errors).join('\n') : (result.msg || 'Unknown error.');
-          alert('Unable to remove one or more files:\n' + errors);
         }
+        // remove all ids
+        ids.forEach(id => {
+          (this as any)[where].delete(id);
+        });
+        const changed = where === 'queue' ? this.queueChanged : this.doneChanged;
+        changed.next(null);
       }),
       catchError(error => {
         ids.forEach(id => {
