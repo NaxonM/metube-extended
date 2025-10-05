@@ -51,6 +51,7 @@ class DownloadInfo:
         self.playlist_item_limit = playlist_item_limit
         self.cookiefile = cookiefile
         self.user_id = user_id
+        self.history_key = f"{self.url}::{self.timestamp}"
 
 class Download:
     manager = None
@@ -194,6 +195,11 @@ class PersistentQueue:
 
     def load(self):
         for k, v in self.saved_items():
+            if not hasattr(v, 'timestamp') or v.timestamp is None:
+                v.timestamp = time.time_ns()
+            if not hasattr(v, 'history_key') or not v.history_key:
+                base = getattr(v, 'url', '') or getattr(v, 'id', '')
+                v.history_key = f"{base}::{v.timestamp}"
             self.dict[k] = Download(None, None, None, None, None, None, {}, v)
 
     def exists(self, key):
@@ -209,8 +215,9 @@ class PersistentQueue:
         with shelve.open(self.path, 'r') as shelf:
             return sorted(shelf.items(), key=lambda item: item[1].timestamp)
 
-    def put(self, value):
-        key = value.info.url
+    def put(self, value, key=None):
+        if key is None:
+            key = value.info.url
         self.dict[key] = value
         with shelve.open(self.path, 'w') as shelf:
             shelf[key] = value.info
@@ -247,6 +254,7 @@ class DownloadQueue:
             self.semaphore = asyncio.Semaphore(int(self.config.MAX_CONCURRENT_DOWNLOADS))
         
         self.done.load()
+        self._normalize_done_entries()
 
     async def __import_queue(self):
         for k, v in self.queue.saved_items():
@@ -262,6 +270,26 @@ class DownloadQueue:
         log.info("Initializing DownloadQueue")
         asyncio.create_task(self.__import_queue())
         asyncio.create_task(self.__import_pending())
+
+    def _ensure_history_key(self, info):
+        history_key = getattr(info, 'history_key', None)
+        if history_key:
+            return history_key
+        timestamp = getattr(info, 'timestamp', None)
+        if timestamp is None:
+            timestamp = time.time_ns()
+            info.timestamp = timestamp
+        base = getattr(info, 'url', '') or getattr(info, 'id', '')
+        info.history_key = f"{base}::{timestamp}"
+        return info.history_key
+
+    def _normalize_done_entries(self):
+        for key, download in list(self.done.items()):
+            info = download.info
+            history_key = self._ensure_history_key(info)
+            if key != history_key:
+                self.done.delete(key)
+                self.done.put(download, history_key)
 
     def _resolve_download_directory(self, info):
         base_directory = self.config.DOWNLOAD_DIR if (info.quality != 'audio' and info.format not in AUDIO_FORMATS) else self.config.AUDIO_DOWNLOAD_DIR
@@ -318,7 +346,8 @@ class DownloadQueue:
             if download.canceled:
                 asyncio.create_task(self.notifier.canceled(download.info.url))
             else:
-                self.done.put(download)
+                history_key = self._ensure_history_key(download.info)
+                self.done.put(download, history_key)
                 asyncio.create_task(self.notifier.completed(download.info))
 
     def __extract_info(self, url, playlist_strict_mode):
@@ -354,6 +383,7 @@ class DownloadQueue:
         dldirectory, error_message = self.__calc_download_path(dl.quality, dl.format, dl.folder)
         if error_message is not None:
             return error_message
+        self._ensure_history_key(dl)
         output = self.config.OUTPUT_TEMPLATE if len(dl.custom_name_prefix) == 0 else f'{dl.custom_name_prefix}.{self.config.OUTPUT_TEMPLATE}'
         output_chapter = self.config.OUTPUT_TEMPLATE_CHAPTER
         entry = getattr(dl, 'entry', None)

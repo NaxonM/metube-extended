@@ -292,7 +292,7 @@ export class AppComponent implements AfterViewInit, OnInit {
   }
 
   trackDownloadEntry(index: number, entry: { key: string; value: Download }) {
-    return entry.value.id || entry.key;
+    return entry.value.history_key || entry.value.id || entry.key;
   }
 
   addDownload(url?: string, quality?: string, format?: string, folder?: string, customNamePrefix?: string, playlistStrictMode?: boolean, playlistItemLimit?: number, autoStart?: boolean) {
@@ -846,6 +846,21 @@ export class AppComponent implements AfterViewInit, OnInit {
     return Math.max(0, Math.min(100, Math.round(percent)));
   }
 
+  getDownloadTitle(download: Download | undefined): string {
+    if (!download) {
+      return 'Unknown download';
+    }
+    const title = (download.title || '').trim();
+    if (title) {
+      return title;
+    }
+    const filename = (download.filename || '').trim();
+    if (filename) {
+      return filename;
+    }
+    return download.url || download.id || 'Unknown download';
+  }
+
   private updateMetrics() {
     this.activeDownloads = Array.from(this.downloads.queue.values()).filter(d => d.status === 'downloading' || d.status === 'preparing').length;
     this.queuedDownloads = Array.from(this.downloads.queue.values()).filter(d => d.status === 'pending').length;
@@ -890,14 +905,16 @@ export class AppComponent implements AfterViewInit, OnInit {
     const dedupBy = (list: Array<{ key: string; value: Download }>) => {
       const deduped = new Map<string, { key: string; value: Download }>();
       list.forEach(entry => {
-        const uniqueKey = entry.value.id || entry.key;
+        const uniqueKey = entry.value.history_key || entry.key || entry.value.id;
         deduped.set(uniqueKey, entry);
       });
       return Array.from(deduped.values());
     };
 
+    const deduped = dedupBy(mapped);
+
     if (this.completedSort === 'largest') {
-      this.filteredCompleted = dedupBy(mapped)
+      this.filteredCompleted = deduped
         .slice()
         .sort((a, b) => {
           const sizeA = a.value.size ?? -1;
@@ -917,7 +934,7 @@ export class AppComponent implements AfterViewInit, OnInit {
         }
         return 2;
       };
-      this.filteredCompleted = dedupBy(mapped)
+      this.filteredCompleted = deduped
         .slice()
         .sort((a, b) => {
           const diff = rank(a.value) - rank(b.value);
@@ -929,6 +946,15 @@ export class AppComponent implements AfterViewInit, OnInit {
       return;
     }
 
-    this.filteredCompleted = dedupBy(mapped);
+    this.filteredCompleted = deduped
+      .slice()
+      .sort((a, b) => {
+        const timestampA = typeof a.value.timestamp === 'number' ? a.value.timestamp : 0;
+        const timestampB = typeof b.value.timestamp === 'number' ? b.value.timestamp : 0;
+        if (timestampA === timestampB) {
+          return (b.value.size ?? 0) - (a.value.size ?? 0);
+        }
+        return timestampB - timestampA;
+      });
   }
 }

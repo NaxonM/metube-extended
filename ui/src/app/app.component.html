@@ -211,7 +211,7 @@
                   </div>
                   <div class="queue-item-content">
                     <div class="queue-item-header">
-                      <h3 class="queue-item-title" [title]="entry.value.filename || entry.value.title">{{ entry.value.title }}</h3>
+                      <h3 class="queue-item-title" [title]="getDownloadTitle(entry.value)">{{ getDownloadTitle(entry.value) }}</h3>
                       <span class="status-chip" [class.status-preparing]="entry.value.status === 'preparing'" [class.status-downloading]="entry.value.status === 'downloading'" [class.status-pending]="entry.value.status === 'pending'">{{ entry.value.status }}</span>
                     </div>
                     <div class="queue-item-progress">
@@ -327,8 +327,10 @@
                       <fa-icon [icon]="entry.value.status === 'finished' ? faCheckCircle : faTimesCircle"></fa-icon>
                       <div>
                         <h3 class="completed-title">
-                          <a *ngIf="entry.value.filename; else noFileLink" [href]="buildDownloadLink(entry.value)" target="_blank" rel="noopener">{{ entry.value.title }}</a>
-                          <ng-template #noFileLink>{{ entry.value.title }}</ng-template>
+                          <ng-container *ngIf="entry.value.filename; else noFileLink">
+                            <a [href]="buildDownloadLink(entry.value)" target="_blank" rel="noopener">{{ getDownloadTitle(entry.value) }}</a>
+                          </ng-container>
+                          <ng-template #noFileLink>{{ getDownloadTitle(entry.value) }}</ng-template>
                         </h3>
                         <div class="completed-meta text-muted">
                           <span *ngIf="entry.value.size">{{ entry.value.size | fileSize }}</span>

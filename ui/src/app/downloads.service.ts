@@ -28,6 +28,8 @@ export interface Download {
   error?: string;
   size?: number;
   thumbnail?: string;
+  timestamp?: number;
+  history_key?: string;
   checked?: boolean;
   deleting?: boolean;
 }
@@ -66,31 +68,59 @@ export class DownloadsService {
   constructor(private http: HttpClient, private socket: MeTubeSocket) {
     socket.fromEvent('all').subscribe((strdata: string) => {
       this.loading = false;
-      let data: [[[string, Download]], [[string, Download]]] = JSON.parse(strdata);
+      const data: [Array<[string, Download]>, Array<[string, Download]>] = JSON.parse(strdata);
       this.queue.clear();
-      data[0].forEach(entry => this.queue.set(...entry));
+      data[0].forEach(([key, download]) => {
+        this.queue.set(key, download);
+      });
       this.done.clear();
-      data[1].forEach(entry => this.done.set(...entry));
+      data[1].forEach(([key, download]) => {
+        const mapKey = download.history_key || key;
+        if (!download.history_key) {
+          download.history_key = mapKey;
+        }
+        this.done.set(mapKey, download);
+      });
       this.queueChanged.next(null);
       this.doneChanged.next(null);
     });
     socket.fromEvent('added').subscribe((strdata: string) => {
-      let data: Download = JSON.parse(strdata);
+      const data: Download = JSON.parse(strdata);
+      if (!data.history_key) {
+        data.history_key = `${data.url}::${data.timestamp ?? Date.now()}`;
+      }
       this.queue.set(data.url, data);
       this.queueChanged.next(null);
     });
     socket.fromEvent('updated').subscribe((strdata: string) => {
-      let data: Download = JSON.parse(strdata);
-      let dl: Download = this.queue.get(data.url);
+      const data: Download = JSON.parse(strdata);
+      const dl: Download | undefined = this.queue.get(data.url);
+      if (!data.history_key && dl?.history_key) {
+        data.history_key = dl.history_key;
+      }
       data.checked = dl?.checked;
       data.deleting = dl?.deleting;
       this.queue.set(data.url, data);
       this.updated.next(null);
     });
     socket.fromEvent('completed').subscribe((strdata: string) => {
-      let data: Download = JSON.parse(strdata);
+      const data: Download = JSON.parse(strdata);
+      const key = data.history_key || `${data.url}::${data.timestamp ?? Date.now()}`;
+      if (!data.history_key) {
+        data.history_key = key;
+      }
       this.queue.delete(data.url);
-      this.done.set(data.url, data);
+
+      const existing = this.done.get(key) || this.done.get(data.url);
+      if (existing) {
+        data.checked = existing.checked;
+        data.deleting = existing.deleting;
+        if (key !== data.url) {
+          this.done.delete(data.url);
+        }
+      }
+
+      this.done.set(key, data);
       this.queueChanged.next(null);
       this.doneChanged.next(null);
     });
@@ -100,25 +130,48 @@ export class DownloadsService {
       this.queueChanged.next(null);
     });
     socket.fromEvent('cleared').subscribe((strdata: string) => {
-      let data: string = JSON.parse(strdata);
-      this.done.delete(data);
-      this.doneChanged.next(null);
+      const key: string = JSON.parse(strdata);
+      let removed = this.done.delete(key);
+
+      if (!removed) {
+        for (const [mapKey, download] of this.done.entries()) {
+          if (download.history_key === key || download.url === key) {
+            this.done.delete(mapKey);
+            removed = true;
+            break;
+          }
+        }
+      }
+
+      if (removed) {
+        this.doneChanged.next(null);
+      }
     });
     socket.fromEvent('renamed').subscribe((strdata: string) => {
-      let data: Download = JSON.parse(strdata);
-      let existing: Download = this.done.get(data.url);
+      const data: Download = JSON.parse(strdata);
+      const key = data.history_key || data.url;
+      let existing: Download | undefined = this.done.get(key);
+
+      if (!existing && data.history_key && this.done.has(data.url)) {
+        existing = this.done.get(data.url);
+        this.done.delete(data.url);
+      }
+
       if (!existing) {
         return;
       }
+
       existing = {
         ...existing,
         filename: data.filename ?? data.title ?? existing.filename,
         title: data.title ?? existing.title,
         msg: data.msg ?? existing.msg,
         error: data.error ?? existing.error,
-        size: data.size ?? existing.size
+        size: data.size ?? existing.size,
+        history_key: data.history_key ?? existing.history_key
       };
-      this.done.set(data.url, existing);
+
+      this.done.set(key, existing);
       this.doneChanged.next(null);
     });
     socket.fromEvent('configuration').subscribe((strdata: string) => {
@@ -214,13 +267,13 @@ export class DownloadsService {
 
   public startByFilter(where: 'queue' | 'done', filter: (dl: Download) => boolean) {
     let ids: string[] = [];
-    this[where].forEach((dl: Download) => { if (filter(dl)) ids.push(dl.url) });
+    this[where].forEach((dl: Download, key: string) => { if (filter(dl)) ids.push(key); });
     return this.startById(ids);
   }
 
   public delByFilter(where: 'queue' | 'done', filter: (dl: Download) => boolean) {
     let ids: string[] = [];
-    this[where].forEach((dl: Download) => { if (filter(dl)) ids.push(dl.url) });
+    this[where].forEach((dl: Download, key: string) => { if (filter(dl)) ids.push(key); });
     return this.delById(where, ids);
   }
   public addDownloadByUrl(url: string): Promise<any> {
