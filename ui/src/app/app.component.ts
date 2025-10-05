@@ -1,25 +1,16 @@
-import { Component, ViewChild, ElementRef, AfterViewInit, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, ViewChild, ElementRef, AfterViewInit, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { faTrashAlt, faCheckCircle, faTimesCircle, IconDefinition } from '@fortawesome/free-regular-svg-icons';
-import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt, faPen, faCookieBite, faUserShield, faUserPlus, faUserSlash, faKey, faRightFromBracket, faPlay } from '@fortawesome/free-solid-svg-icons';
+import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt, faPen, faCookieBite, faUserShield, faUserPlus, faUserSlash, faKey, faRightFromBracket } from '@fortawesome/free-solid-svg-icons';
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { CookieService } from 'ngx-cookie-service';
+import { map, Observable, of, distinctUntilChanged } from 'rxjs';
 
 import { Download, DownloadsService, Status, CurrentUser, ManagedUser } from './downloads.service';
 import { MasterCheckboxComponent } from './master-checkbox.component';
 import { Formats, Format, Quality } from './formats';
 import { Theme, Themes } from './theme';
 import {KeyValue} from "@angular/common";
-
-type QueueFilter = 'all' | 'active' | 'pending';
-type CompletedFilter = 'all' | 'finished' | 'error';
-type CompletedSort = 'recent' | 'largest' | 'status';
-
-interface ToastMessage {
-  id: number;
-  type: 'success' | 'info' | 'warning' | 'danger';
-  text: string;
-}
 
 @Component({
     selector: 'app-root',
@@ -33,6 +24,7 @@ export class AppComponent implements AfterViewInit, OnInit {
   qualities: Quality[];
   quality: string;
   format: string;
+  folder: string;
   customNamePrefix: string;
   autoStart: boolean;
   playlistStrictMode: boolean;
@@ -40,6 +32,7 @@ export class AppComponent implements AfterViewInit, OnInit {
   addInProgress = false;
   themes: Theme[] = Themes;
   activeTheme: Theme;
+  customDirs$: Observable<string[]>;
   showBatchPanel: boolean = false; 
   batchImportModalOpen = false;
   batchImportText = '';
@@ -71,8 +64,14 @@ export class AppComponent implements AfterViewInit, OnInit {
   totalSpeed = 0;
 
   @ViewChild('queueMasterCheckbox') queueMasterCheckbox: MasterCheckboxComponent;
+  @ViewChild('queueDelSelected') queueDelSelected: ElementRef;
+  @ViewChild('queueDownloadSelected') queueDownloadSelected: ElementRef;
   @ViewChild('doneMasterCheckbox') doneMasterCheckbox: MasterCheckboxComponent;
-  @ViewChild('mediaPlayer') mediaPlayer?: ElementRef<HTMLMediaElement>;
+  @ViewChild('doneDelSelected') doneDelSelected: ElementRef;
+  @ViewChild('doneClearCompleted') doneClearCompleted: ElementRef;
+  @ViewChild('doneClearFailed') doneClearFailed: ElementRef;
+  @ViewChild('doneRetryFailed') doneRetryFailed: ElementRef;
+  @ViewChild('doneDownloadSelected') doneDownloadSelected: ElementRef;
 
   faTrashAlt = faTrashAlt;
   faCheckCircle = faCheckCircle;
@@ -97,31 +96,8 @@ export class AppComponent implements AfterViewInit, OnInit {
   faUserSlash = faUserSlash;
   faKey = faKey;
   faRightFromBracket = faRightFromBracket;
-  faPlay = faPlay;
 
-  streamModalOpen = false;
-  streamMode: 'video' | 'audio' = 'video';
-  streamDownload: Download | null = null;
-  streamUrl: string | null = null;
-
-  private readonly streamableVideoExtensions = ['.mp4', '.webm'];
-  private readonly streamableAudioExtensions = ['.mp3', '.ogg', '.wav'];
-
-  queueFilter: QueueFilter = 'all';
-  completedFilter: CompletedFilter = 'all';
-  completedSort: CompletedSort = 'recent';
-  queueSelectionCount = 0;
-  doneSelectionCount = 0;
-  hasCompletedDownloads = false;
-  hasFailedDownloads = false;
-  toasts: ToastMessage[] = [];
-  readonly loadingPlaceholders = [0, 1, 2];
-  filteredQueue: Array<{ key: string; value: Download }> = [];
-  filteredCompleted: Array<{ key: string; value: Download }> = [];
-
-  private toastCounter = 0;
-
-  constructor(public downloads: DownloadsService, private cookieService: CookieService, private http: HttpClient, private cdr: ChangeDetectorRef) {
+  constructor(public downloads: DownloadsService, private cookieService: CookieService, private http: HttpClient) {
     this.format = cookieService.get('metube_format') || 'any';
     // Needs to be set or qualities won't automatically be set
     this.setQualities()
@@ -133,32 +109,20 @@ export class AppComponent implements AfterViewInit, OnInit {
     // Subscribe to download updates
     this.downloads.queueChanged.subscribe(() => {
       this.updateMetrics();
-      if (this.queueMasterCheckbox) {
-        this.queueMasterCheckbox.selectionChanged();
-      }
-      this.queueSelectionCount = 0;
-      this.cdr.detectChanges();
     });
     this.downloads.doneChanged.subscribe(() => {
       this.updateMetrics();
-      if (this.doneMasterCheckbox) {
-        this.doneMasterCheckbox.selectionChanged();
-      }
-      this.doneSelectionCount = 0;
-      this.cdr.detectChanges();
     });
     // Subscribe to real-time updates
     this.downloads.updated.subscribe(() => {
       this.updateMetrics();
-      this.cdr.detectChanges();
     });
-    this.refreshQueueEntries();
-    this.refreshCompletedEntries();
   }
 
   ngOnInit() {
     this.getConfiguration();
     this.getYtdlOptionsUpdateTime();
+    this.customDirs$ = this.getMatchingCustomDir();
     this.setTheme(this.activeTheme);
     this.refreshCookiesStatus();
     this.loadCurrentUser();
@@ -171,6 +135,22 @@ export class AppComponent implements AfterViewInit, OnInit {
   }
 
   ngAfterViewInit() {
+    this.downloads.queueChanged.subscribe(() => {
+      this.queueMasterCheckbox.selectionChanged();
+    });
+    this.downloads.doneChanged.subscribe(() => {
+      this.doneMasterCheckbox.selectionChanged();
+      let completed: number = 0, failed: number = 0;
+      this.downloads.done.forEach(dl => {
+        if (dl.status === 'finished')
+          completed++;
+        else if (dl.status === 'error')
+          failed++;
+      });
+      this.doneClearCompleted.nativeElement.disabled = completed === 0;
+      this.doneClearFailed.nativeElement.disabled = failed === 0;
+      this.doneRetryFailed.nativeElement.disabled = failed === 0;
+    });
     this.fetchVersionInfo();
   }
 
@@ -182,6 +162,39 @@ export class AppComponent implements AfterViewInit, OnInit {
 
   qualityChanged() {
     this.cookieService.set('metube_quality', this.quality, { expires: 3650 });
+    // Re-trigger custom directory change
+    this.downloads.customDirsChanged.next(this.downloads.customDirs);
+  }
+
+  showAdvanced() {
+    return this.downloads.configuration['CUSTOM_DIRS'];
+  }
+
+  allowCustomDir(tag: string) {
+    if (this.downloads.configuration['CREATE_CUSTOM_DIRS']) {
+      return tag;
+    }
+    return false;
+  }
+
+  isAudioType() {
+    return this.quality == 'audio' || this.format == 'mp3'  || this.format == 'm4a' || this.format == 'opus' || this.format == 'wav' || this.format == 'flac';
+  }
+
+  getMatchingCustomDir() : Observable<string[]> {
+    return this.downloads.customDirsChanged.asObservable().pipe(
+      map((output) => {
+        // Keep logic consistent with app/ytdl.py
+        if (this.isAudioType()) {
+          console.debug("Showing audio-specific download directories");
+          return output["audio_download_dir"];
+        } else {
+          console.debug("Showing default download directories");
+          return output["download_dir"];
+        }
+      }),
+      distinctUntilChanged((prev, curr) => JSON.stringify(prev) === JSON.stringify(curr))
+    );
   }
 
   getYtdlOptionsUpdateTime() {
@@ -191,7 +204,7 @@ export class AppComponent implements AfterViewInit, OnInit {
           const date = new Date(data['update_time'] * 1000);
           this.ytDlpOptionsUpdateTime=date.toLocaleString();
         }else{
-          this.showToast('danger', `Error reloading yt-dlp options: ${data['msg']}`);
+          alert("Error reload yt-dlp options: "+data['msg']);
         }
       }
     });
@@ -235,6 +248,8 @@ export class AppComponent implements AfterViewInit, OnInit {
     this.cookieService.set('metube_format', this.format, { expires: 3650 });
     // Updates to use qualities available
     this.setQualities()
+    // Re-trigger custom directory change
+    this.downloads.customDirsChanged.next(this.downloads.customDirs);
   }
 
   autoStartChanged() {
@@ -242,11 +257,13 @@ export class AppComponent implements AfterViewInit, OnInit {
   }
 
   queueSelectionChanged(checked: number) {
-    this.queueSelectionCount = checked;
+    this.queueDelSelected.nativeElement.disabled = checked == 0;
+    this.queueDownloadSelected.nativeElement.disabled = checked == 0;
   }
 
   doneSelectionChanged(checked: number) {
-    this.doneSelectionCount = checked;
+    this.doneDelSelected.nativeElement.disabled = checked == 0;
+    this.doneDownloadSelected.nativeElement.disabled = checked == 0;
   }
 
   setQualities() {
@@ -256,46 +273,11 @@ export class AppComponent implements AfterViewInit, OnInit {
     this.quality = exists ? this.quality : 'best'
   }
 
-  setQueueFilter(filter: QueueFilter) {
-    this.queueFilter = filter;
-    this.refreshQueueEntries();
-  }
-
-  setCompletedFilter(filter: CompletedFilter) {
-    this.completedFilter = filter;
-    this.refreshCompletedEntries();
-  }
-
-  getFilteredQueue(): Array<{ key: string; value: Download }> {
-    return this.filteredQueue;
-  }
-
-  setCompletedSort(sort: CompletedSort) {
-    this.completedSort = sort;
-    this.refreshCompletedEntries();
-  }
-
-  getFilteredCompleted(): Array<{ key: string; value: Download }> {
-    return this.filteredCompleted;
-  }
-
-  trackDownloadEntry(index: number, entry: { key: string; value: Download }) {
-    return entry.value.id;
-  }
-
   addDownload(url?: string, quality?: string, format?: string, folder?: string, customNamePrefix?: string, playlistStrictMode?: boolean, playlistItemLimit?: number, autoStart?: boolean) {
-    url = (url ?? this.addUrl ?? '').trim();
-    if (!url) {
-      return;
-    }
-    if (!this.cookiesConfigured && this.isYoutubeUrl(url)) {
-      this.showToast('warning', 'Downloading from YouTube requires cookies. Please configure your YouTube cookies before trying again.');
-      return;
-    }
-
+    url = url ?? this.addUrl
     quality = quality ?? this.quality
     format = format ?? this.format
-    folder = folder ?? ''
+    folder = folder ?? this.folder
     customNamePrefix = customNamePrefix ?? this.customNamePrefix
     playlistStrictMode = playlistStrictMode ?? this.playlistStrictMode
     playlistItemLimit = playlistItemLimit ?? this.playlistItemLimit
@@ -305,10 +287,9 @@ export class AppComponent implements AfterViewInit, OnInit {
     this.addInProgress = true;
     this.downloads.add(url, quality, format, folder, customNamePrefix, playlistStrictMode, playlistItemLimit, autoStart).subscribe((status: Status) => {
       if (status.status === 'error') {
-        this.showToast('danger', `Error adding URL: ${status.msg}`);
+        alert(`Error adding URL: ${status.msg}`);
       } else {
         this.addUrl = '';
-        this.showToast('success', 'Download queued successfully.');
       }
       this.addInProgress = false;
     });
@@ -351,77 +332,6 @@ export class AppComponent implements AfterViewInit, OnInit {
     });
   }
 
-  canStream(download: Download): boolean {
-    if (!download || !download.filename || download.status !== 'finished') {
-      return false;
-    }
-    const lower = download.filename.toLowerCase();
-    return this.streamableVideoExtensions.some(ext => lower.endsWith(ext)) || this.streamableAudioExtensions.some(ext => lower.endsWith(ext));
-  }
-
-  openStream(download: Download) {
-    if (!this.canStream(download)) {
-      return;
-    }
-    const mode = this.getStreamMode(download.filename);
-    if (!mode) {
-      return;
-    }
-    this.streamMode = mode;
-    this.streamDownload = download;
-    this.streamUrl = this.buildDownloadLink(download);
-    this.streamModalOpen = true;
-    setTimeout(() => {
-      const player = this.mediaPlayer?.nativeElement;
-      if (player) {
-        player.load();
-      }
-    });
-  }
-
-  closeStream() {
-    const player = this.mediaPlayer?.nativeElement;
-    if (player) {
-      player.pause();
-      player.removeAttribute('src');
-      player.load();
-    }
-    this.streamModalOpen = false;
-    this.streamDownload = null;
-    this.streamUrl = null;
-  }
-
-  private getStreamMode(filename: string | null | undefined): 'video' | 'audio' | null {
-    if (!filename) {
-      return null;
-    }
-    const lower = filename.toLowerCase();
-    if (this.streamableVideoExtensions.some(ext => lower.endsWith(ext))) {
-      return 'video';
-    }
-    if (this.streamableAudioExtensions.some(ext => lower.endsWith(ext))) {
-      return 'audio';
-    }
-    return null;
-  }
-
-  showToast(type: ToastMessage['type'], text: string, duration = 4000) {
-    const id = ++this.toastCounter;
-    this.toasts = [...this.toasts, { id, type, text }];
-    if (duration > 0) {
-      setTimeout(() => this.dismissToast(id), duration);
-    }
-  }
-
-  dismissToast(id: number) {
-    this.toasts = this.toasts.filter(toast => toast.id !== id);
-  }
-
-  private isYoutubeUrl(url: string): boolean {
-    const lower = url.toLowerCase();
-    return lower.includes('youtube.com') || lower.includes('youtu.be');
-  }
-
   renameDownload(key: string, download: Download) {
     const currentName = download.filename;
     const newName = prompt('Enter new filename', currentName);
@@ -431,7 +341,7 @@ export class AppComponent implements AfterViewInit, OnInit {
 
     this.downloads.rename(key, newName).subscribe((status: Status) => {
       if (status.status === 'error') {
-        this.showToast('danger', `Error renaming file: ${status.msg}`);
+        alert(`Error renaming file: ${status.msg}`);
       }
     });
   }
@@ -457,7 +367,7 @@ export class AppComponent implements AfterViewInit, OnInit {
 
   saveCookies(): void {
     if (!this.cookiesText || !this.cookiesText.trim()) {
-      this.showToast('warning', 'Please paste your cookies in the provided text area.');
+      alert('Please paste your cookies in the provided text area.');
       return;
     }
 
@@ -467,13 +377,12 @@ export class AppComponent implements AfterViewInit, OnInit {
     this.downloads.setCookies(this.cookiesText).subscribe((status: Status) => {
       this.cookiesInProgress = false;
       if (status.status === 'error') {
-        this.showToast('danger', `Error saving cookies: ${status.msg}`);
+        alert(`Error saving cookies: ${status.msg}`);
         return;
       }
       this.cookiesText = '';
       this.cookiesStatusMessage = 'Cookies saved successfully.';
       this.cookiesConfigured = true;
-      this.showToast('success', 'Cookies saved successfully.');
       this.refreshCookiesStatus();
     });
   }
@@ -489,12 +398,11 @@ export class AppComponent implements AfterViewInit, OnInit {
     this.downloads.clearCookies().subscribe((status: Status) => {
       this.cookiesInProgress = false;
       if (status.status === 'error') {
-        this.showToast('danger', `Error clearing cookies: ${status.msg}`);
+        alert(`Error clearing cookies: ${status.msg}`);
         return;
       }
       this.cookiesConfigured = false;
       this.cookiesStatusMessage = 'Cookies cleared.';
-      this.showToast('info', 'Cookies cleared.');
       this.refreshCookiesStatus();
     });
   }
@@ -529,16 +437,15 @@ export class AppComponent implements AfterViewInit, OnInit {
     }
     const password = prompt(`Enter a password for ${username}`) || '';
     if (!password) {
-      this.showToast('warning', 'Password is required.');
+      alert('Password is required.');
       return;
     }
     const makeAdmin = confirm('Should this user have administrator access?');
     this.downloads.createUser(username, password, makeAdmin ? 'admin' : 'user').subscribe(result => {
       if ((result as any)?.status === 'error') {
-        this.showToast('danger', (result as any).msg || 'Failed to create user.');
+        alert((result as any).msg || 'Failed to create user.');
         return;
       }
-      this.showToast('success', 'User created successfully.');
       this.refreshUsers();
     });
   }
@@ -550,10 +457,9 @@ export class AppComponent implements AfterViewInit, OnInit {
     }
     this.downloads.updateUser(user.id, {role: nextRole}).subscribe(result => {
       if ((result as any)?.status === 'error') {
-        this.showToast('danger', (result as any).msg || 'Failed to update role.');
+        alert((result as any).msg || 'Failed to update role.');
         return;
       }
-      this.showToast('success', 'User role updated.');
       this.refreshUsers();
     });
   }
@@ -565,10 +471,9 @@ export class AppComponent implements AfterViewInit, OnInit {
     }
     this.downloads.updateUser(user.id, {disabled: nextState}).subscribe(result => {
       if ((result as any)?.status === 'error') {
-        this.showToast('danger', (result as any).msg || 'Failed to update status.');
+        alert((result as any).msg || 'Failed to update status.');
         return;
       }
-      this.showToast('success', `User ${nextState ? 'disabled' : 'enabled'} successfully.`);
       this.refreshUsers();
     });
   }
@@ -580,10 +485,10 @@ export class AppComponent implements AfterViewInit, OnInit {
     }
     this.downloads.updateUser(user.id, {password}).subscribe(result => {
       if ((result as any)?.status === 'error') {
-        this.showToast('danger', (result as any).msg || 'Failed to reset password.');
+        alert((result as any).msg || 'Failed to reset password.');
         return;
       }
-      this.showToast('success', 'Password updated successfully.');
+      alert('Password updated successfully.');
     });
   }
 
@@ -593,10 +498,9 @@ export class AppComponent implements AfterViewInit, OnInit {
     }
     this.downloads.deleteUser(user.id).subscribe(result => {
       if ((result as any)?.status === 'error') {
-        this.showToast('danger', (result as any).msg || 'Failed to delete user.');
+        alert((result as any).msg || 'Failed to delete user.');
         return;
       }
-      this.showToast('success', 'User deleted successfully.');
       this.refreshUsers();
     });
   }
@@ -684,11 +588,7 @@ export class AppComponent implements AfterViewInit, OnInit {
       .map(url => url.trim())
       .filter(url => url.length > 0);
     if (urls.length === 0) {
-      this.showToast('warning', 'No valid URLs found.');
-      return;
-    }
-    if (!this.cookiesConfigured && urls.some(url => this.isYoutubeUrl(url))) {
-      this.batchImportStatus = 'YouTube downloads require cookies. Please configure your YouTube cookies before importing.';
+      alert('No valid URLs found.');
       return;
     }
     this.importInProgress = true;
@@ -700,31 +600,28 @@ export class AppComponent implements AfterViewInit, OnInit {
       if (this.cancelImportFlag) {
         this.batchImportStatus = `Import cancelled after ${index} of ${urls.length} URLs.`;
         this.importInProgress = false;
-        this.showToast('info', `Import cancelled after ${index} URL${index === 1 ? '' : 's'}.`);
         return;
       }
       if (index >= urls.length) {
         this.batchImportStatus = `Finished importing ${urls.length} URLs.`;
         this.importInProgress = false;
-        this.showToast('success', `Finished importing ${urls.length} URL${urls.length === 1 ? '' : 's'}.`);
         return;
       }
       const url = urls[index];
       this.batchImportStatus = `Importing URL ${index + 1} of ${urls.length}: ${url}`;
-      // Pass the selected options through to the add() method
-      this.downloads.add(url, this.quality, this.format, '', this.customNamePrefix,
+      // Now pass the selected quality, format, folder, etc. to the add() method
+      this.downloads.add(url, this.quality, this.format, this.folder, this.customNamePrefix,
         this.playlistStrictMode, this.playlistItemLimit, this.autoStart)
         .subscribe({
           next: (status: Status) => {
             if (status.status === 'error') {
-              this.showToast('danger', `Error adding URL ${url}: ${status.msg}`);
+              alert(`Error adding URL ${url}: ${status.msg}`);
             }
             index++;
             setTimeout(processNext, delayBetween);
           },
           error: (err) => {
             console.error(`Error importing URL ${url}:`, err);
-            this.showToast('danger', `Error importing URL ${url}. Check logs for details.`);
             index++;
             setTimeout(processNext, delayBetween);
           }
@@ -760,7 +657,7 @@ export class AppComponent implements AfterViewInit, OnInit {
       ];
     }
     if (!urls.length) {
-      this.showToast('info', 'No URLs found for the selected filter.');
+      alert('No URLs found for the selected filter.');
       return;
     }
     const content = urls.join('\n');
@@ -791,13 +688,13 @@ export class AppComponent implements AfterViewInit, OnInit {
       ];
     }
     if (!urls.length) {
-      this.showToast('info', 'No URLs found for the selected filter.');
+      alert('No URLs found for the selected filter.');
       return;
     }
     const content = urls.join('\n');
     navigator.clipboard.writeText(content)
-      .then(() => this.showToast('success', 'URLs copied to clipboard.'))
-      .catch(() => this.showToast('danger', 'Failed to copy URLs.'));
+      .then(() => alert('URLs copied to clipboard.'))
+      .catch(() => alert('Failed to copy URLs.'));
   }
 
   fetchVersionInfo(): void {
@@ -820,116 +717,16 @@ export class AppComponent implements AfterViewInit, OnInit {
     this.isAdvancedOpen = !this.isAdvancedOpen;
   }
 
-  getProgressValue(download: Download | undefined): number {
-    if (!download) {
-      return 0;
-    }
-    if (download.status === 'preparing') {
-      return 100;
-    }
-    const percent = download.percent;
-    if (typeof percent !== 'number' || !isFinite(percent)) {
-      return 0;
-    }
-    return Math.max(0, Math.min(100, Math.round(percent)));
-  }
-
-  getDownloadTitle(download: Download | undefined): string {
-    if (!download) {
-      return 'Unknown download';
-    }
-    const title = (download.title || '').trim();
-    if (title) {
-      return title;
-    }
-    const filename = (download.filename || '').trim();
-    if (filename) {
-      return filename;
-    }
-    return download.url || download.id || 'Unknown download';
-  }
-
   private updateMetrics() {
     this.activeDownloads = Array.from(this.downloads.queue.values()).filter(d => d.status === 'downloading' || d.status === 'preparing').length;
     this.queuedDownloads = Array.from(this.downloads.queue.values()).filter(d => d.status === 'pending').length;
     this.completedDownloads = Array.from(this.downloads.done.values()).filter(d => d.status === 'finished').length;
     this.failedDownloads = Array.from(this.downloads.done.values()).filter(d => d.status === 'error').length;
-    this.hasCompletedDownloads = this.completedDownloads > 0;
-    this.hasFailedDownloads = this.failedDownloads > 0;
-
+    
     // Calculate total speed from downloading items
     const downloadingItems = Array.from(this.downloads.queue.values())
       .filter(d => d.status === 'downloading');
-
+    
     this.totalSpeed = downloadingItems.reduce((total, item) => total + (item.speed || 0), 0);
-    this.refreshQueueEntries();
-    this.refreshCompletedEntries();
-  }
-
-  private refreshQueueEntries() {
-    const entries = Array.from(this.downloads.queue.entries()).filter(([, download]) => !!download);
-    let filtered = entries;
-    if (this.queueFilter === 'active') {
-      filtered = entries.filter(([, download]) => download.status === 'downloading' || download.status === 'preparing');
-    } else if (this.queueFilter === 'pending') {
-      filtered = entries.filter(([, download]) => download.status === 'pending');
-    }
-    this.filteredQueue = filtered.map(([key, value]) => ({ key, value }));
-  }
-
-  private refreshCompletedEntries() {
-    const entries = Array.from(this.downloads.done.entries()).filter(([, download]) => !!download);
-    let filtered = entries;
-    if (this.completedFilter === 'finished') {
-      filtered = entries.filter(([, download]) => download.status === 'finished');
-    } else if (this.completedFilter === 'error') {
-      filtered = entries.filter(([, download]) => download.status === 'error');
-    }
-
-    const mapped = filtered.map(([key, value]) => ({ key, value }));
-
-    if (this.completedSort === 'largest') {
-      this.filteredCompleted = mapped
-        .slice()
-        .sort((a, b) => {
-          const sizeA = a.value.size ?? -1;
-          const sizeB = b.value.size ?? -1;
-          return sizeB - sizeA;
-        });
-      return;
-    }
-
-    if (this.completedSort === 'status') {
-      const rank = (download: Download) => {
-        if (download.status === 'error') {
-          return 0;
-        }
-        if (download.status === 'finished') {
-          return 1;
-        }
-        return 2;
-      };
-      this.filteredCompleted = mapped
-        .slice()
-        .sort((a, b) => {
-          const diff = rank(a.value) - rank(b.value);
-          if (diff !== 0) {
-            return diff;
-          }
-          return (b.value.size ?? 0) - (a.value.size ?? 0);
-        });
-      return;
-    }
-
-    this.filteredCompleted = mapped
-      .slice()
-      .sort((a, b) => {
-        const timestampA = typeof a.value.timestamp === 'number' ? a.value.timestamp : 0;
-        const timestampB = typeof b.value.timestamp === 'number' ? b.value.timestamp : 0;
-        if (timestampA === timestampB) {
-          return (b.value.size ?? 0) - (a.value.size ?? 0);
-        }
-        return timestampB - timestampA;
-      });
   }
 }

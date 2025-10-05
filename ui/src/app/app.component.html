@@ -1,558 +1,521 @@
-<div class="toast-stack" *ngIf="toasts.length">
-  <div class="app-toast" *ngFor="let toast of toasts" [ngClass]="'toast-' + toast.type" role="status" aria-live="polite">
-    <span>{{ toast.text }}</span>
-    <button type="button" class="btn-close" aria-label="Dismiss notification" (click)="dismissToast(toast.id)"></button>
-  </div>
-</div>
-
-<header class="dashboard-header navbar-dark">
-  <div class="container-xxl">
-    <div class="header-inner">
-      <div class="brand">
-        <img src="assets/icons/android-chrome-192x192.png" alt="MeTubeEX Logo" height="48">
-        <div class="brand-copy">
-          <span class="brand-title">MeTubeEX</span>
-          <span class="brand-subtitle">Self-hosted media control centre</span>
-        </div>
+<nav class="navbar navbar-expand-md navbar-dark">
+  <div class="container-fluid">
+    <a class="navbar-brand d-flex align-items-center" href="#">
+      <img src="assets/icons/android-chrome-192x192.png" alt="MeTubeEX Logo" height="32" class="me-2">
+      MeTubeEX
+    </a>
+    <div class="download-metrics">
+      <div class="metric" *ngIf="activeDownloads > 0">
+        <fa-icon [icon]="faDownload" class="text-primary"></fa-icon>
+        <span>{{activeDownloads}} downloading</span>
       </div>
-      <div class="metrics">
-        <div class="metric metric--primary" *ngIf="activeDownloads > 0">
-          <fa-icon [icon]="faDownload"></fa-icon>
-          <span>{{ activeDownloads }} downloading</span>
-        </div>
-        <div class="metric metric--warning" *ngIf="queuedDownloads > 0">
-          <fa-icon [icon]="faClock"></fa-icon>
-          <span>{{ queuedDownloads }} queued</span>
-        </div>
-        <div class="metric metric--success" *ngIf="completedDownloads > 0">
-          <fa-icon [icon]="faCheck"></fa-icon>
-          <span>{{ completedDownloads }} completed</span>
-        </div>
-        <div class="metric metric--danger" *ngIf="failedDownloads > 0">
-          <fa-icon [icon]="faTimesCircle"></fa-icon>
-          <span>{{ failedDownloads }} failed</span>
-        </div>
-        <div class="metric metric--info" *ngIf="totalSpeed > 0">
-          <fa-icon [icon]="faTachometerAlt"></fa-icon>
-          <span>{{ totalSpeed | speed }}</span>
-        </div>
+      <div class="metric" *ngIf="queuedDownloads > 0">
+        <fa-icon [icon]="faClock" class="text-warning"></fa-icon>
+        <span>{{queuedDownloads}} queued</span>
       </div>
-      <div class="header-actions">
-        <div class="user-summary" *ngIf="currentUser">
-          <span class="summary-label">Signed in as</span>
-          <span class="summary-value">
-            <fa-icon *ngIf="currentUser?.role === 'admin'" [icon]="faUserShield" class="text-warning"></fa-icon>
-            {{ currentUser?.username }}
-          </span>
-        </div>
-        <a class="btn btn-outline-light btn-sm" href="logout" *ngIf="currentUser">
-          <fa-icon [icon]="faRightFromBracket" class="me-1"></fa-icon>
-          Logout
-        </a>
-        <div class="dropdown theme-dropdown">
-          <button class="btn btn-link dropdown-toggle" id="theme-select" data-bs-toggle="dropdown" data-bs-display="static" type="button" aria-expanded="false">
-            <fa-icon [icon]="activeTheme.icon"></fa-icon>
-          </button>
-          <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="theme-select">
-            <li *ngFor="let theme of themes">
-              <button type="button" class="dropdown-item d-flex align-items-center gap-2" [class.active]="activeTheme == theme" (click)="themeChanged(theme)">
-                <fa-icon [icon]="theme.icon" class="opacity-75"></fa-icon>
-                {{ theme.displayName }}
-                <fa-icon [icon]="faCheck" class="ms-auto" *ngIf="activeTheme == theme"></fa-icon>
-              </button>
-            </li>
-          </ul>
-        </div>
+      <div class="metric" *ngIf="completedDownloads > 0">
+        <fa-icon [icon]="faCheck" class="text-success"></fa-icon>
+        <span>{{completedDownloads}} completed</span>
+      </div>
+      <div class="metric" *ngIf="failedDownloads > 0">
+        <fa-icon [icon]="faTimesCircle" class="text-danger"></fa-icon>
+        <span>{{failedDownloads}} failed</span>
+      </div>
+      <div class="metric" *ngIf="(totalSpeed | speed) !== ''">
+        <fa-icon [icon]="faTachometerAlt" class="text-info"></fa-icon>
+        <span>{{totalSpeed | speed }}</span>
+      </div>
+    </div>
+    <!--
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarsDefault" aria-controls="navbarsDefault" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarsDefault">
+      <ul class="navbar-nav mr-auto">
+        <li class="nav-item active">
+          <a class="nav-link" href="#">Home <span class="sr-only">(current)</span></a>
+        </li>
+      </ul>
+    </div>
+    -->
+    <div class="navbar-nav ms-auto align-items-center flex-row gap-3">
+      <div class="nav-item d-none d-md-flex flex-column text-end text-light" *ngIf="currentUser">
+        <span class="small text-secondary">Signed in as</span>
+        <span class="fw-semibold d-flex align-items-center justify-content-end gap-1">
+          <fa-icon *ngIf="currentUser?.role === 'admin'" [icon]="faUserShield" class="text-warning"></fa-icon>
+          {{ currentUser?.username }}
+        </span>
+      </div>
+      <a class="btn btn-outline-light btn-sm" href="logout" *ngIf="currentUser">
+        <fa-icon [icon]="faRightFromBracket" class="me-1"></fa-icon>
+        Logout
+      </a>
+      <div class="nav-item dropdown">
+        <button class="btn btn-link nav-link py-2 px-0 px-sm-2 dropdown-toggle d-flex align-items-center"
+                id="theme-select"
+                type="button"
+                aria-expanded="false"
+                data-bs-toggle="dropdown"
+                data-bs-display="static">
+          <fa-icon [icon]="activeTheme.icon"></fa-icon>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end position-absolute" aria-labelledby="theme-select">
+          <li *ngFor="let theme of themes">
+            <button type="button" class="dropdown-item d-flex align-items-center" [ngClass]="{'active' : activeTheme == theme}" (click)="themeChanged(theme)">
+              <span class="me-2 opacity-50">
+                <fa-icon [icon]="theme.icon"></fa-icon>
+              </span>
+              {{ theme.displayName }}
+              <span class="ms-auto" [ngClass]="{'d-none' : activeTheme != theme}">
+                <fa-icon [icon]="faCheck"></fa-icon>
+              </span>
+            </button>
+          </li>
+        </ul>
       </div>
     </div>
   </div>
-</header>
+</nav>
 
-<main class="dashboard-main">
-  <div class="container-xxl py-4">
-    <section *ngIf="downloads.loading" class="alert alert-info mb-4" role="alert">
-      Connecting to server...
-    </section>
-
-    <div class="dashboard-grid">
-      <div class="main-column">
-        <section class="card shadow-sm download-card">
-          <div class="card-header border-0 pb-0">
-            <div>
-              <h2 class="card-title">Quick download</h2>
-              <p class="card-subtitle">Paste a video or playlist URL to queue it for download on your server.</p>
-            </div>
-          </div>
-          <div class="card-body">
-            <form #downloadForm="ngForm" novalidate (ngSubmit)="addDownload()" class="download-form">
-              <label for="addUrl" class="form-label visually-hidden">Video or playlist URL</label>
-              <div class="input-group input-group-lg mb-3">
-                <input type="text" id="addUrl" autocomplete="off" spellcheck="false" class="form-control form-control-lg" placeholder="Enter video or playlist URL" name="addUrl" [(ngModel)]="addUrl" [disabled]="addInProgress || downloads.loading">
-                <button class="btn btn-primary btn-lg" type="submit" [disabled]="addInProgress || downloads.loading">
-                  <span class="spinner-border spinner-border-sm me-2" role="status" *ngIf="addInProgress"></span>
-                  {{ addInProgress ? 'Adding…' : 'Download' }}
-                </button>
-              </div>
-
-              <div class="row g-3 align-items-end mb-3">
-                <div class="col-md-4">
-                  <label class="form-label">Quality</label>
-                  <select class="form-select" name="quality" [(ngModel)]="quality" (change)="qualityChanged()" [disabled]="addInProgress || downloads.loading">
-                    <option *ngFor="let q of qualities" [ngValue]="q.id">{{ q.text }}</option>
-                  </select>
-                </div>
-                <div class="col-md-4">
-                  <label class="form-label">Format</label>
-                  <select class="form-select" name="format" [(ngModel)]="format" (change)="formatChanged()" [disabled]="addInProgress || downloads.loading">
-                    <option *ngFor="let f of formats" [ngValue]="f.id">{{ f.text }}</option>
-                  </select>
-                </div>
-                <div class="col-md-4">
-                  <button type="button" class="btn btn-outline-secondary w-100 advanced-toggle" (click)="toggleAdvanced()" [attr.aria-expanded]="isAdvancedOpen" aria-controls="advanced-options">
-                    <fa-icon [icon]="isAdvancedOpen ? faTimesCircle : faCircleHalfStroke" class="me-2"></fa-icon>
-                    {{ isAdvancedOpen ? 'Hide advanced options' : 'Show advanced options' }}
-                  </button>
-                </div>
-              </div>
-
-              <div class="advanced-panel" id="advanced-options" [ngbCollapse]="!isAdvancedOpen">
-                <div class="row g-3 mb-3">
-                  <div class="col-md-6">
-                    <label class="form-label">Auto start</label>
-                    <select class="form-select" name="autoStart" [(ngModel)]="autoStart" (change)="autoStartChanged()" [disabled]="addInProgress || downloads.loading">
-                      <option [ngValue]="true">Start immediately</option>
-                      <option [ngValue]="false">Add to queue only</option>
-                    </select>
-                  </div>
-                  <div class="col-md-6">
-                    <label class="form-label">Custom name prefix</label>
-                    <input type="text" class="form-control" placeholder="Optional" name="customNamePrefix" [(ngModel)]="customNamePrefix" [disabled]="addInProgress || downloads.loading">
-                  </div>
-                  <div class="col-md-6">
-                    <label class="form-label">Playlist items limit</label>
-                    <input type="number" min="0" class="form-control" placeholder="0 = no limit" name="playlistItemLimit" (keydown)="isNumber($event)" [(ngModel)]="playlistItemLimit" [disabled]="addInProgress || downloads.loading">
-                  </div>
-                  <div class="col-md-6">
-                    <label class="form-label">Playlist mode</label>
-                    <div class="form-check form-switch">
-                      <input class="form-check-input" type="checkbox" role="switch" name="playlistStrictMode" [(ngModel)]="playlistStrictMode" [disabled]="addInProgress || downloads.loading">
-                      <label class="form-check-label">Only download when the URL explicitly targets a playlist</label>
-                    </div>
-                  </div>
-                </div>
-                <div class="utility-actions">
-                  <button type="button" class="btn btn-outline-secondary" (click)="openBatchImportModal()">
-                    <fa-icon [icon]="faFileImport" class="me-2"></fa-icon>
-                    Import URLs
-                  </button>
-                  <button type="button" class="btn btn-outline-secondary" (click)="exportBatchUrls('all')">
-                    <fa-icon [icon]="faFileExport" class="me-2"></fa-icon>
-                    Export URLs
-                  </button>
-                  <button type="button" class="btn btn-outline-secondary" (click)="copyBatchUrls('all')">
-                    <fa-icon [icon]="faCopy" class="me-2"></fa-icon>
-                    Copy URLs
-                  </button>
-                  <button type="button" class="btn btn-outline-secondary" (click)="openCookiesModal()">
-                    <fa-icon [icon]="faCookieBite" class="me-2"></fa-icon>
-                    Manage cookies
-                    <span class="badge ms-2" [class.bg-success]="cookiesConfigured" [class.bg-warning]="!cookiesConfigured">
-                      {{ cookiesConfigured ? 'Configured' : 'Required for YouTube' }}
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </section>
-
-        <section class="card shadow-sm queue-card" role="region" aria-labelledby="queue-heading">
-          <div class="card-header border-0 pb-0">
-            <div class="section-heading">
-              <div>
-                <h2 class="card-title" id="queue-heading">Download queue</h2>
-                <p class="card-subtitle">Monitor downloads currently queued or running.</p>
-              </div>
-              <div class="btn-group btn-group-sm" role="group" aria-label="Queue filter">
-                <button type="button" class="btn btn-outline-secondary" [class.active]="queueFilter === 'all'" (click)="setQueueFilter('all')">All</button>
-                <button type="button" class="btn btn-outline-secondary" [class.active]="queueFilter === 'active'" (click)="setQueueFilter('active')">Active</button>
-                <button type="button" class="btn btn-outline-secondary" [class.active]="queueFilter === 'pending'" (click)="setQueueFilter('pending')">Pending</button>
-              </div>
-            </div>
-          </div>
-          <div class="card-body">
-            <div class="skeleton-list" *ngIf="downloads.loading" aria-hidden="true">
-              <div class="skeleton-row" *ngFor="let placeholder of loadingPlaceholders"></div>
-            </div>
-
-            <ng-container *ngIf="!downloads.loading">
-              <div class="bulk-toolbar" *ngIf="downloads.queue.size > 0">
-                <div class="bulk-selection">
-                  <app-master-checkbox #queueMasterCheckbox [id]="'queue'" [list]="downloads.queue" (changed)="queueSelectionChanged($event)"></app-master-checkbox>
-                  <span class="bulk-label">Select all</span>
-                </div>
-                <div class="bulk-actions">
-                  <button type="button" class="btn btn-outline-secondary btn-sm" (click)="delSelectedDownloads('queue')" [disabled]="queueSelectionCount === 0" aria-label="Cancel selected downloads">
-                    <fa-icon [icon]="faTrashAlt" class="me-1"></fa-icon>
-                    Cancel selected
-                  </button>
-                  <button type="button" class="btn btn-primary btn-sm" (click)="startSelectedDownloads('queue')" [disabled]="queueSelectionCount === 0" aria-label="Start selected downloads">
-                    <fa-icon [icon]="faDownload" class="me-1"></fa-icon>
-                    Start selected
-                  </button>
-                </div>
-              </div>
-
-              <ng-container *ngIf="filteredQueue as queue">
-                <div *ngIf="queue.length; else emptyQueueState" class="queue-list" role="list">
-                  <article class="queue-item" role="listitem" *ngFor="let entry of queue; trackBy: trackDownloadEntry" [class.queue-item--deleting]="entry.value.deleting">
-                  <div class="queue-item-selection">
-                    <app-slave-checkbox [id]="entry.key" [master]="queueMasterCheckbox" [checkable]="entry.value"></app-slave-checkbox>
-                  </div>
-                  <div class="queue-item-content">
-                    <div class="queue-item-header">
-                      <h3 class="queue-item-title" [title]="getDownloadTitle(entry.value)">{{ getDownloadTitle(entry.value) }}</h3>
-                      <span class="status-chip" [class.status-preparing]="entry.value.status === 'preparing'" [class.status-downloading]="entry.value.status === 'downloading'" [class.status-pending]="entry.value.status === 'pending'">{{ entry.value.status }}</span>
-                    </div>
-                    <div class="queue-item-progress">
-                      <ngb-progressbar height="1.2rem" [showValue]="entry.value.status !== 'preparing'" [striped]="entry.value.status === 'preparing'" [animated]="entry.value.status === 'preparing'" type="success" [value]="getProgressValue(entry.value)"></ngb-progressbar>
-                    </div>
-                    <div class="queue-item-meta">
-                      <span>
-                        <strong>Speed:</strong>
-                        <span>{{ entry.value.speed | speed }}</span>
-                      </span>
-                      <span>
-                        <strong>ETA:</strong>
-                        <span>{{ entry.value.eta | eta }}</span>
-                      </span>
-                      <span *ngIf="entry.value.format">
-                        <strong>Format:</strong>
-                        <span>{{ entry.value.format }}</span>
-                      </span>
-                    </div>
-                  </div>
-                  <div class="queue-item-actions">
-                    <button type="button" class="btn btn-icon" (click)="downloadItemByKey(entry.key)" *ngIf="entry.value.status === 'pending'" ngbTooltip="Start now" aria-label="Start this download">
-                      <fa-icon [icon]="faDownload"></fa-icon>
-                    </button>
-                    <button type="button" class="btn btn-icon" (click)="delDownload('queue', entry.key)" ngbTooltip="Remove from queue" aria-label="Remove this download from queue">
-                      <fa-icon [icon]="faTrashAlt"></fa-icon>
-                    </button>
-                    <a class="btn btn-icon" [href]="entry.value.url" target="_blank" rel="noopener" ngbTooltip="Open source" aria-label="Open source link in new tab">
-                      <fa-icon [icon]="faExternalLinkAlt"></fa-icon>
-                    </a>
-                  </div>
-                </article>
-                </div>
-              </ng-container>
-            </ng-container>
-            <ng-template #emptyQueueState>
-              <div class="empty-state">
-                <fa-icon [icon]="faDownload" class="empty-icon"></fa-icon>
-                <p class="mb-1">No downloads queued.</p>
-                <small class="text-muted">Paste a URL above to start a new download.</small>
-              </div>
-            </ng-template>
-          </div>
-        </section>
-
-        <section class="card shadow-sm completed-card" role="region" aria-labelledby="completed-heading">
-          <div class="card-header border-0 pb-0">
-            <div class="section-heading">
-              <div>
-                <h2 class="card-title" id="completed-heading">Completed &amp; history</h2>
-                <p class="card-subtitle">Review finished downloads, retry failures, or stream video/audio instantly.</p>
-              </div>
-              <div class="section-controls">
-                <div class="btn-group btn-group-sm" role="group" aria-label="Completed filter">
-                  <button type="button" class="btn btn-outline-secondary" [class.active]="completedFilter === 'all'" (click)="setCompletedFilter('all')">All</button>
-                  <button type="button" class="btn btn-outline-secondary" [class.active]="completedFilter === 'finished'" (click)="setCompletedFilter('finished')">Completed</button>
-                  <button type="button" class="btn btn-outline-secondary" [class.active]="completedFilter === 'error'" (click)="setCompletedFilter('error')">Failed</button>
-                </div>
-                <div class="btn-group btn-group-sm sort-group" role="group" aria-label="Completed sort">
-                  <button type="button" class="btn btn-outline-secondary" [class.active]="completedSort === 'recent'" (click)="setCompletedSort('recent')">Newest</button>
-                  <button type="button" class="btn btn-outline-secondary" [class.active]="completedSort === 'largest'" (click)="setCompletedSort('largest')">Largest</button>
-                  <button type="button" class="btn btn-outline-secondary" [class.active]="completedSort === 'status'" (click)="setCompletedSort('status')">Status</button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="card-body">
-            <div class="skeleton-list" *ngIf="downloads.loading" aria-hidden="true">
-              <div class="skeleton-row" *ngFor="let placeholder of loadingPlaceholders"></div>
-            </div>
-
-            <ng-container *ngIf="!downloads.loading">
-              <div class="bulk-toolbar" *ngIf="downloads.done.size > 0">
-                <div class="bulk-selection">
-                  <app-master-checkbox #doneMasterCheckbox [id]="'done'" [list]="downloads.done" (changed)="doneSelectionChanged($event)"></app-master-checkbox>
-                  <span class="bulk-label">Select all</span>
-                </div>
-                <div class="bulk-actions">
-                  <button type="button" class="btn btn-outline-secondary btn-sm" (click)="delSelectedDownloads('done')" [disabled]="doneSelectionCount === 0" aria-label="Remove selected completed downloads">
-                    <fa-icon [icon]="faTrashAlt" class="me-1"></fa-icon>
-                    Clear selected
-                  </button>
-                  <button type="button" class="btn btn-outline-secondary btn-sm" (click)="clearCompletedDownloads()" [disabled]="!hasCompletedDownloads" aria-label="Clear completed downloads">
-                    <fa-icon [icon]="faCheckCircle" class="me-1"></fa-icon>
-                    Clear completed
-                  </button>
-                  <button type="button" class="btn btn-outline-secondary btn-sm" (click)="clearFailedDownloads()" [disabled]="!hasFailedDownloads" aria-label="Clear failed downloads">
-                    <fa-icon [icon]="faTimesCircle" class="me-1"></fa-icon>
-                    Clear failed
-                  </button>
-                  <button type="button" class="btn btn-outline-secondary btn-sm" (click)="retryFailedDownloads()" [disabled]="!hasFailedDownloads" aria-label="Retry failed downloads">
-                    <fa-icon [icon]="faRedoAlt" class="me-1"></fa-icon>
-                    Retry failed
-                  </button>
-                  <button type="button" class="btn btn-primary btn-sm" (click)="downloadSelectedFiles()" [disabled]="doneSelectionCount === 0" aria-label="Download selected files">
-                    <fa-icon [icon]="faDownload" class="me-1"></fa-icon>
-                    Download selected
-                  </button>
-                </div>
-              </div>
-
-              <ng-container *ngIf="filteredCompleted as completed">
-                <div *ngIf="completed.length; else emptyCompletedState" class="completed-list" role="list">
-                  <article class="completed-item" role="listitem" *ngFor="let entry of completed; trackBy: trackDownloadEntry" [class.completed-item--error]="entry.value.status === 'error'" [class.completed-item--deleting]="entry.value.deleting">
-                  <div class="completed-selection">
-                    <app-slave-checkbox [id]="entry.key" [master]="doneMasterCheckbox" [checkable]="entry.value"></app-slave-checkbox>
-                  </div>
-                  <div class="completed-body">
-                    <div class="completed-header">
-                      <div class="completed-thumb" *ngIf="entry.value.thumbnail">
-                        <img [src]="entry.value.thumbnail" alt="" loading="lazy">
-                      </div>
-                      <fa-icon [icon]="entry.value.status === 'finished' ? faCheckCircle : faTimesCircle"></fa-icon>
-                      <div>
-                        <h3 class="completed-title">
-                          <ng-container *ngIf="entry.value.filename; else noFileLink">
-                            <a [href]="buildDownloadLink(entry.value)" target="_blank" rel="noopener">{{ getDownloadTitle(entry.value) }}</a>
-                          </ng-container>
-                          <ng-template #noFileLink>{{ getDownloadTitle(entry.value) }}</ng-template>
-                        </h3>
-                        <div class="completed-meta text-muted">
-                          <span *ngIf="entry.value.size">{{ entry.value.size | fileSize }}</span>
-                          <span *ngIf="entry.value.quality">• {{ entry.value.quality }}</span>
-                          <span *ngIf="entry.value.format">• {{ entry.value.format }}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="completed-messages" *ngIf="entry.value.msg || entry.value.error">
-                      <small class="text-muted" *ngIf="entry.value.msg">{{ entry.value.msg }}</small>
-                      <small class="text-danger" *ngIf="entry.value.error">{{ entry.value.error }}</small>
-                    </div>
-                  </div>
-                  <div class="completed-actions">
-                    <button type="button" class="btn btn-icon" *ngIf="entry.value.status === 'error'" (click)="retryDownload(entry.key, entry.value)" ngbTooltip="Retry download" aria-label="Retry this download">
-                      <fa-icon [icon]="faRedoAlt"></fa-icon>
-                    </button>
-                    <button type="button" class="btn btn-icon" *ngIf="entry.value.filename" (click)="renameDownload(entry.key, entry.value)" ngbTooltip="Rename file" aria-label="Rename this file">
-                      <fa-icon [icon]="faPen"></fa-icon>
-                    </button>
-                    <button type="button" class="btn btn-icon" *ngIf="canStream(entry.value)" (click)="openStream(entry.value)" ngbTooltip="Stream" aria-label="Stream this media">
-                      <fa-icon [icon]="faPlay"></fa-icon>
-                    </button>
-                    <a class="btn btn-icon" *ngIf="entry.value.filename" [href]="buildDownloadLink(entry.value)" download ngbTooltip="Download file" aria-label="Download this file">
-                      <fa-icon [icon]="faDownload"></fa-icon>
-                    </a>
-                    <a class="btn btn-icon" [href]="entry.value.url" target="_blank" rel="noopener" ngbTooltip="Open source" aria-label="Open source link in new tab">
-                      <fa-icon [icon]="faExternalLinkAlt"></fa-icon>
-                    </a>
-                    <button type="button" class="btn btn-icon" (click)="delDownload('done', entry.key)" ngbTooltip="Remove from history" aria-label="Remove this download from history">
-                      <fa-icon [icon]="faTrashAlt"></fa-icon>
-                    </button>
-                  </div>
-                </article>
-                </div>
-              </ng-container>
-            </ng-container>
-            <ng-template #emptyCompletedState>
-              <div class="empty-state">
-                <fa-icon [icon]="faCheckCircle" class="empty-icon"></fa-icon>
-                <p class="mb-1">No completed downloads yet.</p>
-                <small class="text-muted">Completed items will appear here once downloads finish.</small>
-              </div>
-            </ng-template>
-          </div>
-        </section>
-      </div>
-
-      <div class="side-column">
-        <section class="card shadow-sm admin-card" *ngIf="isAdmin" role="region" aria-labelledby="admin-heading">
-          <div class="card-header border-0 pb-0 d-flex align-items-center justify-content-between">
-            <div>
-              <h2 class="card-title" id="admin-heading">User management</h2>
-              <p class="card-subtitle">Invite collaborators and manage access.</p>
-            </div>
-            <button type="button" class="btn btn-primary btn-sm" (click)="promptCreateUser()">
-              <fa-icon [icon]="faUserPlus" class="me-1"></fa-icon>
-              Add user
+<main role="main" class="container container-xl">
+  <form #f="ngForm">
+    <div class="container add-url-box">
+      <!-- Main URL Input with Download Button -->
+      <div class="row mb-4">
+        <div class="col">
+          <div class="input-group input-group-lg shadow-sm">
+            <input type="text" 
+                   autocomplete="off" 
+                   spellcheck="false" 
+                   class="form-control form-control-lg" 
+                   placeholder="Enter video or playlist URL" 
+                   name="addUrl" 
+                   [(ngModel)]="addUrl" 
+                   [disabled]="addInProgress || downloads.loading">
+            <button class="btn btn-primary btn-lg px-4" 
+                    type="submit" 
+                    (click)="addDownload()" 
+                    [disabled]="addInProgress || downloads.loading">
+              <span class="spinner-border spinner-border-sm" role="status" id="add-spinner" *ngIf="addInProgress"></span>
+              {{ addInProgress ? "Adding..." : "Download" }}
             </button>
           </div>
-          <div class="card-body">
-            <div class="admin-list">
-              <div class="admin-loading" *ngIf="adminLoading" role="status" aria-live="polite">
-                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                Loading users…
-              </div>
-              <div *ngIf="!adminLoading && adminUsers.length === 0" class="empty-state small">
-                <fa-icon [icon]="faUserShield" class="empty-icon"></fa-icon>
-                <p class="mb-1">No additional users.</p>
-                <small class="text-muted">Use the button above to create a new account.</small>
-              </div>
-              <div *ngFor="let user of adminUsers" class="admin-row" [class.admin-row--disabled]="user.disabled">
-                <div class="admin-row-main">
-                  <div class="admin-name">
-                    <fa-icon *ngIf="user.role === 'admin'" [icon]="faUserShield" class="text-warning me-2"></fa-icon>
-                    <span [class.fw-semibold]="user.role === 'admin'">{{ user.username }}</span>
-                    <span class="badge bg-secondary ms-2" *ngIf="isSelf(user)">You</span>
-                  </div>
-                  <div class="admin-tags">
-                    <span class="badge" [class.bg-warning]="user.role === 'admin'" [class.text-dark]="user.role === 'admin'" [class.bg-info]="user.role === 'user'">{{ user.role }}</span>
-                    <span class="badge" [class.bg-success]="!user.disabled" [class.bg-danger]="user.disabled">{{ user.disabled ? 'Disabled' : 'Active' }}</span>
+        </div>
+      </div>
+
+      <!-- Options Row -->
+      <div class="row mb-3 g-3">
+        <div class="col-md-4">
+          <div class="input-group">
+            <span class="input-group-text">Quality</span>
+            <select class="form-select" 
+                    name="quality" 
+                    [(ngModel)]="quality" 
+                    (change)="qualityChanged()" 
+                    [disabled]="addInProgress || downloads.loading">
+              <option *ngFor="let q of qualities" [ngValue]="q.id">{{ q.text }}</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="input-group">
+            <span class="input-group-text">Format</span>
+            <select class="form-select" 
+                    name="format" 
+                    [(ngModel)]="format" 
+                    (change)="formatChanged()" 
+                    [disabled]="addInProgress || downloads.loading">
+              <option *ngFor="let f of formats" [ngValue]="f.id">{{ f.text }}</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <button type="button" 
+                  class="btn btn-outline-secondary w-100 h-100" 
+                  (click)="toggleAdvanced()">
+            Advanced Options
+          </button>
+        </div>
+      </div>
+
+      <!-- Advanced Options Panel -->
+      <div class="row">
+        <div class="col-12">
+          <div class="collapse show" id="advancedOptions" [ngbCollapse]="!isAdvancedOpen">
+            <div class="card card-body">
+              <!-- Advanced Settings -->
+              <div class="row g-3 mb-2">
+                <div class="col-md-6">
+                  <div class="input-group">
+                    <span class="input-group-text">Auto Start</span>
+                    <select class="form-select" 
+                            name="autoStart" 
+                            [(ngModel)]="autoStart" 
+                            (change)="autoStartChanged()" 
+                            [disabled]="addInProgress || downloads.loading"
+                            ngbTooltip="Automatically start downloads when added">
+                      <option [ngValue]="true">Yes</option>
+                      <option [ngValue]="false">No</option>
+                    </select>
                   </div>
                 </div>
-                <div class="admin-meta">
-                  <small class="text-muted">Last login: {{ formatTimestamp(user.last_login_at) }}</small>
+                <div class="col-md-6">
+                  <div class="input-group">
+                    <span class="input-group-text">Download Folder</span>
+                    <ng-select [items]="customDirs$ | async" 
+                              placeholder="Default" 
+                              [addTag]="allowCustomDir.bind(this)" 
+                              addTagText="Create directory" 
+                              bindLabel="folder" 
+                              [(ngModel)]="folder" 
+                              [disabled]="addInProgress || downloads.loading"
+                              [virtualScroll]="true"
+                              [clearable]="true"
+                              [loading]="downloads.loading"
+                              [searchable]="true"
+                              [closeOnSelect]="true"
+                              ngbTooltip="Choose where to save downloads. Type to create a new folder.">
+                    </ng-select>
+                  </div>
                 </div>
-                <div class="admin-actions">
-                  <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="user.role === 'admin' && activeAdminCount() <= 1" (click)="toggleUserRole(user)" ngbTooltip="Toggle role" aria-label="Toggle role for {{ user.username }}">
-                    <fa-icon [icon]="faPen"></fa-icon>
-                  </button>
-                  <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="user.role === 'admin' && activeAdminCount() <= 1" (click)="toggleUserDisabled(user)" ngbTooltip="Toggle active state" aria-label="Toggle active state for {{ user.username }}">
-                    <fa-icon [icon]="faUserSlash"></fa-icon>
-                  </button>
-                  <button type="button" class="btn btn-outline-secondary btn-sm" (click)="resetUserPassword(user)" ngbTooltip="Reset password" aria-label="Reset password for {{ user.username }}">
-                    <fa-icon [icon]="faKey"></fa-icon>
-                  </button>
-                  <button type="button" class="btn btn-outline-danger btn-sm" [disabled]="isSelf(user) || (user.role === 'admin' && activeAdminCount() <= 1)" (click)="deleteUser(user)" ngbTooltip="Delete user" aria-label="Delete {{ user.username }}">
-                    <fa-icon [icon]="faTrashAlt"></fa-icon>
-                  </button>
+                <div class="col-md-6">
+                  <div class="input-group">
+                    <span class="input-group-text">Custom Name Prefix</span>
+                    <input type="text" 
+                           class="form-control" 
+                           placeholder="Default" 
+                           name="customNamePrefix" 
+                           [(ngModel)]="customNamePrefix" 
+                           [disabled]="addInProgress || downloads.loading"
+                           ngbTooltip="Add a prefix to downloaded filenames">
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="input-group">
+                    <span class="input-group-text">Items Limit</span>
+                    <input type="number" 
+                           min="0" 
+                           class="form-control" 
+                           placeholder="Default" 
+                           name="playlistItemLimit" 
+                           (keydown)="isNumber($event)" 
+                           [(ngModel)]="playlistItemLimit" 
+                           [disabled]="addInProgress || downloads.loading"
+                           ngbTooltip="Maximum number of items to download from a playlist (0 = no limit)">
+                  </div>
+                </div>
+                <div class="col-12">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           role="switch" 
+                           name="playlistStrictMode" 
+                           [(ngModel)]="playlistStrictMode" 
+                           [disabled]="addInProgress || downloads.loading"
+                           ngbTooltip="Only download playlists when URL explicitly points to a playlist">
+                    <label class="form-check-label">Strict Playlist Mode</label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Advanced Actions -->
+              <div class="row">
+                <div class="col-12">
+                  <hr class="my-3">
+                  <div class="row g-2">
+                    <div class="col-md-4">
+                      <button type="button" 
+                              class="btn btn-secondary w-100" 
+                              (click)="openBatchImportModal()">
+                        <fa-icon [icon]="faFileImport" class="me-2"></fa-icon>
+                        Import URLs
+                      </button>
+                    </div>
+                    <div class="col-md-4">
+                      <button type="button" 
+                              class="btn btn-secondary w-100" 
+                              (click)="exportBatchUrls('all')">
+                        <fa-icon [icon]="faFileExport" class="me-2"></fa-icon>
+                        Export URLs
+                      </button>
+                    </div>
+                    <div class="col-md-4">
+                      <button type="button" 
+                              class="btn btn-secondary w-100" 
+                              (click)="copyBatchUrls('all')">
+                        <fa-icon [icon]="faCopy" class="me-2"></fa-icon>
+                        Copy URLs
+                      </button>
+                    </div>
+                    <div class="col-md-4">
+                      <button type="button"
+                              class="btn btn-secondary w-100"
+                              (click)="openCookiesModal()">
+                        <fa-icon [icon]="faCookieBite" class="me-2"></fa-icon>
+                        Manage Cookies
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="row" *ngIf="isAdmin">
+                <div class="col-12">
+                  <hr class="my-3">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="d-flex align-items-center gap-2">
+                      <fa-icon [icon]="faUserShield" class="text-info"></fa-icon>
+                      <h5 class="mb-0">User Management</h5>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" (click)="promptCreateUser()">
+                      <fa-icon [icon]="faUserPlus" class="me-1"></fa-icon>
+                      Add User
+                    </button>
+                  </div>
+                  <div class="table-responsive small">
+                    <table class="table table-sm align-middle mb-0">
+                      <thead class="table-dark">
+                        <tr>
+                          <th scope="col">User</th>
+                          <th scope="col" class="text-center">Role</th>
+                          <th scope="col" class="text-center">Status</th>
+                          <th scope="col">Last Login</th>
+                          <th scope="col" class="text-end">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr *ngIf="adminLoading">
+                          <td colspan="5" class="text-center py-3">
+                            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                            Loading users...
+                          </td>
+                        </tr>
+                        <tr *ngFor="let user of adminUsers">
+                          <td>
+                            <div class="d-flex align-items-center gap-2">
+                              <fa-icon *ngIf="user.role === 'admin'" [icon]="faUserShield" class="text-warning"></fa-icon>
+                              <span [ngClass]="{'fw-semibold': user.role === 'admin'}">{{ user.username }}</span>
+                              <span class="badge bg-secondary" *ngIf="isSelf(user)">You</span>
+                            </div>
+                          </td>
+                          <td class="text-center">
+                            <span class="badge" [ngClass]="user.role === 'admin' ? 'bg-warning text-dark' : 'bg-info text-dark'">{{ user.role }}</span>
+                          </td>
+                          <td class="text-center">
+                            <span class="badge" [ngClass]="user.disabled ? 'bg-danger' : 'bg-success'">{{ user.disabled ? 'Disabled' : 'Active' }}</span>
+                          </td>
+                          <td>{{ formatTimestamp(user.last_login_at) }}</td>
+                          <td class="text-end">
+                            <div class="btn-group btn-group-sm" role="group">
+                              <button type="button" class="btn btn-outline-secondary" [disabled]="(user.role === 'admin' && activeAdminCount() <= 1)" (click)="toggleUserRole(user)" ngbTooltip="Toggle role">
+                                <fa-icon [icon]="faPen"></fa-icon>
+                              </button>
+                              <button type="button" class="btn btn-outline-secondary" [disabled]="user.role === 'admin' && activeAdminCount() <= 1" (click)="toggleUserDisabled(user)" ngbTooltip="Toggle active state">
+                                <fa-icon [icon]="faUserSlash"></fa-icon>
+                              </button>
+                              <button type="button" class="btn btn-outline-secondary" (click)="resetUserPassword(user)" ngbTooltip="Reset password">
+                                <fa-icon [icon]="faKey"></fa-icon>
+                              </button>
+                              <button type="button" class="btn btn-outline-danger" [disabled]="isSelf(user) || (user.role === 'admin' && activeAdminCount() <= 1)" (click)="deleteUser(user)" ngbTooltip="Delete user">
+                                <fa-icon [icon]="faTrashAlt"></fa-icon>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                        <tr *ngIf="!adminLoading && adminUsers.length === 0">
+                          <td colspan="5" class="text-center text-muted py-3">No users available.</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </section>
-
-        <section class="card shadow-sm system-card" *ngIf="ytDlpVersion && metubeVersion">
-          <div class="card-header border-0 pb-0">
-            <h2 class="card-title">System status</h2>
-            <p class="card-subtitle">Track versions running on this instance.</p>
-          </div>
-          <div class="card-body">
-            <dl class="system-info">
-              <div class="system-info-row">
-                <dt>yt-dlp</dt>
-                <dd>{{ ytDlpVersion }}</dd>
-              </div>
-              <div class="system-info-row">
-                <dt>MeTubeEX</dt>
-                <dd>{{ metubeVersion }}</dd>
-              </div>
-              <div class="system-info-row" *ngIf="ytDlpOptionsUpdateTime">
-                <dt>yt-dlp options</dt>
-                <dd>{{ ytDlpOptionsUpdateTime }}</dd>
-              </div>
-            </dl>
-            <a href="https://github.com/NaxonM/metube-extended" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm w-100">
-              <fa-icon [icon]="faGithub" class="me-1"></fa-icon>
-              View project on GitHub
-            </a>
-          </div>
-        </section>
-      </div>
-    </div>
-  </div>
-</main>
-
-<div class="modal fade" tabindex="-1" role="dialog" [ngClass]="{'show': batchImportModalOpen}" [ngStyle]="{'display': batchImportModalOpen ? 'block' : 'none'}">
-  <div class="modal-dialog" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Batch import URLs</h5>
-        <button type="button" class="btn-close" aria-label="Close" (click)="closeBatchImportModal()"></button>
-      </div>
-      <div class="modal-body">
-        <p class="text-muted small">Each line will be queued as a separate download using your current quality and format settings.</p>
-        <textarea [(ngModel)]="batchImportText" class="form-control" rows="8" placeholder="Paste one video URL per line"></textarea>
-        <div class="mt-2" aria-live="polite">
-          <small *ngIf="batchImportStatus">{{ batchImportStatus }}</small>
         </div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-danger me-auto" *ngIf="importInProgress" (click)="cancelBatchImport()">
-          Cancel import
-        </button>
-        <button type="button" class="btn btn-secondary" (click)="closeBatchImportModal()">Close</button>
-        <button type="button" class="btn btn-primary" (click)="startBatchImport()" [disabled]="importInProgress">
-          Start import
-        </button>
-      </div>
     </div>
-  </div>
-</div>
-
-<div class="modal fade" tabindex="-1" role="dialog" [ngClass]="{'show': cookiesModalOpen}" [ngStyle]="{'display': cookiesModalOpen ? 'block' : 'none'}">
-  <div class="modal-dialog" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Manage YouTube cookies</h5>
-        <button type="button" class="btn-close" aria-label="Close" (click)="closeCookiesModal()" [disabled]="cookiesInProgress"></button>
-      </div>
-      <div class="modal-body">
-        <p>Provide your YouTube cookies in Netscape format. Extensions like <strong>Get cookies.txt</strong> can help you export them from your browser.</p>
-        <textarea [(ngModel)]="cookiesText" class="form-control" rows="8" placeholder="Paste cookies here" [disabled]="cookiesInProgress"></textarea>
-        <div class="mt-2 small" aria-live="polite">
-          <span *ngIf="cookiesStatusMessage">{{ cookiesStatusMessage }}</span>
-          <span *ngIf="!cookiesStatusMessage && cookiesConfigured">Cookies are currently configured.</span>
-          <span *ngIf="!cookiesStatusMessage && !cookiesConfigured">No cookies configured. YouTube downloads require valid cookies.</span>
+  </form>
+  
+  <!-- Batch Import Modal -->
+  <div class="modal fade" tabindex="-1" role="dialog" [ngClass]="{'show': batchImportModalOpen}" [ngStyle]="{'display': batchImportModalOpen ? 'block' : 'none'}">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Batch Import URLs</h5>
+          <button type="button" class="btn-close" aria-label="Close" (click)="closeBatchImportModal()"></button>
+        </div>
+        <div class="modal-body">
+          <textarea [(ngModel)]="batchImportText" class="form-control" rows="6"
+            placeholder="Paste one video URL per line"></textarea>
+          <div class="mt-2">
+            <small *ngIf="batchImportStatus">{{ batchImportStatus }}</small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-danger me-auto" *ngIf="importInProgress" (click)="cancelBatchImport()">
+            Cancel Import
+          </button>
+          <button type="button" class="btn btn-secondary" (click)="closeBatchImportModal()">Close</button>
+          <button type="button" class="btn btn-primary" (click)="startBatchImport()" [disabled]="importInProgress">
+            Import URLs
+          </button>
         </div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-danger me-auto" (click)="clearCookies()" [disabled]="cookiesInProgress || !cookiesConfigured">
-          Clear cookies
-        </button>
-        <button type="button" class="btn btn-secondary" (click)="closeCookiesModal()" [disabled]="cookiesInProgress">Close</button>
-        <button type="button" class="btn btn-primary" (click)="saveCookies()" [disabled]="cookiesInProgress || !cookiesText || !cookiesText.trim()">
-          Save cookies
-        </button>
+    </div>
+  </div>
+  <!-- Cookies Modal -->
+  <div class="modal fade" tabindex="-1" role="dialog" [ngClass]="{'show': cookiesModalOpen}" [ngStyle]="{'display': cookiesModalOpen ? 'block' : 'none'}">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Manage Cookies</h5>
+          <button type="button" class="btn-close" aria-label="Close" (click)="closeCookiesModal()" [disabled]="cookiesInProgress"></button>
+        </div>
+        <div class="modal-body">
+          <p>Paste your YouTube cookies in Netscape format. You can export them using browser extensions like <strong>Get cookies.txt</strong>.</p>
+          <textarea [(ngModel)]="cookiesText" class="form-control" rows="6" placeholder="Paste cookies here" [disabled]="cookiesInProgress"></textarea>
+          <div class="mt-2">
+            <small *ngIf="cookiesStatusMessage">{{ cookiesStatusMessage }}</small>
+            <small *ngIf="!cookiesStatusMessage && cookiesConfigured">Cookies are currently configured.</small>
+            <small *ngIf="!cookiesStatusMessage && !cookiesConfigured">No cookies are configured.</small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-danger me-auto" (click)="clearCookies()" [disabled]="cookiesInProgress || !cookiesConfigured">
+            Clear Cookies
+          </button>
+          <button type="button" class="btn btn-secondary" (click)="closeCookiesModal()" [disabled]="cookiesInProgress">Close</button>
+          <button type="button" class="btn btn-primary" (click)="saveCookies()" [disabled]="cookiesInProgress || !cookiesText || !cookiesText.trim()">
+            Save Cookies
+          </button>
+        </div>
       </div>
     </div>
   </div>
-</div>
+  
 
-<div class="modal fade" tabindex="-1" role="dialog" [ngClass]="{'show': streamModalOpen}" [ngStyle]="{'display': streamModalOpen ? 'block' : 'none'}">
-  <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">{{ streamDownload?.title }}</h5>
-        <button type="button" class="btn-close" aria-label="Close" (click)="closeStream()"></button>
-      </div>
-      <div class="modal-body">
-        <ng-container [ngSwitch]="streamMode">
-          <video *ngSwitchCase="'video'" #mediaPlayer controls autoplay playsinline class="w-100 rounded" [src]="streamUrl"></video>
-          <audio *ngSwitchCase="'audio'" #mediaPlayer controls autoplay class="w-100" [src]="streamUrl"></audio>
-        </ng-container>
-      </div>
-    </div>
+  <div *ngIf="downloads.loading" class="alert alert-info" role="alert">
+    Connecting to server...
   </div>
-</div>
+  <div class="metube-section-header">Downloading</div>
+  <div class="px-2 py-3 border-bottom">
+    <button type="button" class="btn btn-link text-decoration-none px-0 me-4" disabled #queueDelSelected (click)="delSelectedDownloads('queue')"><fa-icon [icon]="faTrashAlt"></fa-icon>&nbsp; Cancel selected</button>
+    <button type="button" class="btn btn-link text-decoration-none px-0 me-4" disabled #queueDownloadSelected (click)="startSelectedDownloads('queue')"><fa-icon [icon]="faDownload"></fa-icon>&nbsp; Download selected</button>
+  </div>
+  <div class="overflow-auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th scope="col" style="width: 1rem;">
+            <app-master-checkbox #queueMasterCheckbox [id]="'queue'" [list]="downloads.queue" (changed)="queueSelectionChanged($event)"></app-master-checkbox>
+          </th>
+          <th scope="col">Video</th>
+          <th scope="col" style="width: 8rem;">Speed</th>
+          <th scope="col" style="width: 7rem;">ETA</th>
+          <th scope="col" style="width: 6rem;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let download of downloads.queue | keyvalue: asIsOrder; trackBy: identifyDownloadRow" [class.disabled]='download.value.deleting'>
+          <td>
+            <app-slave-checkbox [id]="download.key" [master]="queueMasterCheckbox" [checkable]="download.value"></app-slave-checkbox>
+          </td>
+          <td title="{{ download.value.filename }}">
+            <div class="d-flex flex-column flex-sm-row align-items-center row-gap-2 column-gap-3">
+              <div>{{ download.value.title }}</div>
+              <ngb-progressbar height="1.5rem" [showValue]="download.value.status != 'preparing'" [striped]="download.value.status == 'preparing'" [animated]="download.value.status == 'preparing'" type="success" [value]="download.value.status == 'preparing' ? 100 : download.value.percent | number:'1.0-0'" class="download-progressbar"></ngb-progressbar>
+            </div>
+          </td>
+          <td>{{ download.value.speed | speed }}</td>
+          <td>{{ download.value.eta | eta }}</td>
+          <td>
+            <div class="d-flex">
+              <button *ngIf="download.value.status === 'pending'" type="button" class="btn btn-link" (click)="downloadItemByKey(download.key)"><fa-icon [icon]="faDownload"></fa-icon></button>
+              <button type="button" class="btn btn-link" (click)="delDownload('queue', download.key)"><fa-icon [icon]="faTrashAlt"></fa-icon></button>
+              <a href="{{download.value.url}}" target="_blank" class="btn btn-link"><fa-icon [icon]="faExternalLinkAlt"></fa-icon></a>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 
-<footer class="dashboard-footer mt-5">
-  <div class="container-xxl">
-    <div class="footer-content">
-      <span class="footer-brand">MeTubeEX</span>
-      <div class="footer-metadata" *ngIf="ytDlpVersion && metubeVersion">
-        <span>yt-dlp {{ ytDlpVersion }}</span>
-        <span>•</span>
-        <span>MeTubeEX {{ metubeVersion }}</span>
-        <span *ngIf="ytDlpOptionsUpdateTime">• yt-dlp options {{ ytDlpOptionsUpdateTime }}</span>
+  <div class="metube-section-header">Completed</div>
+  <div class="px-2 py-3 border-bottom">
+    <button type="button" class="btn btn-link text-decoration-none px-0 me-4" disabled #doneDelSelected (click)="delSelectedDownloads('done')"><fa-icon [icon]="faTrashAlt"></fa-icon>&nbsp; Clear selected</button>
+    <button type="button" class="btn btn-link text-decoration-none px-0 me-4" disabled #doneClearCompleted (click)="clearCompletedDownloads()"><fa-icon [icon]="faCheckCircle"></fa-icon>&nbsp; Clear completed</button>
+    <button type="button" class="btn btn-link text-decoration-none px-0 me-4" disabled #doneClearFailed (click)="clearFailedDownloads()"><fa-icon [icon]="faTimesCircle"></fa-icon>&nbsp; Clear failed</button>
+    <button type="button" class="btn btn-link text-decoration-none px-0 me-4" disabled #doneRetryFailed (click)="retryFailedDownloads()"><fa-icon [icon]="faRedoAlt"></fa-icon>&nbsp; Retry failed</button>
+    <button type="button" class="btn btn-link text-decoration-none px-0 me-4" disabled #doneDownloadSelected (click)="downloadSelectedFiles()"><fa-icon [icon]="faDownload"></fa-icon>&nbsp; Download Selected</button>
+  </div>
+  <div class="overflow-auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th scope="col" style="width: 1rem;">
+            <app-master-checkbox #doneMasterCheckbox [id]="'done'" [list]="downloads.done" (changed)="doneSelectionChanged($event)"></app-master-checkbox>
+          </th>
+          <th scope="col">Video</th>
+          <th scope="col">File Size</th>
+          <th scope="col" style="width: 8rem;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let download of downloads.done | keyvalue: asIsOrder; trackBy: identifyDownloadRow" [class.disabled]='download.value.deleting'>
+          <td>
+            <app-slave-checkbox [id]="download.key" [master]="doneMasterCheckbox" [checkable]="download.value"></app-slave-checkbox>
+          </td>
+          <td>
+            <div style="display: inline-block; width: 1.5rem;">
+              <fa-icon *ngIf="download.value.status == 'finished'" [icon]="faCheckCircle" class="text-success"></fa-icon>
+              <fa-icon *ngIf="download.value.status == 'error'" [icon]="faTimesCircle" class="text-danger"></fa-icon>
+            </div>
+            <span ngbTooltip="{{download.value.msg}} | {{download.value.error}}"><a *ngIf="!!download.value.filename; else noDownloadLink" href="{{buildDownloadLink(download.value)}}" target="_blank">{{ download.value.title }}</a></span>
+            <ng-template #noDownloadLink>
+              {{download.value.title}}
+              <span *ngIf="download.value.msg"><br>{{download.value.msg}}</span>
+              <span *ngIf="download.value.error"><br>Error: {{download.value.error}}</span>
+            </ng-template>
+          </td>
+          <td>
+            <span *ngIf="download.value.size">{{ download.value.size | fileSize }}</span>
+          </td>
+          <td>
+            <div class="d-flex">
+              <button *ngIf="download.value.status == 'error'" type="button" class="btn btn-link" (click)="retryDownload(download.key, download.value)"><fa-icon [icon]="faRedoAlt"></fa-icon></button>
+              <button *ngIf="download.value.filename" type="button" class="btn btn-link" (click)="renameDownload(download.key, download.value)"><fa-icon [icon]="faPen"></fa-icon></button>
+              <a *ngIf="download.value.filename" href="{{buildDownloadLink(download.value)}}" download class="btn btn-link"><fa-icon [icon]="faDownload"></fa-icon></a>
+              <a href="{{download.value.url}}" target="_blank" class="btn btn-link"><fa-icon [icon]="faExternalLinkAlt"></fa-icon></a>
+              <button type="button" class="btn btn-link" (click)="delDownload('done', download.key)"><fa-icon [icon]="faTrashAlt"></fa-icon></button>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</main><!-- /.container -->
+
+<footer class="footer navbar-dark bg-dark py-3 mt-5">
+  <div class="container text-center">
+    <div class="footer-content" *ngIf="ytDlpVersion && metubeVersion">
+      <div class="version-item">
+        <span class="version-label">yt-dlp</span>
+        <span class="version-value">{{ytDlpVersion}}</span>
       </div>
-      <a href="https://github.com/NaxonM/metube-extended" target="_blank" rel="noopener" class="footer-link">
-        <fa-icon [icon]="faGithub" class="me-1"></fa-icon>
-        GitHub
+      <div class="version-separator"></div>
+      <div class="version-item">
+        <span class="version-label">MeTubeEX</span>
+        <span class="version-value">{{metubeVersion}}</span>
+      </div>
+      <div class="version-separator"></div>
+      <div class="version-item" *ngIf="ytDlpOptionsUpdateTime">
+        <span class="version-label">yt-dlp-options</span>
+        <span class="version-value">{{ytDlpOptionsUpdateTime}}</span>
+      </div>
+      <div class="version-separator" *ngIf="ytDlpOptionsUpdateTime"></div>
+      <a href="https://github.com/NaxonM/metube-extended" target="_blank" class="github-link">
+        <fa-icon [icon]="faGithub"></fa-icon>
+        <span>GitHub</span>
       </a>
     </div>
   </div>

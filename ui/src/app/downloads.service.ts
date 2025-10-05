@@ -27,9 +27,6 @@ export interface Download {
   filename: string;
   error?: string;
   size?: number;
-  thumbnail?: string;
-  timestamp?: number;
-  history_key?: string;
   checked?: boolean;
   deleting?: boolean;
 }
@@ -64,235 +61,63 @@ export class DownloadsService {
 
   configuration = {};
   customDirs = {};
-  private readonly fallbackPrefix = 'dl';
-  private counter = 0;
-
-  private normalizeDownload(download: Download | null | undefined, key?: string): Download | undefined {
-    if (!download) {
-      return undefined;
-    }
-  
-    if (typeof download.timestamp !== 'number') {
-      download.timestamp = Date.now();
-    }
-  
-    if (typeof download.id !== 'string' || download.id.trim().length === 0) {
-      if (key) {
-        download.id = key;
-      } else {
-        this.counter += 1;
-        download.id = `${this.fallbackPrefix}-${this.counter}-${download.timestamp}`;
-      }
-    }
-  
-    if (!download.history_key) {
-      if (key) {
-        download.history_key = key;
-      } else if (download.url) {
-        download.history_key = `${download.url}::${download.timestamp}`;
-      } else {
-        this.counter += 1;
-        download.history_key = `${this.fallbackPrefix}-${this.counter}-${download.timestamp}`;
-      }
-    }
-  
-    if (!download.title || download.title.trim().length === 0) {
-      if (download.filename && download.filename.trim().length > 0) {
-        download.title = download.filename.trim();
-      } else if (download.url && download.url.trim().length > 0) {
-        download.title = download.url.trim();
-      } else if (download.id && download.id.trim().length > 0) {
-        download.title = download.id.trim();
-      } else {
-        download.title = 'Unknown download';
-      }
-    }
-  
-    return download;
-  }
 
   constructor(private http: HttpClient, private socket: MeTubeSocket) {
     socket.fromEvent('all').subscribe((strdata: string) => {
       this.loading = false;
-      const data: [Array<[string, Download]>, Array<[string, Download]>] = JSON.parse(strdata);
+      let data: [[[string, Download]], [[string, Download]]] = JSON.parse(strdata);
       this.queue.clear();
-      data[0].forEach(([backendKey, download]) => {
-        const normalized = this.normalizeDownload(download, backendKey);
-        if (normalized && normalized.id) {
-          this.queue.set(normalized.id, normalized);
-        }
-      });
+      data[0].forEach(entry => this.queue.set(...entry));
       this.done.clear();
-      data[1].forEach(([backendKey, download]) => {
-        const normalized = this.normalizeDownload(download, backendKey);
-        if (normalized && normalized.id) {
-          this.done.set(normalized.id, normalized);
-        }
-      });
+      data[1].forEach(entry => this.done.set(...entry));
       this.queueChanged.next(null);
       this.doneChanged.next(null);
     });
     socket.fromEvent('added').subscribe((strdata: string) => {
-      const data: Download = JSON.parse(strdata);
-      const normalized = this.normalizeDownload(data);
-      if (normalized && normalized.id) {
-        this.queue.set(normalized.id, normalized);
-        this.queueChanged.next(null);
-      }
+      let data: Download = JSON.parse(strdata);
+      this.queue.set(data.url, data);
+      this.queueChanged.next(null);
     });
     socket.fromEvent('updated').subscribe((strdata: string) => {
-      const data: Download = JSON.parse(strdata);
-      let targetKey: string | undefined;
-      let existing: Download | undefined;
-      if (data.id) {
-        targetKey = data.id;
-        existing = this.queue.get(targetKey);
-      } else if (data.url) {
-        for (const [k, v] of this.queue.entries()) {
-          if (v.url === data.url) {
-            targetKey = k;
-            existing = v;
-            data.id = k;
-            break;
-          }
-        }
-      } else {
-        return; // cannot update without id or url
-      }
-      if (existing) {
-        if (!data.history_key) {
-          data.history_key = existing.history_key;
-        }
-        data.checked = existing.checked;
-        data.deleting = existing.deleting;
-      }
-      const normalized = this.normalizeDownload(data, targetKey);
-      if (normalized && targetKey) {
-        this.queue.set(targetKey, normalized);
-        this.queueChanged.next(null);
-        this.updated.next(null);
-      }
+      let data: Download = JSON.parse(strdata);
+      let dl: Download = this.queue.get(data.url);
+      data.checked = dl.checked;
+      data.deleting = dl.deleting;
+      this.queue.set(data.url, data);
+      this.updated.next(null);
     });
     socket.fromEvent('completed').subscribe((strdata: string) => {
-      const data: Download = JSON.parse(strdata);
-      let queueTargetKey: string | undefined;
-      if (data.id) {
-        if (this.queue.has(data.id)) {
-          queueTargetKey = data.id;
-        }
-      } else if (data.url) {
-        for (const [k, v] of this.queue.entries()) {
-          if (v.url === data.url) {
-            queueTargetKey = k;
-            data.id = k;
-            break;
-          }
-        }
-      }
-      if (queueTargetKey) {
-        this.queue.delete(queueTargetKey);
-      }
-      const normalized = this.normalizeDownload(data, data.id);
-      if (!normalized) {
-        return;
-      }
-      const doneTargetKey = normalized.id;
-      const existing = doneTargetKey ? this.done.get(doneTargetKey) : undefined;
-      if (existing) {
-        normalized.checked = existing.checked;
-        normalized.deleting = existing.deleting;
-      }
-      this.done.set(doneTargetKey, normalized);
+      let data: Download = JSON.parse(strdata);
+      this.queue.delete(data.url);
+      this.done.set(data.url, data);
       this.queueChanged.next(null);
       this.doneChanged.next(null);
     });
     socket.fromEvent('canceled').subscribe((strdata: string) => {
-      const dataStr: string = JSON.parse(strdata);
-      let deleted = false;
-      if (this.queue.has(dataStr)) {
-        this.queue.delete(dataStr);
-        deleted = true;
-      } else {
-        for (const [k, v] of this.queue.entries()) {
-          if (v.id === dataStr || v.url === dataStr || v.history_key === dataStr) {
-            this.queue.delete(k);
-            deleted = true;
-            break;
-          }
-        }
-      }
-      if (deleted) {
-        this.queueChanged.next(null);
-      }
+      let data: string = JSON.parse(strdata);
+      this.queue.delete(data);
+      this.queueChanged.next(null);
     });
     socket.fromEvent('cleared').subscribe((strdata: string) => {
-      const key: string = JSON.parse(strdata);
-      let removed = this.done.delete(key);
-
-      if (!removed) {
-        for (const [mapKey, download] of this.done.entries()) {
-          if (download.history_key === key || download.url === key || download.id === key) {
-            this.done.delete(mapKey);
-            removed = true;
-            break;
-          }
-        }
-      }
-
-      if (removed) {
-        this.doneChanged.next(null);
-      }
+      let data: string = JSON.parse(strdata);
+      this.done.delete(data);
+      this.doneChanged.next(null);
     });
     socket.fromEvent('renamed').subscribe((strdata: string) => {
-      const data: Download = JSON.parse(strdata);
-      let targetKey: string | undefined;
-      let existing: Download | undefined;
-      if (data.id) {
-        targetKey = data.id;
-        existing = this.done.get(targetKey);
-      } else if (data.url) {
-        for (const [k, v] of this.done.entries()) {
-          if (v.url === data.url) {
-            targetKey = k;
-            data.id = k;
-            existing = v;
-            break;
-          }
-        }
-      } else if (data.history_key) {
-        for (const [k, v] of this.done.entries()) {
-          if (v.history_key === data.history_key) {
-            targetKey = k;
-            data.id = k;
-            existing = v;
-            break;
-          }
-        }
-      }
-      if (!targetKey) {
-        const normalized = this.normalizeDownload(data);
-        if (normalized && normalized.id) {
-          this.done.set(normalized.id, normalized);
-          this.doneChanged.next(null);
-          return;
-        } else {
-          return;
-        }
-      }
-      const normalized = this.normalizeDownload(data, targetKey);
-      if (!normalized) {
+      let data: Download = JSON.parse(strdata);
+      let existing: Download = this.done.get(data.url);
+      if (!existing) {
         return;
       }
-      if (existing) {
-        const merged = {
-          ...existing,
-          ...normalized,
-          history_key: normalized.history_key ?? existing.history_key
-        };
-        this.done.set(targetKey, merged);
-      } else {
-        this.done.set(targetKey, normalized);
-      }
+      existing = {
+        ...existing,
+        filename: data.filename ?? data.title ?? existing.filename,
+        title: data.title ?? existing.title,
+        msg: data.msg ?? existing.msg,
+        error: data.error ?? existing.error,
+        size: data.size ?? existing.size
+      };
+      this.done.set(data.url, existing);
       this.doneChanged.next(null);
     });
     socket.fromEvent('configuration').subscribe((strdata: string) => {
@@ -338,21 +163,20 @@ export class DownloadsService {
 
     return this.http.post<any>('delete', {where: where, ids: ids}).pipe(
       tap(result => {
-        if (!result || result.status !== 'ok') {
+        if (!result || result.status === 'error') {
           ids.forEach(id => {
             const entry = (this as any)[where]?.get(id);
             if (entry) {
               entry.deleting = false;
             }
           });
-          if (where === 'done') {
-            const errors = result?.errors ? Object.values(result.errors).join('\n') : (result?.msg || 'Unknown error.');
-            alert('Unable to remove one or more files:\n' + errors);
-          }
+        }
+
+        if (where !== 'done' || !result) {
           return;
         }
-        // success
-        if (where === 'done') {
+
+        if (result.status === 'ok') {
           const deleted: string[] = result.deleted || [];
           const missing: string[] = result.missing || [];
           let messageParts: string[] = [];
@@ -366,13 +190,10 @@ export class DownloadsService {
             messageParts.push('Selected downloads removed.');
           }
           alert(messageParts.join('\n\n'));
+        } else {
+          const errors = result.errors ? Object.values(result.errors).join('\n') : (result.msg || 'Unknown error.');
+          alert('Unable to remove one or more files:\n' + errors);
         }
-        // remove all ids
-        ids.forEach(id => {
-          (this as any)[where].delete(id);
-        });
-        const changed = where === 'queue' ? this.queueChanged : this.doneChanged;
-        changed.next(null);
       }),
       catchError(error => {
         ids.forEach(id => {
@@ -392,13 +213,13 @@ export class DownloadsService {
 
   public startByFilter(where: 'queue' | 'done', filter: (dl: Download) => boolean) {
     let ids: string[] = [];
-    this[where].forEach((dl: Download, key: string) => { if (filter(dl)) ids.push(key); });
+    this[where].forEach((dl: Download) => { if (filter(dl)) ids.push(dl.url) });
     return this.startById(ids);
   }
 
   public delByFilter(where: 'queue' | 'done', filter: (dl: Download) => boolean) {
     let ids: string[] = [];
-    this[where].forEach((dl: Download, key: string) => { if (filter(dl)) ids.push(key); });
+    this[where].forEach((dl: Download) => { if (filter(dl)) ids.push(dl.url) });
     return this.delById(where, ids);
   }
   public addDownloadByUrl(url: string): Promise<any> {
