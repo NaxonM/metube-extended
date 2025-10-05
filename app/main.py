@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, Optional
 from aiohttp import web
 from aiohttp.log import access_logger
+from aiohttp.web_fileresponse import FileSender
 import ssl
 import socket
 import socketio
@@ -168,6 +169,7 @@ app = web.Application()
 sio = socketio.AsyncServer(cors_allowed_origins='*', cors_credentials=True)
 sio.attach(app, socketio_path=config.URL_PREFIX + 'socket.io')
 routes = web.RouteTableDef()
+file_sender = FileSender()
 
 class UserNotifier(DownloadQueueNotifier):
     def __init__(self, sio_server: socketio.AsyncServer, user_id: str):
@@ -631,69 +633,26 @@ async def stream_download(request):
         raise web.HTTPNotFound(text='File not found')
 
     mime_type, _ = mimetypes.guess_type(file_path)
-    file_size = os.path.getsize(file_path)
-    range_header = request.headers.get('Range')
-
-    if range_header:
-        match = re.match(r'bytes=(\d*)-(\d*)$', range_header.strip())
-        if not match:
-            raise web.HTTPRequestRangeNotSatisfiable(headers={'Content-Range': f'bytes */{file_size}'})
-
-        start_str, end_str = match.groups()
-        if start_str:
-            start = int(start_str)
-            if start >= file_size:
-                raise web.HTTPRequestRangeNotSatisfiable(headers={'Content-Range': f'bytes */{file_size}'})
-        elif end_str:
-            suffix = int(end_str)
-            if suffix <= 0:
-                raise web.HTTPRequestRangeNotSatisfiable(headers={'Content-Range': f'bytes */{file_size}'})
-            start = max(file_size - suffix, 0)
-        else:
-            raise web.HTTPRequestRangeNotSatisfiable(headers={'Content-Range': f'bytes */{file_size}'})
-
-        if end_str:
-            end = min(int(end_str), file_size - 1)
-        else:
-            end = file_size - 1
-
-        if end < start:
-            raise web.HTTPRequestRangeNotSatisfiable(headers={'Content-Range': f'bytes */{file_size}'})
-
-        chunk_length = end - start + 1
-        headers = {
-            'Content-Disposition': f'inline; filename="{os.path.basename(file_path)}"',
-            'Content-Range': f'bytes {start}-{end}/{file_size}',
-            'Content-Length': str(chunk_length),
-            'Accept-Ranges': 'bytes',
-        }
-
-        response = web.StreamResponse(status=206, headers=headers)
-        response.content_type = mime_type or 'application/octet-stream'
-        await response.prepare(request)
-
-        chunk_size = 256 * 1024
-        with open(file_path, 'rb') as fh:
-            fh.seek(start)
-            remaining = chunk_length
-            while remaining > 0:
-                read_size = min(chunk_size, remaining)
-                data = await asyncio.to_thread(fh.read, read_size)
-                if not data:
-                    break
-                remaining -= len(data)
-                await response.write(data)
-
-        await response.write_eof()
-        return response
-
     headers = {
         'Content-Disposition': f'inline; filename="{os.path.basename(file_path)}"',
         'Accept-Ranges': 'bytes',
     }
 
-    response = web.FileResponse(path=file_path, headers=headers)
+    response = web.StreamResponse(status=200, headers=headers)
     response.content_type = mime_type or 'application/octet-stream'
+
+    await response.prepare(request)
+
+    try:
+        await file_sender.send(request, response, file_path)
+    except (asyncio.CancelledError, web.HTTPException):
+        raise
+    except ConnectionResetError:
+        pass
+    finally:
+        if not response._eof_sent:  # pylint: disable=protected-access
+            await response.write_eof()
+
     return response
 
 @sio.event
