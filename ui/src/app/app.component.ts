@@ -832,6 +832,20 @@ export class AppComponent implements AfterViewInit, OnInit {
     this.isAdvancedOpen = !this.isAdvancedOpen;
   }
 
+  getProgressValue(download: Download | undefined): number {
+    if (!download) {
+      return 0;
+    }
+    if (download.status === 'preparing') {
+      return 100;
+    }
+    const percent = download.percent;
+    if (typeof percent !== 'number' || !isFinite(percent)) {
+      return 0;
+    }
+    return Math.max(0, Math.min(100, Math.round(percent)));
+  }
+
   private updateMetrics() {
     this.activeDownloads = Array.from(this.downloads.queue.values()).filter(d => d.status === 'downloading' || d.status === 'preparing').length;
     this.queuedDownloads = Array.from(this.downloads.queue.values()).filter(d => d.status === 'pending').length;

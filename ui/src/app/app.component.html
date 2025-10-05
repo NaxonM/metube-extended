@@ -32,7 +32,7 @@
           <fa-icon [icon]="faTimesCircle"></fa-icon>
           <span>{{ failedDownloads }} failed</span>
         </div>
-        <div class="metric metric--info" *ngIf="(totalSpeed | speed) !== ''">
+        <div class="metric metric--info" *ngIf="totalSpeed > 0">
           <fa-icon [icon]="faTachometerAlt"></fa-icon>
           <span>{{ totalSpeed | speed }}</span>
         </div>
@@ -215,7 +215,7 @@
                       <span class="status-chip" [class.status-preparing]="entry.value.status === 'preparing'" [class.status-downloading]="entry.value.status === 'downloading'" [class.status-pending]="entry.value.status === 'pending'">{{ entry.value.status }}</span>
                     </div>
                     <div class="queue-item-progress">
-                      <ngb-progressbar height="1.2rem" [showValue]="entry.value.status !== 'preparing'" [striped]="entry.value.status === 'preparing'" [animated]="entry.value.status === 'preparing'" type="success" [value]="entry.value.status === 'preparing' ? 100 : entry.value.percent | number:'1.0-0'"></ngb-progressbar>
+                      <ngb-progressbar height="1.2rem" [showValue]="entry.value.status !== 'preparing'" [striped]="entry.value.status === 'preparing'" [animated]="entry.value.status === 'preparing'" type="success" [value]="getProgressValue(entry.value)"></ngb-progressbar>
                     </div>
                     <div class="queue-item-meta">
                       <span>
