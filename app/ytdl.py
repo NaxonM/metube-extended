@@ -43,6 +43,7 @@ class DownloadInfo:
         self.format = format
         self.folder = folder
         self.custom_name_prefix = custom_name_prefix
+        self.filename = None
         self.msg = self.percent = self.speed = self.eta = None
         self.status = "pending"
         self.size = None
@@ -488,9 +489,10 @@ class DownloadQueue:
                 continue
 
             dl = self.done.get(id)
-            filename = dl.info.filename or dl.info.title
+            stored_filename = getattr(dl.info, 'filename', None)
+            filename = stored_filename or dl.info.title
             directory = self._resolve_download_directory(dl.info)
-            file_path = os.path.join(directory, dl.info.filename) if (directory and dl.info.filename) else None
+            file_path = os.path.join(directory, stored_filename) if (directory and stored_filename) else None
 
             if file_path and os.path.exists(file_path):
                 try:

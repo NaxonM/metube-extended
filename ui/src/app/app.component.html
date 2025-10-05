@@ -234,134 +234,149 @@
   </form>
 
   <div *ngIf="isAdmin" class="container admin-tools-container">
-    <div class="admin-panel">
-      <div class="admin-panel-header">
-        <fa-icon [icon]="faUserShield" class="text-warning me-2"></fa-icon>
-        <span class="fw-semibold">Admin tools</span>
+    <div class="admin-tools-toggle">
+      <div class="admin-tools-label">
+        <fa-icon [icon]="faUserShield" class="text-warning"></fa-icon>
+        <div class="admin-tools-text">
+          <span class="admin-tools-title">Admin tools</span>
+          <span class="admin-tools-subtitle">Proxy settings, monitoring &amp; user management</span>
+        </div>
       </div>
+      <button type="button"
+              class="btn btn-outline-secondary btn-sm"
+              (click)="toggleAdminTools()"
+              [attr.aria-expanded]="adminToolsOpen"
+              aria-controls="adminToolsPanel">
+        {{ adminToolsOpen ? 'Hide' : 'Show' }}
+      </button>
+    </div>
 
-      <div class="row g-3">
-        <div class="col-12 col-lg-4">
-          <div class="admin-card">
-            <div class="admin-card-header d-flex align-items-center gap-2">
-              <fa-icon [icon]="faTachometerAlt" class="text-primary"></fa-icon>
-              <span class="fw-semibold">Proxy download limits</span>
+    <div id="adminToolsPanel"
+         class="collapse admin-panel-wrapper"
+         [ngbCollapse]="!adminToolsOpen">
+      <div class="admin-panel">
+        <div class="row g-3">
+          <div class="col-12 col-lg-4">
+            <div class="admin-card">
+              <div class="admin-card-header d-flex align-items-center gap-2">
+                <fa-icon [icon]="faTachometerAlt" class="text-primary"></fa-icon>
+                <span class="fw-semibold">Proxy download limits</span>
+              </div>
+              <p class="small text-muted mb-3">Configure the maximum size allowed for direct proxy downloads. These settings apply to all users.</p>
+
+              <div *ngIf="proxySettingsLoading" class="d-flex align-items-center gap-2 py-2">
+                <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+                <span>Loading settings…</span>
+              </div>
+
+              <ng-container *ngIf="!proxySettingsLoading">
+                <div class="form-check form-switch mb-3">
+                  <input class="form-check-input" type="checkbox" id="proxyLimitToggle" [checked]="proxyLimitEnabled" (change)="onProxyLimitToggle($event.target.checked)" [disabled]="proxySettingsSaving || proxySettingsLoading">
+                  <label class="form-check-label" for="proxyLimitToggle">Enforce download size limit</label>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label" for="proxyLimitMb">Maximum size (MB)</label>
+                  <input id="proxyLimitMb" type="number" class="form-control" min="0" [value]="proxyLimitMb" (input)="onProxyLimitMbChange($event.target.value)" (change)="onProxyLimitMbChange($event.target.value)" (blur)="onProxyLimitMbChange($event.target.value)" [disabled]="proxySettingsSaving || proxySettingsLoading || !proxyLimitEnabled">
+                  <small class="text-muted">Set to 0 for unlimited downloads.</small>
+                </div>
+
+                <div *ngIf="proxySettingsError" class="alert alert-danger py-2" role="alert">
+                  {{ proxySettingsError }}
+                </div>
+
+                <div class="d-flex justify-content-end">
+                  <button type="button" class="btn btn-primary" (click)="saveProxySettings()" [disabled]="proxySettingsSaving || proxySettingsLoading || !proxySettingsDirty">
+                    <span *ngIf="proxySettingsSaving" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Save changes
+                  </button>
+                </div>
+              </ng-container>
             </div>
-            <p class="small text-muted mb-3">Configure the maximum size allowed for direct proxy downloads. These settings apply to all users.</p>
+          </div>
 
-            <div *ngIf="proxySettingsLoading" class="d-flex align-items-center gap-2 py-2">
-              <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
-              <span>Loading settings…</span>
-            </div>
+          <div class="col-12 col-lg-4">
+            <div class="admin-card">
+              <div class="admin-card-header d-flex align-items-center gap-2">
+                <fa-icon [icon]="faTachometerAlt" class="text-success"></fa-icon>
+                <span class="fw-semibold">System resource monitor</span>
+              </div>
+              <p class="small text-muted mb-3">Live view of server CPU, memory, swap, and network usage.</p>
 
-            <ng-container *ngIf="!proxySettingsLoading">
-              <div class="form-check form-switch mb-3">
-                <input class="form-check-input" type="checkbox" id="proxyLimitToggle" [checked]="proxyLimitEnabled" (change)="onProxyLimitToggle($event.target.checked)" [disabled]="proxySettingsSaving || proxySettingsLoading">
-                <label class="form-check-label" for="proxyLimitToggle">Enforce download size limit</label>
+              <div *ngIf="systemStatsLoading" class="d-flex align-items-center gap-2 py-2">
+                <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+                <span>Fetching system statistics…</span>
               </div>
 
-              <div class="mb-3">
-                <label class="form-label" for="proxyLimitMb">Maximum size (MB)</label>
-                <input id="proxyLimitMb" type="number" class="form-control" min="0" [value]="proxyLimitMb" (input)="onProxyLimitMbChange($event.target.value)" (change)="onProxyLimitMbChange($event.target.value)" (blur)="onProxyLimitMbChange($event.target.value)" [disabled]="proxySettingsSaving || proxySettingsLoading || !proxyLimitEnabled">
-                <small class="text-muted">Set to 0 for unlimited downloads.</small>
+              <div *ngIf="systemStatsError" class="alert alert-danger py-2" role="alert">
+                {{ systemStatsError }}
               </div>
 
-              <div *ngIf="proxySettingsError" class="alert alert-danger py-2" role="alert">
-                {{ proxySettingsError }}
+              <div *ngIf="systemStats && !systemStatsLoading" class="small">
+                <div class="admin-stats-grid">
+                  <div class="stat-tile">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                      <span class="text-muted text-uppercase small">CPU</span>
+                      <span class="fw-semibold">{{ systemStats.cpu.percent | number:'1.0-1' }}%</span>
+                    </div>
+                    <div class="text-muted">Cores: {{ systemStats.cpu.cores }}, Threads: {{ systemStats.cpu.threads }}</div>
+                  </div>
+
+                  <div class="stat-tile">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                      <span class="text-muted text-uppercase small">Memory</span>
+                      <span class="fw-semibold">{{ systemStats.memory.percent | number:'1.0-1' }}%</span>
+                    </div>
+                    <div class="text-muted">{{ formatBytes(systemStats.memory.used) }} / {{ formatBytes(systemStats.memory.total) }}</div>
+                    <div class="text-muted">Free: {{ formatBytes(systemStats.memory.available) }}</div>
+                  </div>
+
+                  <div class="stat-tile" *ngIf="systemStats.swap.total > 0">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                      <span class="text-muted text-uppercase small">Swap</span>
+                      <span class="fw-semibold">{{ systemStats.swap.percent | number:'1.0-1' }}%</span>
+                    </div>
+                    <div class="text-muted">{{ formatBytes(systemStats.swap.used) }} / {{ formatBytes(systemStats.swap.total) }}</div>
+                  </div>
+
+                  <div class="stat-tile" *ngIf="systemStats.swap.total === 0">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                      <span class="text-muted text-uppercase small">Swap</span>
+                      <span class="badge bg-secondary">Off</span>
+                    </div>
+                    <div class="text-muted">Swap disabled</div>
+                  </div>
+
+                  <div class="stat-tile">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                      <span class="text-muted text-uppercase small">Uptime</span>
+                      <span class="fw-semibold">{{ formatDuration(systemStats.uptime_seconds) }}</span>
+                    </div>
+                    <div class="text-muted">Since {{ formatTimestampLocal(systemStats.timestamp - systemStats.uptime_seconds) }}</div>
+                  </div>
+
+                  <div class="stat-tile stat-wide">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                      <span class="text-muted text-uppercase small">Network</span>
+                      <span class="fw-semibold">TX {{ formatRate(systemStatsRates.sentPerSec) }} · RX {{ formatRate(systemStatsRates.recvPerSec) }}</span>
+                    </div>
+                    <div class="text-muted">Total sent {{ formatBytes(systemStats.network.bytes_sent) }}, received {{ formatBytes(systemStats.network.bytes_recv) }}</div>
+                  </div>
+                </div>
               </div>
 
-              <div class="d-flex justify-content-end">
-                <button type="button" class="btn btn-primary" (click)="saveProxySettings()" [disabled]="proxySettingsSaving || proxySettingsLoading || !proxySettingsDirty">
-                  <span *ngIf="proxySettingsSaving" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                  Save changes
+              <div class="d-flex justify-content-between align-items-center mt-3 small text-muted">
+                <span>Last update: {{ formatTimestampLocal(systemStats?.timestamp) }}</span>
+                <button type="button" class="btn btn-outline-secondary btn-sm" (click)="refreshSystemStats()" [disabled]="systemStatsRequestActive">
+                  <span *ngIf="systemStatsRequestActive" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                  Refresh
                 </button>
               </div>
-            </ng-container>
-          </div>
-        </div>
-
-        <div class="col-12 col-lg-4">
-          <div class="admin-card">
-            <div class="admin-card-header d-flex align-items-center gap-2">
-              <fa-icon [icon]="faTachometerAlt" class="text-success"></fa-icon>
-              <span class="fw-semibold">System resource monitor</span>
-            </div>
-            <p class="small text-muted mb-3">Live view of server CPU, memory, swap, and network usage.</p>
-
-            <div *ngIf="systemStatsLoading" class="d-flex align-items-center gap-2 py-2">
-              <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
-              <span>Fetching system statistics…</span>
-            </div>
-
-            <div *ngIf="systemStatsError" class="alert alert-danger py-2" role="alert">
-              {{ systemStatsError }}
-            </div>
-
-            <div *ngIf="systemStats && !systemStatsLoading" class="small">
-              <div class="admin-stats-grid">
-                <div class="stat-tile">
-                  <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="text-muted text-uppercase small">CPU</span>
-                    <span class="fw-semibold">{{ systemStats.cpu.percent | number:'1.0-1' }}%</span>
-                  </div>
-                  <div class="text-muted">Cores: {{ systemStats.cpu.cores }}, Threads: {{ systemStats.cpu.threads }}</div>
-                </div>
-
-                <div class="stat-tile">
-                  <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="text-muted text-uppercase small">Memory</span>
-                    <span class="fw-semibold">{{ systemStats.memory.percent | number:'1.0-1' }}%</span>
-                  </div>
-                  <div class="text-muted">{{ formatBytes(systemStats.memory.used) }} / {{ formatBytes(systemStats.memory.total) }}</div>
-                  <div class="text-muted">Free: {{ formatBytes(systemStats.memory.available) }}</div>
-                </div>
-
-                <div class="stat-tile" *ngIf="systemStats.swap.total > 0">
-                  <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="text-muted text-uppercase small">Swap</span>
-                    <span class="fw-semibold">{{ systemStats.swap.percent | number:'1.0-1' }}%</span>
-                  </div>
-                  <div class="text-muted">{{ formatBytes(systemStats.swap.used) }} / {{ formatBytes(systemStats.swap.total) }}</div>
-                </div>
-
-                <div class="stat-tile" *ngIf="systemStats.swap.total === 0">
-                  <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="text-muted text-uppercase small">Swap</span>
-                    <span class="badge bg-secondary">Off</span>
-                  </div>
-                  <div class="text-muted">Swap disabled</div>
-                </div>
-
-                <div class="stat-tile">
-                  <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="text-muted text-uppercase small">Uptime</span>
-                    <span class="fw-semibold">{{ formatDuration(systemStats.uptime_seconds) }}</span>
-                  </div>
-                  <div class="text-muted">Since {{ formatTimestampLocal(systemStats.timestamp - systemStats.uptime_seconds) }}</div>
-                </div>
-
-                <div class="stat-tile stat-wide">
-                  <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="text-muted text-uppercase small">Network</span>
-                    <span class="fw-semibold">TX {{ formatRate(systemStatsRates.sentPerSec) }} · RX {{ formatRate(systemStatsRates.recvPerSec) }}</span>
-                  </div>
-                  <div class="text-muted">Total sent {{ formatBytes(systemStats.network.bytes_sent) }}, received {{ formatBytes(systemStats.network.bytes_recv) }}</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="d-flex justify-content-between align-items-center mt-3 small text-muted">
-              <span>Last update: {{ formatTimestampLocal(systemStats?.timestamp) }}</span>
-              <button type="button" class="btn btn-outline-secondary btn-sm" (click)="refreshSystemStats()" [disabled]="systemStatsRequestActive">
-                <span *ngIf="systemStatsRequestActive" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                Refresh
-              </button>
             </div>
           </div>
-        </div>
 
-        <div class="col-12 col-lg-8">
-          <div class="admin-card">
+          <div class="col-12 col-lg-8">
+            <div class="admin-card">
             <div class="admin-card-header d-flex justify-content-between align-items-center">
               <div class="d-flex align-items-center gap-2">
                 <fa-icon [icon]="faUserShield" class="text-info"></fa-icon>
@@ -428,6 +443,7 @@
                   </tr>
                 </tbody>
               </table>
+            </div>
             </div>
           </div>
         </div>

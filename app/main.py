@@ -871,6 +871,8 @@ async def stream_download(request):
             raise web.HTTPRequestRangeNotSatisfiable(headers={'Content-Range': f'bytes */{file_size}'})
 
         start_str, end_str = match.groups()
+        is_suffix_request = False
+
         if start_str:
             start = int(start_str)
             if start >= file_size:
@@ -880,18 +882,21 @@ async def stream_download(request):
             if suffix <= 0:
                 raise web.HTTPRequestRangeNotSatisfiable(headers={'Content-Range': f'bytes */{file_size}'})
             start = max(file_size - suffix, 0)
+            is_suffix_request = True
         else:
             start = 0
 
-        if end_str:
-            end = int(end_str)
+        if end_str and not is_suffix_request:
+            requested_end = int(end_str)
         else:
-            end = start + MAX_STREAM_CHUNK - 1
+            requested_end = file_size - 1
 
-        end = min(end, file_size - 1, start + MAX_STREAM_CHUNK - 1)
-
-        if end < start:
+        if requested_end < start:
             raise web.HTTPRequestRangeNotSatisfiable(headers={'Content-Range': f'bytes */{file_size}'})
+
+        end = min(requested_end, file_size - 1)
+        if end_str and not is_suffix_request and end - start + 1 > MAX_STREAM_CHUNK:
+            end = min(start + MAX_STREAM_CHUNK - 1, file_size - 1)
 
         chunk_length = end - start + 1
         headers = {

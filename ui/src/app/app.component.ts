@@ -50,6 +50,7 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
 
   currentUser: CurrentUser | null = null;
   isAdmin = false;
+  adminToolsOpen = false;
   adminUsers: ManagedUser[] = [];
   adminLoading = false;
   adminError = '';
@@ -262,6 +263,10 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
 
   autoStartChanged() {
     this.cookieService.set('metube_auto_start', this.autoStart ? 'true' : 'false', { expires: 3650 });
+  }
+
+  toggleAdminTools() {
+    this.adminToolsOpen = !this.adminToolsOpen;
   }
 
   queueSelectionChanged(checked: number) {

@@ -50,8 +50,44 @@
 .advanced-action fa-icon
     font-size: 0.9rem
 
+.admin-tools-container
+    margin-top: 3rem
+
+.admin-tools-toggle
+    display: flex
+    align-items: center
+    justify-content: space-between
+    gap: 1rem
+    padding: 1.25rem 1.5rem
+    border-radius: 1rem
+    background: var(--bs-card-bg)
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+
+.admin-tools-label
+    display: flex
+    align-items: center
+    gap: 1rem
+
+.admin-tools-text
+    display: flex
+    flex-direction: column
+    gap: 0.15rem
+
+.admin-tools-title
+    font-size: 0.82rem
+    text-transform: uppercase
+    letter-spacing: 0.08em
+    font-weight: 600
+
+.admin-tools-subtitle
+    font-size: 0.85rem
+    color: rgba(var(--bs-body-color-rgb), 0.65)
+
+.admin-panel-wrapper
+    margin-top: 1.5rem
+
 .admin-panel
-    margin-top: 2.5rem
+    margin-top: 0
     padding: 2rem
     border-radius: 1rem
     background: var(--bs-card-bg)
@@ -101,6 +137,13 @@
 @media (max-width: 767.98px)
     .advanced-card
         padding: 1.5rem
+    .admin-tools-toggle
+        flex-direction: column
+        align-items: stretch
+        text-align: left
+        gap: 0.75rem
+    .admin-tools-toggle button
+        width: 100%
     .admin-panel
         padding: 1.5rem
     .admin-stats-grid
