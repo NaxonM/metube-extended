@@ -22,7 +22,7 @@ __all__ = [
 
 PATTERN_TITLE = re.compile(r'<h1 class="main-h1" style="line-height: 1em;">\s*(.*?)\s*</h1>')
 PATTERN_TITLE_ALTERNATE = re.compile(r'style="margin-bottom: 0px;font-size:18px;">(.*?)</h1>')
-PATTERN_CDN_URL = re.compile(r"url: '/blocks/altplayer\\.php\\?i=//(.*?)',")
+PATTERN_CDN_URL = re.compile(r"altplayer\.php\?i=//([^'\"\s]+)")
 PATTERN_EXTRACT_CDN_URLS = re.compile(r"href='//(.*?)' style=")
 PATTERN_RESOLUTION = re.compile(r'(\d{3,4})\.mp4')
 
