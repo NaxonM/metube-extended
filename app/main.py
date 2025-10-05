@@ -4,7 +4,9 @@
 import os
 import sys
 import asyncio
+import secrets
 from pathlib import Path
+from typing import Dict, Optional
 from aiohttp import web
 from aiohttp.log import access_logger
 import ssl
@@ -14,10 +16,14 @@ import logging
 import json
 import pathlib
 import re
+import uuid
 from watchfiles import DefaultFilter, Change, awatch
 
 from ytdl import DownloadQueueNotifier, DownloadQueue
 from yt_dlp.version import __version__ as yt_dlp_version
+from auth import setup_auth
+from users import UserStore
+from aiohttp_session import get_session
 
 log = logging.getLogger('main')
 
@@ -54,6 +60,10 @@ class Config:
         'MAX_CONCURRENT_DOWNLOADS': 3,
         'LOGLEVEL': 'INFO',
         'ENABLE_ACCESSLOG': 'false',
+        'ADMIN_USERNAME': '',
+        'ADMIN_PASSWORD': '',
+        'SECRET_KEY': '',
+        'LOGIN_RATELIMIT': '10/minute',
     }
 
     _BOOLEAN = ('DOWNLOAD_DIRS_INDEXABLE', 'CUSTOM_DIRS', 'CREATE_CUSTOM_DIRS', 'DELETE_FILE_ON_TRASHCAN', 'DEFAULT_OPTION_PLAYLIST_STRICT_MODE', 'HTTPS', 'ENABLE_ACCESSLOG')
@@ -113,6 +123,30 @@ class Config:
 
 config = Config()
 
+user_store_path = os.path.join(config.STATE_DIR, 'users.json')
+user_store = UserStore(user_store_path)
+
+def ensure_default_admin():
+    users = user_store.list_users(include_sensitive=True)
+    if users:
+        return
+
+    username = config.ADMIN_USERNAME or 'admin'
+    if config.ADMIN_PASSWORD:
+        password = config.ADMIN_PASSWORD
+        created_default_password = False
+    else:
+        password = secrets.token_urlsafe(12)
+        created_default_password = True
+
+    user_store.create_user(username, password, role='admin')
+    if created_default_password:
+        log.warning("Created default admin user. Please update the password immediately.")
+        log.warning(f"Generated admin credentials -> username: {username}, password: {password}")
+
+
+ensure_default_admin()
+
 class ObjectSerializer(json.JSONEncoder):
     def default(self, obj):
         # First try to use __dict__ for custom objects
@@ -130,33 +164,95 @@ class ObjectSerializer(json.JSONEncoder):
 
 serializer = ObjectSerializer()
 app = web.Application()
-sio = socketio.AsyncServer(cors_allowed_origins='*')
+sio = socketio.AsyncServer(cors_allowed_origins='*', cors_credentials=True)
 sio.attach(app, socketio_path=config.URL_PREFIX + 'socket.io')
 routes = web.RouteTableDef()
 
-class Notifier(DownloadQueueNotifier):
+class UserNotifier(DownloadQueueNotifier):
+    def __init__(self, sio_server: socketio.AsyncServer, user_id: str):
+        self.sio = sio_server
+        self.user_id = user_id
+        self._room = f'user:{user_id}'
+
     async def added(self, dl):
-        log.info(f"Notifier: Download added - {dl.title}")
-        await sio.emit('added', serializer.encode(dl))
+        log.info(f"Notifier[{self.user_id}]: Download added - {dl.title}")
+        await self.sio.emit('added', serializer.encode(dl), room=self._room)
 
     async def updated(self, dl):
-        log.info(f"Notifier: Download updated - {dl.title}")
-        await sio.emit('updated', serializer.encode(dl))
+        log.info(f"Notifier[{self.user_id}]: Download updated - {dl.title}")
+        await self.sio.emit('updated', serializer.encode(dl), room=self._room)
 
     async def completed(self, dl):
-        log.info(f"Notifier: Download completed - {dl.title}")
-        await sio.emit('completed', serializer.encode(dl))
+        log.info(f"Notifier[{self.user_id}]: Download completed - {dl.title}")
+        await self.sio.emit('completed', serializer.encode(dl), room=self._room)
 
     async def canceled(self, id):
-        log.info(f"Notifier: Download canceled - {id}")
-        await sio.emit('canceled', serializer.encode(id))
+        log.info(f"Notifier[{self.user_id}]: Download canceled - {id}")
+        await self.sio.emit('canceled', serializer.encode(id), room=self._room)
 
     async def cleared(self, id):
-        log.info(f"Notifier: Download cleared - {id}")
-        await sio.emit('cleared', serializer.encode(id))
+        log.info(f"Notifier[{self.user_id}]: Download cleared - {id}")
+        await self.sio.emit('cleared', serializer.encode(id), room=self._room)
 
-dqueue = DownloadQueue(config, Notifier())
-app.on_startup.append(lambda app: dqueue.initialize())
+    async def renamed(self, dl):
+        log.info(f"Notifier[{self.user_id}]: Download renamed - {dl.title}")
+        await self.sio.emit('renamed', serializer.encode(dl), room=self._room)
+
+
+class DownloadManager:
+    def __init__(self, config, sio_server: socketio.AsyncServer):
+        self.config = config
+        self.sio = sio_server
+        self._queues: Dict[str, DownloadQueue] = {}
+        self._lock = asyncio.Lock()
+
+    def _state_dir_for(self, user_id: str) -> str:
+        path = os.path.join(self.config.STATE_DIR, 'users', user_id)
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    async def get_queue(self, user_id: str) -> DownloadQueue:
+        if user_id in self._queues:
+            return self._queues[user_id]
+
+        async with self._lock:
+            if user_id in self._queues:
+                return self._queues[user_id]
+
+            notifier = UserNotifier(self.sio, user_id)
+            queue = DownloadQueue(self.config, notifier, state_dir=self._state_dir_for(user_id), user_id=user_id)
+            await queue.initialize()
+            self._queues[user_id] = queue
+            return queue
+
+
+download_manager = DownloadManager(config, sio)
+
+
+async def get_user_context(request):
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        raise web.HTTPUnauthorized()
+    queue = await download_manager.get_queue(user_id)
+    return session, user_id, queue
+
+
+def ensure_admin(session):
+    if session.get('role') != 'admin':
+        raise web.HTTPForbidden(text='Admin privileges required')
+
+
+def _has_other_active_admins(exclude_id: Optional[str] = None) -> bool:
+    for user in user_store.list_users(include_sensitive=True):
+        if user.get('role') != 'admin':
+            continue
+        if user.get('disabled'):
+            continue
+        if exclude_id and user.get('id') == exclude_id:
+            continue
+        return True
+    return False
 
 class FileOpsFilter(DefaultFilter):
     def __call__(self, change_type: int, path: str) -> bool:
@@ -207,6 +303,32 @@ async def watch_files():
 if config.YTDL_OPTIONS_FILE:
     app.on_startup.append(lambda app: watch_files())
 
+
+def ensure_cookie_directory(user_id: str) -> str:
+    path = os.path.join(config.STATE_DIR, 'cookies', user_id)
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def get_session_identity(session) -> str:
+    identity = getattr(session, 'identity', None)
+    if identity:
+        return identity
+    identity = session.get('cookie_identity')
+    if not identity:
+        identity = uuid.uuid4().hex
+        session['cookie_identity'] = identity
+    return identity
+
+
+def get_cookie_path_for_session(session) -> str:
+    user_id = session.get('user_id')
+    if not user_id:
+        raise web.HTTPUnauthorized()
+    directory = ensure_cookie_directory(user_id)
+    identity = get_session_identity(session)
+    return os.path.join(directory, f"{identity}.txt")
+
 @routes.post(config.URL_PREFIX + 'add')
 async def add(request):
     log.info("Received request to add download")
@@ -224,6 +346,13 @@ async def add(request):
     playlist_item_limit = post.get('playlist_item_limit')
     auto_start = post.get('auto_start')
 
+    session, user_id, queue = await get_user_context(request)
+    cookie_path = session.get('cookie_file')
+    if cookie_path:
+        user_cookie_dir = ensure_cookie_directory(user_id)
+        if not cookie_path.startswith(user_cookie_dir) or not os.path.exists(cookie_path):
+            cookie_path = None
+
     if custom_name_prefix is None:
         custom_name_prefix = ''
     if auto_start is None:
@@ -235,7 +364,7 @@ async def add(request):
 
     playlist_item_limit = int(playlist_item_limit)
 
-    status = await dqueue.add(url, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start)
+    status = await queue.add(url, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, cookie_path=cookie_path)
     return web.Response(text=serializer.encode(status))
 
 @routes.post(config.URL_PREFIX + 'delete')
@@ -246,7 +375,8 @@ async def delete(request):
     if not ids or where not in ['queue', 'done']:
         log.error("Bad request: missing 'ids' or incorrect 'where' value")
         raise web.HTTPBadRequest()
-    status = await (dqueue.cancel(ids) if where == 'queue' else dqueue.clear(ids))
+    _session, _, queue = await get_user_context(request)
+    status = await (queue.cancel(ids) if where == 'queue' else queue.clear(ids))
     log.info(f"Download delete request processed for ids: {ids}, where: {where}")
     return web.Response(text=serializer.encode(status))
 
@@ -255,18 +385,212 @@ async def start(request):
     post = await request.json()
     ids = post.get('ids')
     log.info(f"Received request to start pending downloads for ids: {ids}")
-    status = await dqueue.start_pending(ids)
+    _session, _, queue = await get_user_context(request)
+    status = await queue.start_pending(ids)
     return web.Response(text=serializer.encode(status))
+
+@routes.post(config.URL_PREFIX + 'rename')
+async def rename(request):
+    post = await request.json()
+    id = post.get('id')
+    new_name = post.get('new_name')
+    if not id or new_name is None:
+        log.error("Bad request: missing 'id' or 'new_name'")
+        raise web.HTTPBadRequest()
+    _session, _, queue = await get_user_context(request)
+    status = await queue.rename(id, new_name)
+    log.info(f"Rename request processed for id: {id}")
+    return web.Response(text=serializer.encode(status))
+
+
+@routes.get(config.URL_PREFIX + 'cookies')
+async def get_cookies(request):
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        raise web.HTTPUnauthorized()
+    cookie_path = session.get('cookie_file')
+    if cookie_path:
+        user_dir = ensure_cookie_directory(user_id)
+        if not cookie_path.startswith(user_dir) or not os.path.exists(cookie_path):
+            cookie_path = None
+            session.pop('cookie_file', None)
+    has_cookies = bool(cookie_path)
+    return web.json_response({'has_cookies': has_cookies})
+
+
+@routes.post(config.URL_PREFIX + 'cookies')
+async def set_cookies(request):
+    try:
+        post = await request.json()
+    except json.JSONDecodeError:
+        log.error("Failed to decode cookies payload")
+        raise web.HTTPBadRequest()
+
+    cookie_text = post.get('cookies')
+    if not cookie_text or not isinstance(cookie_text, str):
+        log.error("Bad request: missing 'cookies' payload")
+        raise web.HTTPBadRequest()
+
+    if len(cookie_text) > 1024 * 1024:
+        log.warning("Cookie payload too large")
+        raise web.HTTPRequestEntityTooLarge()
+
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        raise web.HTTPUnauthorized()
+    cookie_path = get_cookie_path_for_session(session)
+
+    try:
+        with open(cookie_path, 'w', encoding='utf-8') as fh:
+            fh.write(cookie_text.rstrip('\n') + '\n')
+        try:
+            os.chmod(cookie_path, 0o600)
+        except PermissionError:
+            log.warning(f"Unable to set permissions on cookie file {cookie_path}")
+    except OSError as exc:
+        log.error(f"Failed to write cookie file: {exc!r}")
+        raise web.HTTPInternalServerError(text='Failed to persist cookies')
+
+    session['cookie_file'] = cookie_path
+
+    return web.json_response({'status': 'ok'})
+
+
+@routes.delete(config.URL_PREFIX + 'cookies')
+async def clear_cookies(request):
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        raise web.HTTPUnauthorized()
+    cookie_path = session.get('cookie_file')
+
+    if cookie_path and os.path.exists(cookie_path):
+        try:
+            os.remove(cookie_path)
+        except OSError as exc:
+            log.error(f"Failed to delete cookie file {cookie_path}: {exc!r}")
+            raise web.HTTPInternalServerError(text='Failed to remove cookies')
+
+    session.pop('cookie_file', None)
+
+    return web.json_response({'status': 'ok'})
+
+
+@routes.get(config.URL_PREFIX + 'me')
+async def current_user(request):
+    session = await get_session(request)
+    if not session.get('authenticated'):
+        raise web.HTTPUnauthorized()
+    return web.json_response({
+        'id': session.get('user_id'),
+        'username': session.get('username'),
+        'role': session.get('role')
+    })
+
+
+@routes.get(config.URL_PREFIX + 'admin/users')
+async def admin_list_users(request):
+    session = await get_session(request)
+    ensure_admin(session)
+    users = user_store.list_users()
+    return web.json_response({'users': users})
+
+
+@routes.post(config.URL_PREFIX + 'admin/users')
+async def admin_create_user(request):
+    session = await get_session(request)
+    ensure_admin(session)
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError:
+        raise web.HTTPBadRequest(text='Invalid JSON payload')
+
+    username = (payload.get('username') or '').strip()
+    password = payload.get('password') or ''
+    role = payload.get('role') or 'user'
+
+    if not username or not password:
+        raise web.HTTPBadRequest(text='Username and password are required')
+
+    try:
+        user = user_store.create_user(username, password, role=role)
+    except ValueError as exc:
+        raise web.HTTPBadRequest(text=str(exc))
+
+    return web.json_response(user, status=201)
+
+
+@routes.patch(config.URL_PREFIX + 'admin/users/{user_id}')
+async def admin_update_user(request):
+    session = await get_session(request)
+    ensure_admin(session)
+    user_id = request.match_info['user_id']
+
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError:
+        raise web.HTTPBadRequest(text='Invalid JSON payload')
+
+    user = user_store.get_user_by_id(user_id)
+    if not user:
+        raise web.HTTPNotFound(text='User not found')
+
+    password_updated = False
+
+    if 'password' in payload and payload['password']:
+        user_store.set_password(user_id, payload['password'])
+        password_updated = True
+
+    if 'role' in payload and payload['role']:
+        new_role = payload['role']
+        if new_role not in ('admin', 'user'):
+            raise web.HTTPBadRequest(text='Invalid role')
+        if new_role != 'admin' and not _has_other_active_admins(exclude_id=user_id):
+            raise web.HTTPConflict(text='Cannot remove the last active admin')
+        user_store.set_role(user_id, new_role)
+
+    if 'disabled' in payload:
+        disabled = bool(payload['disabled'])
+        if disabled and not _has_other_active_admins(exclude_id=user_id):
+            raise web.HTTPConflict(text='Cannot disable the last active admin')
+        user_store.set_disabled(user_id, disabled)
+
+    updated_user = user_store.get_user_by_id(user_id)
+    sanitized = updated_user.copy()
+    sanitized.pop('password_hash', None)
+    if password_updated:
+        sanitized['password_updated'] = True
+    return web.json_response(sanitized)
+
+
+@routes.delete(config.URL_PREFIX + 'admin/users/{user_id}')
+async def admin_delete_user(request):
+    session = await get_session(request)
+    ensure_admin(session)
+    user_id = request.match_info['user_id']
+
+    user = user_store.get_user_by_id(user_id)
+    if not user:
+        raise web.HTTPNotFound(text='User not found')
+
+    if user.get('role') == 'admin' and not _has_other_active_admins(exclude_id=user_id):
+        raise web.HTTPConflict(text='Cannot delete the last active admin')
+
+    user_store.delete_user(user_id)
+    return web.json_response({'status': 'deleted'})
 
 @routes.get(config.URL_PREFIX + 'history')
 async def history(request):
-    history = { 'done': [], 'queue': [], 'pending': []}
+    _session, _, queue = await get_user_context(request)
+    history = {'done': [], 'queue': [], 'pending': []}
 
-    for _, v in dqueue.queue.saved_items():
+    for _, v in queue.queue.saved_items():
         history['queue'].append(v)
-    for _, v in dqueue.done.saved_items():
+    for _, v in queue.done.saved_items():
         history['done'].append(v)
-    for _, v in dqueue.pending.saved_items():
+    for _, v in queue.pending.saved_items():
         history['pending'].append(v)
 
     log.info("Sending download history")
@@ -274,8 +598,26 @@ async def history(request):
 
 @sio.event
 async def connect(sid, environ):
-    log.info(f"Client connected: {sid}")
-    await sio.emit('all', serializer.encode(dqueue.get()), to=sid)
+    request = environ.get('aiohttp.request')
+    if request is None:
+        log.warning("Socket connect without request context; disconnecting")
+        await sio.disconnect(sid)
+        return
+
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    username = session.get('username')
+    if not user_id:
+        log.warning("Socket connect without authenticated session; disconnecting")
+        await sio.disconnect(sid)
+        return
+
+    log.info(f"Client connected: {sid} (user={username})")
+    room = f'user:{user_id}'
+    await sio.enter_room(sid, room)
+
+    queue = await download_manager.get_queue(user_id)
+    await sio.emit('all', serializer.encode(queue.get()), to=sid)
     await sio.emit('configuration', serializer.encode(config), to=sid)
     if config.CUSTOM_DIRS:
         await sio.emit('custom_dirs', serializer.encode(get_custom_dirs()), to=sid)
@@ -376,7 +718,7 @@ async def on_prepare(request, response):
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
 
 app.on_response_prepare.append(on_prepare)
- 
+
 def supports_reuse_port():
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -410,6 +752,8 @@ def isAccessLogEnabled():
 if __name__ == '__main__':
     logging.basicConfig(level=parseLogLevel(config.LOGLEVEL))
     log.info(f"Listening on {config.HOST}:{config.PORT}")
+
+    setup_auth(app, sio, config, user_store)
 
     if config.HTTPS:
         ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)

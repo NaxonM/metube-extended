@@ -1,12 +1,12 @@
-import { Component, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
+import { Component, ViewChild, ElementRef, AfterViewInit, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { faTrashAlt, faCheckCircle, faTimesCircle, IconDefinition } from '@fortawesome/free-regular-svg-icons';
-import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt } from '@fortawesome/free-solid-svg-icons';
+import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt, faPen, faCookieBite, faUserShield, faUserPlus, faUserSlash, faKey, faRightFromBracket } from '@fortawesome/free-solid-svg-icons';
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { CookieService } from 'ngx-cookie-service';
 import { map, Observable, of, distinctUntilChanged } from 'rxjs';
 
-import { Download, DownloadsService, Status } from './downloads.service';
+import { Download, DownloadsService, Status, CurrentUser, ManagedUser } from './downloads.service';
 import { MasterCheckboxComponent } from './master-checkbox.component';
 import { Formats, Format, Quality } from './formats';
 import { Theme, Themes } from './theme';
@@ -18,7 +18,7 @@ import {KeyValue} from "@angular/common";
     styleUrls: ['./app.component.sass'],
     standalone: false
 })
-export class AppComponent implements AfterViewInit {
+export class AppComponent implements AfterViewInit, OnInit {
   addUrl: string;
   formats: Format[] = Formats;
   qualities: Quality[];
@@ -43,6 +43,18 @@ export class AppComponent implements AfterViewInit {
   ytDlpVersion: string | null = null;
   metubeVersion: string | null = null;
   isAdvancedOpen = false;
+
+  cookiesModalOpen = false;
+  cookiesText = '';
+  cookiesConfigured = false;
+  cookiesStatusMessage = '';
+  cookiesInProgress = false;
+
+  currentUser: CurrentUser | null = null;
+  isAdmin = false;
+  adminUsers: ManagedUser[] = [];
+  adminLoading = false;
+  adminError = '';
 
   // Download metrics
   activeDownloads = 0;
@@ -77,6 +89,13 @@ export class AppComponent implements AfterViewInit {
   faGithub = faGithub;
   faClock = faClock;
   faTachometerAlt = faTachometerAlt;
+  faPen = faPen;
+  faCookieBite = faCookieBite;
+  faUserShield = faUserShield;
+  faUserPlus = faUserPlus;
+  faUserSlash = faUserSlash;
+  faKey = faKey;
+  faRightFromBracket = faRightFromBracket;
 
   constructor(public downloads: DownloadsService, private cookieService: CookieService, private http: HttpClient) {
     this.format = cookieService.get('metube_format') || 'any';
@@ -105,6 +124,8 @@ export class AppComponent implements AfterViewInit {
     this.getYtdlOptionsUpdateTime();
     this.customDirs$ = this.getMatchingCustomDir();
     this.setTheme(this.activeTheme);
+    this.refreshCookiesStatus();
+    this.loadCurrentUser();
 
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
       if (this.activeTheme.id === 'auto') {
@@ -283,15 +304,15 @@ export class AppComponent implements AfterViewInit {
     this.downloads.delById('done', [key]).subscribe();
   }
 
-  delDownload(where: string, id: string) {
+  delDownload(where: 'queue' | 'done', id: string) {
     this.downloads.delById(where, [id]).subscribe();
   }
 
-  startSelectedDownloads(where: string){
+  startSelectedDownloads(where: 'queue' | 'done'){
     this.downloads.startByFilter(where, dl => dl.checked).subscribe();
   }
 
-  delSelectedDownloads(where: string) {
+  delSelectedDownloads(where: 'queue' | 'done') {
     this.downloads.delByFilter(where, dl => dl.checked).subscribe();
   }
 
@@ -309,6 +330,198 @@ export class AppComponent implements AfterViewInit {
         this.retryDownload(key, dl);
       }
     });
+  }
+
+  renameDownload(key: string, download: Download) {
+    const currentName = download.filename;
+    const newName = prompt('Enter new filename', currentName);
+    if (!newName || newName === currentName) {
+      return;
+    }
+
+    this.downloads.rename(key, newName).subscribe((status: Status) => {
+      if (status.status === 'error') {
+        alert(`Error renaming file: ${status.msg}`);
+      }
+    });
+  }
+
+  openCookiesModal(): void {
+    this.cookiesModalOpen = true;
+    this.cookiesText = '';
+    this.cookiesStatusMessage = '';
+    this.refreshCookiesStatus();
+  }
+
+  closeCookiesModal(): void {
+    this.cookiesModalOpen = false;
+    this.cookiesInProgress = false;
+    this.cookiesText = '';
+  }
+
+  refreshCookiesStatus(): void {
+    this.downloads.getCookiesStatus().subscribe(data => {
+      this.cookiesConfigured = data.has_cookies;
+    });
+  }
+
+  saveCookies(): void {
+    if (!this.cookiesText || !this.cookiesText.trim()) {
+      alert('Please paste your cookies in the provided text area.');
+      return;
+    }
+
+    this.cookiesInProgress = true;
+    this.cookiesStatusMessage = '';
+
+    this.downloads.setCookies(this.cookiesText).subscribe((status: Status) => {
+      this.cookiesInProgress = false;
+      if (status.status === 'error') {
+        alert(`Error saving cookies: ${status.msg}`);
+        return;
+      }
+      this.cookiesText = '';
+      this.cookiesStatusMessage = 'Cookies saved successfully.';
+      this.cookiesConfigured = true;
+      this.refreshCookiesStatus();
+    });
+  }
+
+  clearCookies(): void {
+    if (!this.cookiesConfigured) {
+      return;
+    }
+
+    this.cookiesInProgress = true;
+    this.cookiesStatusMessage = '';
+
+    this.downloads.clearCookies().subscribe((status: Status) => {
+      this.cookiesInProgress = false;
+      if (status.status === 'error') {
+        alert(`Error clearing cookies: ${status.msg}`);
+        return;
+      }
+      this.cookiesConfigured = false;
+      this.cookiesStatusMessage = 'Cookies cleared.';
+      this.refreshCookiesStatus();
+    });
+  }
+
+  loadCurrentUser(): void {
+    this.downloads.getCurrentUser().subscribe(user => {
+      this.currentUser = user;
+      this.isAdmin = !!user && user.role === 'admin';
+      if (this.isAdmin) {
+        this.refreshUsers();
+      } else {
+        this.adminUsers = [];
+      }
+    });
+  }
+
+  refreshUsers(): void {
+    if (!this.isAdmin) {
+      return;
+    }
+    this.adminLoading = true;
+    this.downloads.listUsers().subscribe(response => {
+      this.adminUsers = (response?.users ?? []).slice().sort((a, b) => a.username.localeCompare(b.username));
+      this.adminLoading = false;
+    });
+  }
+
+  promptCreateUser(): void {
+    const username = (prompt('Enter a username for the new account') || '').trim();
+    if (!username) {
+      return;
+    }
+    const password = prompt(`Enter a password for ${username}`) || '';
+    if (!password) {
+      alert('Password is required.');
+      return;
+    }
+    const makeAdmin = confirm('Should this user have administrator access?');
+    this.downloads.createUser(username, password, makeAdmin ? 'admin' : 'user').subscribe(result => {
+      if ((result as any)?.status === 'error') {
+        alert((result as any).msg || 'Failed to create user.');
+        return;
+      }
+      this.refreshUsers();
+    });
+  }
+
+  toggleUserRole(user: ManagedUser): void {
+    const nextRole = user.role === 'admin' ? 'user' : 'admin';
+    if (!confirm(`Change role for ${user.username} to ${nextRole}?`)) {
+      return;
+    }
+    this.downloads.updateUser(user.id, {role: nextRole}).subscribe(result => {
+      if ((result as any)?.status === 'error') {
+        alert((result as any).msg || 'Failed to update role.');
+        return;
+      }
+      this.refreshUsers();
+    });
+  }
+
+  toggleUserDisabled(user: ManagedUser): void {
+    const nextState = !user.disabled;
+    if (!confirm(`${nextState ? 'Disable' : 'Enable'} ${user.username}?`)) {
+      return;
+    }
+    this.downloads.updateUser(user.id, {disabled: nextState}).subscribe(result => {
+      if ((result as any)?.status === 'error') {
+        alert((result as any).msg || 'Failed to update status.');
+        return;
+      }
+      this.refreshUsers();
+    });
+  }
+
+  resetUserPassword(user: ManagedUser): void {
+    const password = prompt(`Enter a new password for ${user.username}`) || '';
+    if (!password) {
+      return;
+    }
+    this.downloads.updateUser(user.id, {password}).subscribe(result => {
+      if ((result as any)?.status === 'error') {
+        alert((result as any).msg || 'Failed to reset password.');
+        return;
+      }
+      alert('Password updated successfully.');
+    });
+  }
+
+  deleteUser(user: ManagedUser): void {
+    if (!confirm(`Delete user ${user.username}? This action cannot be undone.`)) {
+      return;
+    }
+    this.downloads.deleteUser(user.id).subscribe(result => {
+      if ((result as any)?.status === 'error') {
+        alert((result as any).msg || 'Failed to delete user.');
+        return;
+      }
+      this.refreshUsers();
+    });
+  }
+
+  isSelf(user: ManagedUser): boolean {
+    return !!this.currentUser && this.currentUser.id === user.id;
+  }
+
+  formatTimestamp(value: number | null | undefined): string {
+    if (!value) {
+      return '—';
+    }
+    const date = new Date(value * 1000);
+    if (Number.isNaN(date.getTime())) {
+      return '—';
+    }
+    return date.toLocaleString();
+  }
+
+  activeAdminCount(): number {
+    return this.adminUsers.filter(user => user.role === 'admin' && !user.disabled).length;
   }
 
   downloadSelectedFiles() {

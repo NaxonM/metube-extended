@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, of, Subject } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { catchError, tap } from 'rxjs/operators';
 import { MeTubeSocket } from './metube-socket';
 
 export interface Status {
@@ -25,8 +25,24 @@ export interface Download {
   speed: number;
   eta: number;
   filename: string;
+  error?: string;
+  size?: number;
   checked?: boolean;
   deleting?: boolean;
+}
+
+export interface CurrentUser {
+  id: string;
+  username: string;
+  role: 'admin' | 'user';
+}
+
+export interface ManagedUser extends CurrentUser {
+  disabled: boolean;
+  created_at: number;
+  updated_at: number;
+  last_login_at?: number | null;
+  password_updated?: boolean;
 }
 
 @Injectable({
@@ -87,6 +103,23 @@ export class DownloadsService {
       this.done.delete(data);
       this.doneChanged.next(null);
     });
+    socket.fromEvent('renamed').subscribe((strdata: string) => {
+      let data: Download = JSON.parse(strdata);
+      let existing: Download = this.done.get(data.url);
+      if (!existing) {
+        return;
+      }
+      existing = {
+        ...existing,
+        filename: data.filename ?? data.title ?? existing.filename,
+        title: data.title ?? existing.title,
+        msg: data.msg ?? existing.msg,
+        error: data.error ?? existing.error,
+        size: data.size ?? existing.size
+      };
+      this.done.set(data.url, existing);
+      this.doneChanged.next(null);
+    });
     socket.fromEvent('configuration').subscribe((strdata: string) => {
       let data = JSON.parse(strdata);
       console.debug("got configuration:", data);
@@ -120,18 +153,71 @@ export class DownloadsService {
     return this.http.post('start', {ids: ids});
   }
 
-  public delById(where: string, ids: string[]) {
-    ids.forEach(id => this[where].get(id).deleting = true);
-    return this.http.post('delete', {where: where, ids: ids});
+  public delById(where: 'queue' | 'done', ids: string[]) {
+    ids.forEach(id => {
+      const entry = (this as any)[where]?.get(id);
+      if (entry) {
+        entry.deleting = true;
+      }
+    });
+
+    return this.http.post<any>('delete', {where: where, ids: ids}).pipe(
+      tap(result => {
+        if (!result || result.status === 'error') {
+          ids.forEach(id => {
+            const entry = (this as any)[where]?.get(id);
+            if (entry) {
+              entry.deleting = false;
+            }
+          });
+        }
+
+        if (where !== 'done' || !result) {
+          return;
+        }
+
+        if (result.status === 'ok') {
+          const deleted: string[] = result.deleted || [];
+          const missing: string[] = result.missing || [];
+          let messageParts: string[] = [];
+          if (deleted.length) {
+            messageParts.push('Removed from disk:\n' + deleted.map(name => `• ${name}`).join('\n'));
+          }
+          if (missing.length) {
+            messageParts.push('Already missing on disk:\n' + missing.map(name => `• ${name}`).join('\n'));
+          }
+          if (!messageParts.length) {
+            messageParts.push('Selected downloads removed.');
+          }
+          alert(messageParts.join('\n\n'));
+        } else {
+          const errors = result.errors ? Object.values(result.errors).join('\n') : (result.msg || 'Unknown error.');
+          alert('Unable to remove one or more files:\n' + errors);
+        }
+      }),
+      catchError(error => {
+        ids.forEach(id => {
+          const entry = (this as any)[where]?.get(id);
+          if (entry) {
+            entry.deleting = false;
+          }
+        });
+        if (where === 'done') {
+          const message = error.error instanceof ErrorEvent ? error.error.message : (error.error || error.message || 'Request failed');
+          alert('Unable to remove files:\n' + message);
+        }
+        return this.handleHTTPError(error);
+      })
+    );
   }
 
-  public startByFilter(where: string, filter: (dl: Download) => boolean) {
+  public startByFilter(where: 'queue' | 'done', filter: (dl: Download) => boolean) {
     let ids: string[] = [];
     this[where].forEach((dl: Download) => { if (filter(dl)) ids.push(dl.url) });
     return this.startById(ids);
   }
 
-  public delByFilter(where: string, filter: (dl: Download) => boolean) {
+  public delByFilter(where: 'queue' | 'done', filter: (dl: Download) => boolean) {
     let ids: string[] = [];
     this[where].forEach((dl: Download) => { if (filter(dl)) ids.push(dl.url) });
     return this.delById(where, ids);
@@ -157,5 +243,58 @@ export class DownloadsService {
     return Array.from(this.queue.values()).map(download => download.url);
   }
   
+  public rename(id: string, newName: string) {
+    return this.http.post<Status>('rename', {id: id, new_name: newName}).pipe(
+      catchError(this.handleHTTPError)
+    );
+  }
+
+  public setCookies(cookies: string) {
+    return this.http.post<Status>('cookies', {cookies: cookies}).pipe(
+      catchError(this.handleHTTPError)
+    );
+  }
+
+  public clearCookies() {
+    return this.http.delete<Status>('cookies').pipe(
+      catchError(this.handleHTTPError)
+    );
+  }
+
+  public getCookiesStatus() {
+    return this.http.get<{has_cookies: boolean}>('cookies').pipe(
+      catchError(() => of({has_cookies: false}))
+    );
+  }
+
+  public getCurrentUser() {
+    return this.http.get<CurrentUser>('me').pipe(
+      catchError(() => of(null as CurrentUser | null))
+    );
+  }
+
+  public listUsers() {
+    return this.http.get<{users: ManagedUser[]}>('admin/users').pipe(
+      catchError(() => of({users: [] as ManagedUser[]}))
+    );
+  }
+
+  public createUser(username: string, password: string, role: 'admin' | 'user') {
+    return this.http.post<ManagedUser>('admin/users', {username, password, role}).pipe(
+      catchError(this.handleHTTPError)
+    );
+  }
+
+  public updateUser(userId: string, payload: Partial<{password: string; role: 'admin' | 'user'; disabled: boolean;}>) {
+    return this.http.patch<ManagedUser>(`admin/users/${userId}`, payload).pipe(
+      catchError(this.handleHTTPError)
+    );
+  }
+
+  public deleteUser(userId: string) {
+    return this.http.delete('admin/users/' + userId).pipe(
+      catchError(this.handleHTTPError)
+    );
+  }
   
 }

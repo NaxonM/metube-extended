@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  metube:
+    build: .
+    container_name: "${COMPOSE_PROJECT_NAME}-metube"
+    restart: unless-stopped
+    expose:
+      - "8081"
+    volumes:
+      - "${APP_DATA_PATH}:/downloads"
+    environment:
+      - "PUID=1000"
+      - "PGID=1000"
+      - "TZ=Etc/UTC"
+      - "STATE_DIR=/downloads"
+      - "YTDL_OPTIONS={}"
+    env_file:
+      - .env

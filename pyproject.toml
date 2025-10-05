@@ -2,7 +2,7 @@
 name = "metube"
 version = "0.1.0"
 description = "Web GUI for youtube-dl (using yt-dlp) with playlist support"
-requires-python = ">=3.13"
+requires-python = ">=3.13, <3.14"
 dependencies = [
     "aiohttp",
     "python-socketio>=5.0,<6.0",
@@ -10,6 +10,10 @@ dependencies = [
     "mutagen",
     "curl-cffi",
     "watchfiles",
+    "aiohttp-session",
+    "bcrypt",
+    "pynacl",
+    "cryptography",
 ]
 
 [dependency-groups]

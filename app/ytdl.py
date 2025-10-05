@@ -30,8 +30,11 @@ class DownloadQueueNotifier:
     async def cleared(self, id):
         raise NotImplementedError
 
+    async def renamed(self, dl):
+        raise NotImplementedError
+
 class DownloadInfo:
-    def __init__(self, id, title, url, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit):
+    def __init__(self, id, title, url, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookiefile=None, user_id=None):
         self.id = id if len(custom_name_prefix) == 0 else f'{custom_name_prefix}.{id}'
         self.title = title if len(custom_name_prefix) == 0 else f'{custom_name_prefix}.{title}'
         self.url = url
@@ -46,6 +49,8 @@ class DownloadInfo:
         self.error = error
         self.entry = entry
         self.playlist_item_limit = playlist_item_limit
+        self.cookiefile = cookiefile
+        self.user_id = user_id
 
 class Download:
     manager = None
@@ -224,12 +229,15 @@ class PersistentQueue:
         return not bool(self.dict)
 
 class DownloadQueue:
-    def __init__(self, config, notifier):
+    def __init__(self, config, notifier, state_dir=None, user_id=None):
         self.config = config
         self.notifier = notifier
-        self.queue = PersistentQueue(self.config.STATE_DIR + '/queue')
-        self.done = PersistentQueue(self.config.STATE_DIR + '/completed')
-        self.pending = PersistentQueue(self.config.STATE_DIR + '/pending')
+        self.user_id = user_id
+        self.state_dir = state_dir or self.config.STATE_DIR
+        os.makedirs(self.state_dir, exist_ok=True)
+        self.queue = PersistentQueue(os.path.join(self.state_dir, 'queue'))
+        self.done = PersistentQueue(os.path.join(self.state_dir, 'completed'))
+        self.pending = PersistentQueue(os.path.join(self.state_dir, 'pending'))
         self.active_downloads = set()
         self.semaphore = None
         # For sequential mode, use an asyncio lock to ensure one-at-a-time execution.
@@ -242,16 +250,29 @@ class DownloadQueue:
 
     async def __import_queue(self):
         for k, v in self.queue.saved_items():
-            await self.__add_download(v, True)
+            cookie_path = getattr(v, 'cookiefile', None)
+            await self.__add_download(v, True, cookie_path)
 
     async def __import_pending(self):
         for k, v in self.pending.saved_items():
-            await self.__add_download(v, False)
+            cookie_path = getattr(v, 'cookiefile', None)
+            await self.__add_download(v, False, cookie_path)
 
     async def initialize(self):
         log.info("Initializing DownloadQueue")
         asyncio.create_task(self.__import_queue())
         asyncio.create_task(self.__import_pending())
+
+    def _resolve_download_directory(self, info):
+        base_directory = self.config.DOWNLOAD_DIR if (info.quality != 'audio' and info.format not in AUDIO_FORMATS) else self.config.AUDIO_DOWNLOAD_DIR
+        base_directory = os.path.realpath(base_directory)
+        if info.folder:
+            dldirectory = os.path.realpath(os.path.join(base_directory, info.folder))
+            if not dldirectory.startswith(base_directory):
+                log.warning(f'Folder "{info.folder}" for download {info.url} resolved outside the base directory; skipping file removal.')
+                return None
+            return dldirectory
+        return base_directory
 
     async def __start_download(self, download):
         if download.canceled:
@@ -329,7 +350,7 @@ class DownloadQueue:
             dldirectory = base_directory
         return dldirectory, None
 
-    async def __add_download(self, dl, auto_start):
+    async def __add_download(self, dl, auto_start, cookie_path=None):
         dldirectory, error_message = self.__calc_download_path(dl.quality, dl.format, dl.folder)
         if error_message is not None:
             return error_message
@@ -347,6 +368,9 @@ class DownloadQueue:
         if playlist_item_limit > 0:
             log.info(f'playlist limit is set. Processing only first {playlist_item_limit} entries')
             ytdl_options['playlistend'] = playlist_item_limit
+        if cookie_path:
+            ytdl_options['cookiefile'] = cookie_path
+            dl.cookiefile = cookie_path
         download = Download(dldirectory, self.config.TEMP_DIR, output, output_chapter, dl.quality, dl.format, ytdl_options, dl)
         if auto_start is True:
             self.queue.put(download)
@@ -355,7 +379,7 @@ class DownloadQueue:
             self.pending.put(download)
         await self.notifier.added(dl)
 
-    async def __add_entry(self, entry, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already):
+    async def __add_entry(self, entry, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already, cookie_path=None):
         if not entry:
             return {'status': 'error', 'msg': "Invalid/empty data was given."}
 
@@ -371,7 +395,7 @@ class DownloadQueue:
 
         if etype.startswith('url'):
             log.debug('Processing as an url')
-            return await self.add(entry['url'], quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already)
+            return await self.add(entry['url'], quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already, cookie_path)
         elif etype == 'playlist':
             log.debug('Processing as a playlist')
             entries = entry['entries']
@@ -388,7 +412,7 @@ class DownloadQueue:
                 for property in ("id", "title", "uploader", "uploader_id"):
                     if property in entry:
                         etr[f"playlist_{property}"] = entry[property]
-                results.append(await self.__add_entry(etr, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already))
+                results.append(await self.__add_entry(etr, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already, cookie_path))
             if any(res['status'] == 'error' for res in results):
                 return {'status': 'error', 'msg': ', '.join(res['msg'] for res in results if res['status'] == 'error' and 'msg' in res)}
             return {'status': 'ok'}
@@ -396,12 +420,12 @@ class DownloadQueue:
             log.debug('Processing as a video')
             key = entry.get('webpage_url') or entry['url']
             if not self.queue.exists(key):
-                dl = DownloadInfo(entry['id'], entry.get('title') or entry['id'], key, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit)
-                await self.__add_download(dl, auto_start)
+                dl = DownloadInfo(entry['id'], entry.get('title') or entry['id'], key, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookie_path, self.user_id)
+                await self.__add_download(dl, auto_start, cookie_path)
             return {'status': 'ok'}
         return {'status': 'error', 'msg': f'Unsupported resource "{etype}"'}
 
-    async def add(self, url, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start=True, already=None):
+    async def add(self, url, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start=True, already=None, cookie_path=None):
         log.info(f'adding {url}: {quality=} {format=} {already=} {folder=} {custom_name_prefix=} {playlist_strict_mode=} {playlist_item_limit=} {auto_start=}')
         already = set() if already is None else already
         if url in already:
@@ -413,7 +437,7 @@ class DownloadQueue:
             entry = await asyncio.get_running_loop().run_in_executor(None, self.__extract_info, url, playlist_strict_mode)
         except yt_dlp.utils.YoutubeDLError as exc:
             return {'status': 'error', 'msg': str(exc)}
-        return await self.__add_entry(entry, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already)
+        return await self.__add_entry(entry, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already, cookie_path)
 
     async def start_pending(self, ids):
         for id in ids:
@@ -443,22 +467,91 @@ class DownloadQueue:
         return {'status': 'ok'}
 
     async def clear(self, ids):
+        deleted_files = []
+        missing_files = []
+        errors = {}
+
         for id in ids:
             if not self.done.exists(id):
                 log.warn(f'requested delete for non-existent download {id}')
                 continue
-            if self.config.DELETE_FILE_ON_TRASHCAN:
-                dl = self.done.get(id)
+
+            dl = self.done.get(id)
+            filename = dl.info.filename or dl.info.title
+            directory = self._resolve_download_directory(dl.info)
+            file_path = os.path.join(directory, dl.info.filename) if (directory and dl.info.filename) else None
+
+            if file_path and os.path.exists(file_path):
                 try:
-                    dldirectory, _ = self.__calc_download_path(dl.info.quality, dl.info.format, dl.info.folder)
-                    os.remove(os.path.join(dldirectory, dl.info.filename))
+                    os.remove(file_path)
+                    deleted_files.append(filename)
                 except Exception as e:
                     log.warn(f'deleting file for download {id} failed with error message {e!r}')
+                    errors[id] = str(e)
+                    continue
+            else:
+                missing_files.append(filename)
+
             self.done.delete(id)
             await self.notifier.cleared(id)
-        return {'status': 'ok'}
+
+        response = {'status': 'ok', 'deleted': deleted_files, 'missing': missing_files}
+        if errors:
+            response['status'] = 'error'
+            response['errors'] = errors
+            response['msg'] = 'Some files could not be removed from disk.'
+        return response
 
     def get(self):
         return (list((k, v.info) for k, v in self.queue.items()) +
                 list((k, v.info) for k, v in self.pending.items()),
                 list((k, v.info) for k, v in self.done.items()))
+
+    async def rename(self, id, new_name):
+        if not new_name or not new_name.strip():
+            return {'status': 'error', 'msg': 'New filename cannot be empty.'}
+
+        if any(sep in new_name for sep in ('/', '\\')):
+            return {'status': 'error', 'msg': 'Filename cannot contain path separators.'}
+
+        if new_name in ('.', '..'):
+            return {'status': 'error', 'msg': 'Invalid filename specified.'}
+
+        if not self.done.exists(id):
+            return {'status': 'error', 'msg': 'Download not found.'}
+
+        dl = self.done.get(id)
+
+        dldirectory, error_message = self.__calc_download_path(dl.info.quality, dl.info.format, dl.info.folder)
+        if error_message is not None:
+            return error_message
+
+        original_path = os.path.join(dldirectory, dl.info.filename)
+        if not os.path.exists(original_path):
+            return {'status': 'error', 'msg': 'Original file no longer exists.'}
+
+        target_path = os.path.join(dldirectory, new_name)
+
+        if os.path.exists(target_path):
+            return {'status': 'error', 'msg': 'A file with the requested name already exists.'}
+
+        try:
+            os.rename(original_path, target_path)
+        except OSError as exc:
+            log.error(f'Failed to rename file {original_path} -> {target_path}: {exc!r}')
+            return {'status': 'error', 'msg': f'Failed to rename file: {exc}'}
+
+        dl.info.filename = new_name
+        dl.info.title = new_name
+        try:
+            dl.info.size = os.path.getsize(target_path)
+        except OSError:
+            dl.info.size = dl.info.size
+
+        self.done.dict[id] = dl
+        with shelve.open(self.done.path, 'w') as shelf:
+            shelf[id] = dl.info
+
+        await self.notifier.renamed(dl.info)
+
+        return {'status': 'ok', 'filename': new_name, 'title': new_name}

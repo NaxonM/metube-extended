@@ -1,53 +1,35 @@
-# compiled output
-/ui/dist
-/ui/tmp
-/ui/out-tsc
-# Only exists if Bazel was run
-/ui/bazel-out
+# Log files
+app.log
+*.log
 
-# dependencies
-/ui/node_modules
+# SQLite state files
+completed
+completed-shm
+completed-wal
+pending
+pending-shm
+pending-wal
+queue
+queue-shm
+queue-wal
 
-# profiling files
-chrome-profiler-events*.json
-speed-measure-plugin*.json
+# Environment file
+.env
 
-# IDEs and editors
-/ui/.idea
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
+# Cloudflare token
+.cf_token
 
-# IDE - VSCode
-.vscode/*
-#!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-.history/*
+# Node.js
+node_modules
+/ui/dist/
+/ui/coverage/
 
-# misc
-/ui/.sass-cache
-/ui/.angular
-/ui/connect.lock
-/ui/coverage
-/ui/libpeerconnection.log
-npm-debug.log
-yarn-error.log
-testem.log
-/ui/typings
-
-# System Files
-.DS_Store
-Thumbs.db
-
-# MeTube runtime databases
-queue*
-completed*
-pending*
-
-__pycache__
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
 .venv
+.idea/
+.vscode/

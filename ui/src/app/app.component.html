@@ -1,8 +1,8 @@
 <nav class="navbar navbar-expand-md navbar-dark">
   <div class="container-fluid">
     <a class="navbar-brand d-flex align-items-center" href="#">
-      <img src="assets/icons/android-chrome-192x192.png" alt="MeTube Logo" height="32" class="me-2">
-      MeTube
+      <img src="assets/icons/android-chrome-192x192.png" alt="MeTubeEX Logo" height="32" class="me-2">
+      MeTubeEX
     </a>
     <div class="download-metrics">
       <div class="metric" *ngIf="activeDownloads > 0">
@@ -38,7 +38,18 @@
       </ul>
     </div>
     -->
-    <div class="navbar-nav ms-auto">
+    <div class="navbar-nav ms-auto align-items-center flex-row gap-3">
+      <div class="nav-item d-none d-md-flex flex-column text-end text-light" *ngIf="currentUser">
+        <span class="small text-secondary">Signed in as</span>
+        <span class="fw-semibold d-flex align-items-center justify-content-end gap-1">
+          <fa-icon *ngIf="currentUser?.role === 'admin'" [icon]="faUserShield" class="text-warning"></fa-icon>
+          {{ currentUser?.username }}
+        </span>
+      </div>
+      <a class="btn btn-outline-light btn-sm" href="logout" *ngIf="currentUser">
+        <fa-icon [icon]="faRightFromBracket" class="me-1"></fa-icon>
+        Logout
+      </a>
       <div class="nav-item dropdown">
         <button class="btn btn-link nav-link py-2 px-0 px-sm-2 dropdown-toggle d-flex align-items-center"
                 id="theme-select"
@@ -236,6 +247,85 @@
                         Copy URLs
                       </button>
                     </div>
+                    <div class="col-md-4">
+                      <button type="button"
+                              class="btn btn-secondary w-100"
+                              (click)="openCookiesModal()">
+                        <fa-icon [icon]="faCookieBite" class="me-2"></fa-icon>
+                        Manage Cookies
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="row" *ngIf="isAdmin">
+                <div class="col-12">
+                  <hr class="my-3">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="d-flex align-items-center gap-2">
+                      <fa-icon [icon]="faUserShield" class="text-info"></fa-icon>
+                      <h5 class="mb-0">User Management</h5>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" (click)="promptCreateUser()">
+                      <fa-icon [icon]="faUserPlus" class="me-1"></fa-icon>
+                      Add User
+                    </button>
+                  </div>
+                  <div class="table-responsive small">
+                    <table class="table table-sm align-middle mb-0">
+                      <thead class="table-dark">
+                        <tr>
+                          <th scope="col">User</th>
+                          <th scope="col" class="text-center">Role</th>
+                          <th scope="col" class="text-center">Status</th>
+                          <th scope="col">Last Login</th>
+                          <th scope="col" class="text-end">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr *ngIf="adminLoading">
+                          <td colspan="5" class="text-center py-3">
+                            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                            Loading users...
+                          </td>
+                        </tr>
+                        <tr *ngFor="let user of adminUsers">
+                          <td>
+                            <div class="d-flex align-items-center gap-2">
+                              <fa-icon *ngIf="user.role === 'admin'" [icon]="faUserShield" class="text-warning"></fa-icon>
+                              <span [ngClass]="{'fw-semibold': user.role === 'admin'}">{{ user.username }}</span>
+                              <span class="badge bg-secondary" *ngIf="isSelf(user)">You</span>
+                            </div>
+                          </td>
+                          <td class="text-center">
+                            <span class="badge" [ngClass]="user.role === 'admin' ? 'bg-warning text-dark' : 'bg-info text-dark'">{{ user.role }}</span>
+                          </td>
+                          <td class="text-center">
+                            <span class="badge" [ngClass]="user.disabled ? 'bg-danger' : 'bg-success'">{{ user.disabled ? 'Disabled' : 'Active' }}</span>
+                          </td>
+                          <td>{{ formatTimestamp(user.last_login_at) }}</td>
+                          <td class="text-end">
+                            <div class="btn-group btn-group-sm" role="group">
+                              <button type="button" class="btn btn-outline-secondary" [disabled]="(user.role === 'admin' && activeAdminCount() <= 1)" (click)="toggleUserRole(user)" ngbTooltip="Toggle role">
+                                <fa-icon [icon]="faPen"></fa-icon>
+                              </button>
+                              <button type="button" class="btn btn-outline-secondary" [disabled]="user.role === 'admin' && activeAdminCount() <= 1" (click)="toggleUserDisabled(user)" ngbTooltip="Toggle active state">
+                                <fa-icon [icon]="faUserSlash"></fa-icon>
+                              </button>
+                              <button type="button" class="btn btn-outline-secondary" (click)="resetUserPassword(user)" ngbTooltip="Reset password">
+                                <fa-icon [icon]="faKey"></fa-icon>
+                              </button>
+                              <button type="button" class="btn btn-outline-danger" [disabled]="isSelf(user) || (user.role === 'admin' && activeAdminCount() <= 1)" (click)="deleteUser(user)" ngbTooltip="Delete user">
+                                <fa-icon [icon]="faTrashAlt"></fa-icon>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                        <tr *ngIf="!adminLoading && adminUsers.length === 0">
+                          <td colspan="5" class="text-center text-muted py-3">No users available.</td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
@@ -268,6 +358,35 @@
           <button type="button" class="btn btn-secondary" (click)="closeBatchImportModal()">Close</button>
           <button type="button" class="btn btn-primary" (click)="startBatchImport()" [disabled]="importInProgress">
             Import URLs
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Cookies Modal -->
+  <div class="modal fade" tabindex="-1" role="dialog" [ngClass]="{'show': cookiesModalOpen}" [ngStyle]="{'display': cookiesModalOpen ? 'block' : 'none'}">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Manage Cookies</h5>
+          <button type="button" class="btn-close" aria-label="Close" (click)="closeCookiesModal()" [disabled]="cookiesInProgress"></button>
+        </div>
+        <div class="modal-body">
+          <p>Paste your YouTube cookies in Netscape format. You can export them using browser extensions like <strong>Get cookies.txt</strong>.</p>
+          <textarea [(ngModel)]="cookiesText" class="form-control" rows="6" placeholder="Paste cookies here" [disabled]="cookiesInProgress"></textarea>
+          <div class="mt-2">
+            <small *ngIf="cookiesStatusMessage">{{ cookiesStatusMessage }}</small>
+            <small *ngIf="!cookiesStatusMessage && cookiesConfigured">Cookies are currently configured.</small>
+            <small *ngIf="!cookiesStatusMessage && !cookiesConfigured">No cookies are configured.</small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-danger me-auto" (click)="clearCookies()" [disabled]="cookiesInProgress || !cookiesConfigured">
+            Clear Cookies
+          </button>
+          <button type="button" class="btn btn-secondary" (click)="closeCookiesModal()" [disabled]="cookiesInProgress">Close</button>
+          <button type="button" class="btn btn-primary" (click)="saveCookies()" [disabled]="cookiesInProgress || !cookiesText || !cookiesText.trim()">
+            Save Cookies
           </button>
         </div>
       </div>
@@ -364,6 +483,7 @@
           <td>
             <div class="d-flex">
               <button *ngIf="download.value.status == 'error'" type="button" class="btn btn-link" (click)="retryDownload(download.key, download.value)"><fa-icon [icon]="faRedoAlt"></fa-icon></button>
+              <button *ngIf="download.value.filename" type="button" class="btn btn-link" (click)="renameDownload(download.key, download.value)"><fa-icon [icon]="faPen"></fa-icon></button>
               <a *ngIf="download.value.filename" href="{{buildDownloadLink(download.value)}}" download class="btn btn-link"><fa-icon [icon]="faDownload"></fa-icon></a>
               <a href="{{download.value.url}}" target="_blank" class="btn btn-link"><fa-icon [icon]="faExternalLinkAlt"></fa-icon></a>
               <button type="button" class="btn btn-link" (click)="delDownload('done', download.key)"><fa-icon [icon]="faTrashAlt"></fa-icon></button>
@@ -384,7 +504,7 @@
       </div>
       <div class="version-separator"></div>
       <div class="version-item">
-        <span class="version-label">MeTube</span>
+        <span class="version-label">MeTubeEX</span>
         <span class="version-value">{{metubeVersion}}</span>
       </div>
       <div class="version-separator"></div>
@@ -393,7 +513,7 @@
         <span class="version-value">{{ytDlpOptionsUpdateTime}}</span>
       </div>
       <div class="version-separator" *ngIf="ytDlpOptionsUpdateTime"></div>
-      <a href="https://github.com/alexta69/metube" target="_blank" class="github-link">
+      <a href="https://github.com/NaxonM/metube-extended" target="_blank" class="github-link">
         <fa-icon [icon]="faGithub"></fa-icon>
         <span>GitHub</span>
       </a>

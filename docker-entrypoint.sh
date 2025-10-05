@@ -11,9 +11,9 @@ if [ `id -u` -eq 0 ] && [ `id -g` -eq 0 ]; then
     fi
     echo "Changing ownership of download and state directories to ${UID}:${GID}"
     chown -R "${UID}":"${GID}" /app "${DOWNLOAD_DIR}" "${STATE_DIR}" "${TEMP_DIR}"
-    echo "Running MeTube as user ${UID}:${GID}"
+    echo "Running MeTubeEX as user ${UID}:${GID}"
     exec su-exec "${UID}":"${GID}" python3 app/main.py
 else
-    echo "User set by docker; running MeTube as `id -u`:`id -g`"
+    echo "User set by docker; running MeTubeEX as `id -u`:`id -g`"
     exec python3 app/main.py
 fi
