@@ -374,6 +374,76 @@
     </div>
   </div>
 
+  <div class="modal fade proxy-modal" tabindex="-1" role="dialog" [ngClass]="{'show': proxyPromptOpen}" [ngStyle]="{'display': proxyPromptOpen ? 'block' : 'none'}">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Direct download required</h5>
+          <button type="button" class="btn-close" aria-label="Close" (click)="closeProxyPrompt()" [disabled]="proxyConfirmInProgress"></button>
+        </div>
+        <div class="modal-body">
+          <p>{{ proxyPromptMessage }}</p>
+
+          <div *ngIf="proxyPromptData">
+            <dl class="file-details">
+              <dt>URL</dt>
+              <dd class="text-break">{{ proxyPromptData.url }}</dd>
+              <ng-container *ngIf="proxyPromptData.folder">
+                <dt>Target folder</dt>
+                <dd class="text-break">{{ proxyPromptData.folder }}</dd>
+              </ng-container>
+            </dl>
+          </div>
+
+          <div *ngIf="proxyProbeLoading" class="text-center py-3">
+            <div class="spinner-border" role="status" aria-hidden="true"></div>
+          </div>
+
+          <div *ngIf="!proxyProbeLoading && proxyProbeError" class="alert alert-warning" role="alert">
+            {{ proxyProbeError }}
+          </div>
+
+          <div *ngIf="!proxyProbeLoading && proxyProbeResult && proxyProbeResult.status === 'ok'">
+            <dl class="file-details">
+              <dt>File name</dt>
+              <dd class="text-break">{{ proxyProbeResult.filename || proxySuggestedTitle }}</dd>
+              <ng-container *ngIf="proxyProbeResult.size !== undefined && proxyProbeResult.size !== null">
+                <dt>File size</dt>
+                <dd>{{ formatBytes(proxyProbeResult.size) }}</dd>
+              </ng-container>
+              <ng-container *ngIf="proxyProbeResult.content_type">
+                <dt>Content type</dt>
+                <dd>{{ proxyProbeResult.content_type }}</dd>
+              </ng-container>
+            </dl>
+
+            <div *ngIf="proxyPromptData?.limit_enabled && proxyProbeResult.limit_exceeded" class="alert alert-danger" role="alert">
+              This file exceeds the configured size limit ({{ proxyPromptData.size_limit_mb }} MB).
+            </div>
+          </div>
+
+          <div *ngIf="proxyPromptData?.limit_enabled" class="mt-3">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="proxyOverrideToggle" [(ngModel)]="proxyOverrideEnabled">
+              <label class="form-check-label" for="proxyOverrideToggle">Override size limit</label>
+            </div>
+            <div class="mt-2" *ngIf="proxyOverrideEnabled">
+              <label class="form-label" for="proxyOverrideValue">Allow up to (MB)</label>
+              <input id="proxyOverrideValue" class="form-control" type="number" min="0" [(ngModel)]="proxyOverrideMb" [disabled]="proxyConfirmInProgress">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeProxyPrompt()" [disabled]="proxyConfirmInProgress">Cancel</button>
+          <button type="button" class="btn btn-primary" (click)="confirmProxyDownload()" [disabled]="proxyDownloadDisabled">
+            <span *ngIf="proxyConfirmInProgress" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            Download
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Stream Modal -->
   <div class="modal fade stream-modal" tabindex="-1" role="dialog" [ngClass]="{'show': streamModalOpen, 'minimized': streamModalOpen && streamMinimized}" [ngStyle]="{'display': streamModalOpen ? 'block' : 'none'}">
     <div class="modal-dialog" role="document" [ngClass]="{

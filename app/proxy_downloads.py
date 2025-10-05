@@ -258,7 +258,7 @@ class ProxyDownloadManager:
             log.error(f'Proxy probe failed for {url}: {exc!r}')
             return {'status': 'error', 'msg': str(exc)}
 
-    async def add_job(self, *, url: str, title: Optional[str], folder: str, size_limit_override: Optional[int], auto_start: bool = True) -> Dict:
+    async def add_job(self, *, url: str, title: Optional[str], folder: str, custom_name_prefix: str = '', size_limit_override: Optional[int] = None, auto_start: bool = True) -> Dict:
         display_title = title or _guess_filename_from_headers({}, url)
         job_id = uuid.uuid4().hex
         storage_key = f'proxy:{job_id}'
@@ -270,7 +270,7 @@ class ProxyDownloadManager:
             'proxy',
             'proxy',
             folder or '',
-            custom_name_prefix='',
+            custom_name_prefix or '',
             error=None,
             entry=None,
             playlist_item_limit=0,
@@ -429,6 +429,9 @@ class ProxyDownloadManager:
                         raise ValueError('File exceeds configured size limit')
 
                     filename = _guess_filename_from_headers(resp.headers, str(resp.url))
+                    original_extension = os.path.splitext(urlparse(job.source_url).path)[1]
+                    if not os.path.splitext(filename)[1] and original_extension:
+                        filename = f"{filename}{original_extension}"
                     if not os.path.splitext(filename)[1] and job.content_type:
                         ext = mimetypes.guess_extension(job.content_type.split(';')[0])
                         if ext:

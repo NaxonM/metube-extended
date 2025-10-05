@@ -5,7 +5,7 @@ import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAl
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { CookieService } from 'ngx-cookie-service';
 
-import { Download, DownloadsService, Status, CurrentUser, ManagedUser } from './downloads.service';
+import { Download, DownloadsService, Status, CurrentUser, ManagedUser, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse } from './downloads.service';
 import { MasterCheckboxComponent } from './master-checkbox.component';
 import { Formats, Format, Quality } from './formats';
 import { Theme, Themes } from './theme';
@@ -61,6 +61,17 @@ export class AppComponent implements AfterViewInit, OnInit {
   streamType: 'audio' | 'video' = 'video';
   streamMinimized = false;
   streamDockSide: 'left' | 'right' = 'right';
+
+  proxyPromptOpen = false;
+  proxyPromptData: ProxySuggestion | null = null;
+  proxyPromptMessage = '';
+  proxyProbeLoading = false;
+  proxyProbeError = '';
+  proxyProbeResult: ProxyProbeResponse | null = null;
+  proxySuggestedTitle: string | null = null;
+  proxyOverrideEnabled = false;
+  proxyOverrideMb: number | null = null;
+  proxyConfirmInProgress = false;
 
   // Download metrics
   activeDownloads = 0;
@@ -262,12 +273,16 @@ export class AppComponent implements AfterViewInit, OnInit {
     console.debug('Downloading: url='+url+' quality='+quality+' format='+format+' folder='+folder+' customNamePrefix='+customNamePrefix+' playlistStrictMode='+playlistStrictMode+' playlistItemLimit='+playlistItemLimit+' autoStart='+autoStart);
     this.addInProgress = true;
     this.downloads.add(url, quality, format, folder, customNamePrefix, playlistStrictMode, playlistItemLimit, autoStart).subscribe((status: Status) => {
+      this.addInProgress = false;
+      if (status.status === 'unsupported') {
+        this.showProxyPrompt(status);
+        return;
+      }
       if (status.status === 'error') {
         alert(`Error adding URL: ${status.msg}`);
       } else {
         this.addUrl = '';
       }
-      this.addInProgress = false;
     });
   }
 
@@ -320,6 +335,134 @@ export class AppComponent implements AfterViewInit, OnInit {
         alert(`Error renaming file: ${status.msg}`);
       }
     });
+  }
+
+  private showProxyPrompt(status: Status) {
+    if (!status.proxy) {
+      alert(status.msg || 'This URL is not supported by yt-dlp.');
+      return;
+    }
+
+    this.proxyPromptData = {...status.proxy};
+    this.proxyPromptMessage = status.msg || 'This URL is not supported by yt-dlp. Do you want to download it directly through the server?';
+    this.proxyProbeResult = null;
+    this.proxyProbeError = '';
+    this.proxySuggestedTitle = null;
+    this.proxyOverrideEnabled = false;
+    this.proxyOverrideMb = status.proxy.limit_enabled ? status.proxy.size_limit_mb : null;
+    this.proxyConfirmInProgress = false;
+    this.proxyPromptOpen = true;
+    this.proxyProbeLoading = true;
+
+    this.downloads.proxyProbe(status.proxy.url).subscribe((result: ProxyProbeResponse) => {
+      this.proxyProbeLoading = false;
+      if (result.status === 'error') {
+        this.proxyProbeError = result.msg || 'Unable to inspect the remote file. You can still proceed, but size checks may not be available.';
+        this.proxySuggestedTitle = this.extractFileName(status.proxy.url);
+        return;
+      }
+
+      this.proxyProbeResult = result;
+      this.proxySuggestedTitle = result.filename || this.extractFileName(status.proxy.url);
+      if (result.limit_exceeded && status.proxy.limit_enabled) {
+        const sizeMb = result.size ? Math.ceil(result.size / (1024 * 1024)) : status.proxy.size_limit_mb;
+        this.proxyOverrideMb = sizeMb;
+        this.proxyOverrideEnabled = false;
+      }
+    }, () => {
+      this.proxyProbeLoading = false;
+      this.proxyProbeError = 'Unable to inspect the remote file. You can still proceed, but size checks may not be available.';
+      this.proxySuggestedTitle = this.extractFileName(status.proxy.url);
+    });
+  }
+
+  closeProxyPrompt() {
+    this.proxyPromptOpen = false;
+    this.proxyPromptData = null;
+    this.proxyProbeResult = null;
+    this.proxyProbeError = '';
+    this.proxySuggestedTitle = null;
+    this.proxyConfirmInProgress = false;
+  }
+
+  confirmProxyDownload() {
+    if (!this.proxyPromptData || this.proxyConfirmInProgress) {
+      return;
+    }
+
+    const overrideMb = this.proxyOverrideEnabled ? Math.max(Number(this.proxyOverrideMb ?? 0), 0) : null;
+    const payload = {
+      url: this.proxyPromptData.url,
+      title: this.proxySuggestedTitle || this.extractFileName(this.proxyPromptData.url),
+      folder: this.proxyPromptData.folder || '',
+      custom_name_prefix: this.proxyPromptData.custom_name_prefix || '',
+      auto_start: this.proxyPromptData.auto_start,
+      size_limit_mb: overrideMb
+    };
+
+    this.proxyConfirmInProgress = true;
+    this.downloads.proxyAdd(payload).subscribe((result: ProxyAddResponse) => {
+      this.proxyConfirmInProgress = false;
+      if (result.status === 'error') {
+        this.proxyProbeError = result.msg || 'Unable to start the proxy download.';
+        return;
+      }
+      this.closeProxyPrompt();
+      this.addUrl = '';
+    }, (error) => {
+      this.proxyConfirmInProgress = false;
+      this.proxyProbeError = (error?.error && typeof error.error === 'string') ? error.error : 'Unable to start the proxy download.';
+    });
+  }
+
+  get proxyDownloadDisabled(): boolean {
+    if (!this.proxyPromptData || this.proxyProbeLoading || this.proxyConfirmInProgress) {
+      return true;
+    }
+    if (!this.proxyPromptData.limit_enabled) {
+      return false;
+    }
+    if (!this.proxyProbeResult) {
+      return false;
+    }
+    if (this.proxyProbeResult.status !== 'ok') {
+      return false;
+    }
+    return !!this.proxyProbeResult.limit_exceeded && !this.proxyOverrideEnabled;
+  }
+
+  formatBytes(value?: number | null): string {
+    if (value === undefined || value === null || isNaN(value)) {
+      return 'Unknown';
+    }
+    if (value === 0) {
+      return '0 B';
+    }
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let size = value;
+    let index = 0;
+    while (size >= 1024 && index < units.length - 1) {
+      size /= 1024;
+      index++;
+    }
+    const precision = size >= 10 || index === 0 ? 0 : 1;
+    return `${size.toFixed(precision)} ${units[index]}`;
+  }
+
+  extractFileName(url: string): string {
+    try {
+      const parsed = new URL(url);
+      const segments = parsed.pathname.split('/').filter(Boolean);
+      if (segments.length) {
+        return decodeURIComponent(segments[segments.length - 1]);
+      }
+    } catch (e) {
+      const parts = url.split('/');
+      if (parts.length) {
+        return parts[parts.length - 1];
+      }
+    }
+    return url;
   }
 
   openStream(key: string, download: Download): void {

@@ -7,6 +7,41 @@ import { MeTubeSocket } from './metube-socket';
 export interface Status {
   status: string;
   msg?: string;
+  proxy?: ProxySuggestion;
+}
+
+export interface ProxySuggestion {
+  url: string;
+  quality: string;
+  format: string;
+  folder: string;
+  custom_name_prefix: string;
+  playlist_strict_mode: boolean;
+  playlist_item_limit: number;
+  auto_start: boolean;
+  size_limit_mb: number;
+  limit_enabled: boolean;
+}
+
+export interface ProxyProbeResponse extends Status {
+  filename?: string;
+  size?: number;
+  content_type?: string;
+  disposition?: string;
+  limit_exceeded?: boolean;
+}
+
+export interface ProxyAddRequest {
+  url: string;
+  title?: string;
+  folder: string;
+  custom_name_prefix: string;
+  auto_start: boolean;
+  size_limit_mb?: number | null;
+}
+
+export interface ProxyAddResponse extends Status {
+  id?: string;
 }
 
 export interface Download {
@@ -146,6 +181,18 @@ export class DownloadsService {
   public add(url: string, quality: string, format: string, folder: string, customNamePrefix: string, playlistStrictMode: boolean, playlistItemLimit: number, autoStart: boolean) {
     return this.http.post<Status>('add', {url: url, quality: quality, format: format, folder: folder, custom_name_prefix: customNamePrefix, playlist_strict_mode: playlistStrictMode, playlist_item_limit: playlistItemLimit, auto_start: autoStart}).pipe(
       catchError(this.handleHTTPError)
+    );
+  }
+
+  public proxyProbe(url: string) {
+    return this.http.post<ProxyProbeResponse>('proxy/probe', {url}).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<ProxyProbeResponse>(error))
+    );
+  }
+
+  public proxyAdd(request: ProxyAddRequest) {
+    return this.http.post<ProxyAddResponse>('proxy/add', request).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<ProxyAddResponse>(error))
     );
   }
 
@@ -295,6 +342,11 @@ export class DownloadsService {
     return this.http.delete('admin/users/' + userId).pipe(
       catchError(this.handleHTTPError)
     );
+  }
+
+  private handleTypedError<T extends Status>(error: HttpErrorResponse) {
+    const msg = error.error instanceof ErrorEvent ? error.error.message : error.error;
+    return of({status: 'error', msg} as T);
   }
   
 }

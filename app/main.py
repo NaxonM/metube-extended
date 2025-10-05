@@ -481,6 +481,59 @@ async def rename(request):
     return web.Response(text=serializer.encode(status))
 
 
+@routes.post(config.URL_PREFIX + 'proxy/probe')
+async def proxy_probe(request):
+    try:
+        post = await request.json()
+    except json.JSONDecodeError:
+        raise web.HTTPBadRequest(text='Invalid JSON payload')
+
+    url = post.get('url')
+    if not url:
+        raise web.HTTPBadRequest(text='Missing url parameter')
+
+    _session, user_id, _ = await get_user_context(request)
+    proxy_queue = await download_manager.get_proxy_queue(user_id)
+    result = await proxy_queue.probe(url)
+    return web.json_response(result)
+
+
+@routes.post(config.URL_PREFIX + 'proxy/add')
+async def proxy_add(request):
+    try:
+        post = await request.json()
+    except json.JSONDecodeError:
+        raise web.HTTPBadRequest(text='Invalid JSON payload')
+
+    url = post.get('url')
+    if not url:
+        raise web.HTTPBadRequest(text='Missing url parameter')
+
+    title = post.get('title')
+    folder = post.get('folder') or ''
+    custom_name_prefix = post.get('custom_name_prefix') or ''
+    auto_start = bool(post.get('auto_start', True))
+    size_limit_mb = post.get('size_limit_mb')
+    size_limit_override = None
+    if size_limit_mb is not None:
+        try:
+            size_limit_override = max(int(size_limit_mb), 0) * 1024 * 1024
+        except (TypeError, ValueError):
+            raise web.HTTPBadRequest(text='Invalid size_limit_mb value')
+
+    _session, user_id, _ = await get_user_context(request)
+    proxy_queue = await download_manager.get_proxy_queue(user_id)
+    result = await proxy_queue.add_job(
+        url=url,
+        title=title,
+        folder=folder,
+        custom_name_prefix=custom_name_prefix,
+        size_limit_override=size_limit_override,
+        auto_start=auto_start
+    )
+    return web.json_response(result)
+
+
 @routes.get(config.URL_PREFIX + 'cookies')
 async def get_cookies(request):
     session = await get_session(request)
