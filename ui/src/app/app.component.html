@@ -495,7 +495,7 @@
             <div class="d-flex">
               <button *ngIf="download.value.status == 'error'" type="button" class="btn btn-link" (click)="retryDownload(download.key, download.value)"><fa-icon [icon]="faRedoAlt"></fa-icon></button>
               <button *ngIf="download.value.filename" type="button" class="btn btn-link" (click)="renameDownload(download.key, download.value)"><fa-icon [icon]="faPen"></fa-icon></button>
-              <button *ngIf="download.value.filename && download.value.status == 'finished'" type="button" class="btn btn-link" (click)="openStream(download.value)"><fa-icon [icon]="faPlay"></fa-icon></button>
+              <button *ngIf="download.value.filename && download.value.status == 'finished'" type="button" class="btn btn-link" (click)="openStream(download.key, download.value)"><fa-icon [icon]="faPlay"></fa-icon></button>
               <a *ngIf="download.value.filename" href="{{buildDownloadLink(download.value)}}" download class="btn btn-link"><fa-icon [icon]="faDownload"></fa-icon></a>
               <a href="{{download.value.url}}" target="_blank" class="btn btn-link"><fa-icon [icon]="faExternalLinkAlt"></fa-icon></a>
               <button type="button" class="btn btn-link" (click)="delDownload('done', download.key)"><fa-icon [icon]="faTrashAlt"></fa-icon></button>

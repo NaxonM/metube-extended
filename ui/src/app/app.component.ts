@@ -318,7 +318,7 @@ export class AppComponent implements AfterViewInit, OnInit {
     });
   }
 
-  openStream(download: Download): void {
+  openStream(key: string, download: Download): void {
     if (!download || !download.filename) {
       alert('This file is not available for streaming.');
       return;
@@ -328,7 +328,7 @@ export class AppComponent implements AfterViewInit, OnInit {
     this.streamTitle = download.title || download.filename;
     this.streamMimeType = mimeType;
     this.streamType = this.getStreamType(mimeType, download);
-    const streamUrl = this.buildStreamLink(download);
+    const streamUrl = this.buildStreamLink(key);
     this.streamSource = this.sanitizer.bypassSecurityTrustResourceUrl(streamUrl);
     this.streamModalOpen = true;
 
@@ -410,8 +410,8 @@ export class AppComponent implements AfterViewInit, OnInit {
     }
   }
 
-  private buildStreamLink(download: Download): string {
-    const encoded = encodeURIComponent(download.url);
+  private buildStreamLink(id: string): string {
+    const encoded = encodeURIComponent(id);
     const relative = `stream?id=${encoded}`;
     try {
       return new URL(relative, window.location.href).toString();
