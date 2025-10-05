@@ -375,7 +375,7 @@
   </div>
 
   <!-- Stream Modal -->
-  <div class="modal fade stream-modal" tabindex="-1" role="dialog" [ngClass]="{'show': streamModalOpen && !streamMinimized, 'minimized': streamModalOpen && streamMinimized}" [ngStyle]="{'display': streamModalOpen ? 'block' : 'none'}">
+  <div class="modal fade stream-modal" tabindex="-1" role="dialog" [ngClass]="{'show': streamModalOpen, 'minimized': streamModalOpen && streamMinimized}" [ngStyle]="{'display': streamModalOpen ? 'block' : 'none'}">
     <div class="modal-dialog" role="document" [ngClass]="{
       'modal-lg': !streamMinimized,
       'minimized': streamMinimized,
@@ -384,16 +384,16 @@
     }">
       <div class="modal-content">
         <div class="modal-header align-items-center">
-          <h5 class="modal-title mb-0">{{ streamTitle || 'Stream media' }}</h5>
-          <div class="d-flex align-items-center gap-2">
-            <button *ngIf="streamMinimized" type="button" class="btn btn-outline-secondary btn-sm" (click)="toggleStreamDock()" title="Switch side">
+          <h5 class="modal-title mb-0 flex-grow-1">{{ streamTitle || 'Stream media' }}</h5>
+          <div class="modal-actions">
+            <button *ngIf="!streamMinimized" type="button" class="btn btn-link btn-sm p-0 me-2" (click)="minimizeStream()" title="Minimize player">
+              <fa-icon [icon]="faWindowMinimize"></fa-icon>
+            </button>
+            <button *ngIf="streamMinimized" type="button" class="btn btn-link btn-sm p-0 me-2" (click)="toggleStreamDock()" title="Switch side">
               <fa-icon [icon]="faArrowsLeftRight"></fa-icon>
             </button>
-            <button *ngIf="streamMinimized" type="button" class="btn btn-outline-secondary btn-sm" (click)="restoreStream()" title="Restore player">
+            <button *ngIf="streamMinimized" type="button" class="btn btn-link btn-sm p-0 me-2" (click)="restoreStream()" title="Restore player">
               <fa-icon [icon]="faWindowRestore"></fa-icon>
-            </button>
-            <button *ngIf="!streamMinimized" type="button" class="btn btn-outline-secondary btn-sm" (click)="minimizeStream()" title="Minimize player">
-              <fa-icon [icon]="faWindowMinimize"></fa-icon>
             </button>
             <button type="button" class="btn-close" aria-label="Close" (click)="closeStreamModal()"></button>
           </div>
