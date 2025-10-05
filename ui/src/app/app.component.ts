@@ -1,4 +1,4 @@
-import { Component, ViewChild, ElementRef, AfterViewInit, OnInit } from '@angular/core';
+import { Component, ViewChild, ElementRef, AfterViewInit, OnInit, ChangeDetectorRef } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { faTrashAlt, faCheckCircle, faTimesCircle, IconDefinition } from '@fortawesome/free-regular-svg-icons';
 import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt, faPen, faCookieBite, faUserShield, faUserPlus, faUserSlash, faKey, faRightFromBracket, faPlay } from '@fortawesome/free-solid-svg-icons';
@@ -121,7 +121,7 @@ export class AppComponent implements AfterViewInit, OnInit {
 
   private toastCounter = 0;
 
-  constructor(public downloads: DownloadsService, private cookieService: CookieService, private http: HttpClient) {
+  constructor(public downloads: DownloadsService, private cookieService: CookieService, private http: HttpClient, private cdr: ChangeDetectorRef) {
     this.format = cookieService.get('metube_format') || 'any';
     // Needs to be set or qualities won't automatically be set
     this.setQualities()
@@ -137,6 +137,7 @@ export class AppComponent implements AfterViewInit, OnInit {
         this.queueMasterCheckbox.selectionChanged();
       }
       this.queueSelectionCount = 0;
+      this.cdr.detectChanges();
     });
     this.downloads.doneChanged.subscribe(() => {
       this.updateMetrics();
@@ -144,10 +145,12 @@ export class AppComponent implements AfterViewInit, OnInit {
         this.doneMasterCheckbox.selectionChanged();
       }
       this.doneSelectionCount = 0;
+      this.cdr.detectChanges();
     });
     // Subscribe to real-time updates
     this.downloads.updated.subscribe(() => {
       this.updateMetrics();
+      this.cdr.detectChanges();
     });
     this.refreshQueueEntries();
     this.refreshCompletedEntries();
