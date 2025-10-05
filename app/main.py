@@ -633,9 +633,10 @@ async def stream_download(request):
     mime_type, _ = mimetypes.guess_type(file_path)
     headers = {'Content-Disposition': f'inline; filename="{os.path.basename(file_path)}"'}
 
+    response = web.FileResponse(path=file_path, headers=headers)
     if mime_type:
-        return web.FileResponse(path=file_path, headers=headers, content_type=mime_type)
-    return web.FileResponse(path=file_path, headers=headers)
+        response.content_type = mime_type
+    return response
 
 @sio.event
 async def connect(sid, environ):
