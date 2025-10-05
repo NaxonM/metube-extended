@@ -104,8 +104,8 @@ export class AppComponent implements AfterViewInit, OnInit {
   streamDownload: Download | null = null;
   streamUrl: string | null = null;
 
-  private readonly streamableVideoExtensions = ['.mp4', '.mkv', '.webm', '.mov', '.m4v', '.avi'];
-  private readonly streamableAudioExtensions = ['.mp3', '.m4a', '.aac', '.flac', '.ogg', '.opus', '.wav'];
+  private readonly streamableVideoExtensions = ['.mp4', '.webm'];
+  private readonly streamableAudioExtensions = ['.mp3', '.ogg', '.wav'];
 
   queueFilter: QueueFilter = 'all';
   completedFilter: CompletedFilter = 'all';

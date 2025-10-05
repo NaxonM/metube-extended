@@ -71,11 +71,20 @@ export class DownloadsService {
     if (!download) {
       return undefined;
     }
-
+  
     if (typeof download.timestamp !== 'number') {
       download.timestamp = Date.now();
     }
-
+  
+    if (typeof download.id !== 'string' || download.id.trim().length === 0) {
+      if (key) {
+        download.id = key;
+      } else {
+        this.counter += 1;
+        download.id = `${this.fallbackPrefix}-${this.counter}-${download.timestamp}`;
+      }
+    }
+  
     if (!download.history_key) {
       if (key) {
         download.history_key = key;
@@ -86,7 +95,7 @@ export class DownloadsService {
         download.history_key = `${this.fallbackPrefix}-${this.counter}-${download.timestamp}`;
       }
     }
-
+  
     if (!download.title || download.title.trim().length === 0) {
       if (download.filename && download.filename.trim().length > 0) {
         download.title = download.filename.trim();
@@ -98,7 +107,7 @@ export class DownloadsService {
         download.title = 'Unknown download';
       }
     }
-
+  
     return download;
   }
 
@@ -107,20 +116,18 @@ export class DownloadsService {
       this.loading = false;
       const data: [Array<[string, Download]>, Array<[string, Download]>] = JSON.parse(strdata);
       this.queue.clear();
-      data[0].forEach(([key, download]) => {
-        const normalized = this.normalizeDownload(download, key);
-        if (!normalized) {
-          return;
+      data[0].forEach(([backendKey, download]) => {
+        const normalized = this.normalizeDownload(download, backendKey);
+        if (normalized && normalized.id) {
+          this.queue.set(normalized.id, normalized);
         }
-        this.queue.set(normalized.url ?? key, normalized);
       });
       this.done.clear();
-      data[1].forEach(([key, download]) => {
-        const normalized = this.normalizeDownload(download, key);
-        if (!normalized) {
-          return;
+      data[1].forEach(([backendKey, download]) => {
+        const normalized = this.normalizeDownload(download, backendKey);
+        if (normalized && normalized.id) {
+          this.done.set(normalized.id, normalized);
         }
-        this.done.set(normalized.history_key, normalized);
       });
       this.queueChanged.next(null);
       this.doneChanged.next(null);
@@ -128,54 +135,95 @@ export class DownloadsService {
     socket.fromEvent('added').subscribe((strdata: string) => {
       const data: Download = JSON.parse(strdata);
       const normalized = this.normalizeDownload(data);
-      if (!normalized) {
-        return;
+      if (normalized && normalized.id) {
+        this.queue.set(normalized.id, normalized);
+        this.queueChanged.next(null);
       }
-      this.queue.set(normalized.url ?? normalized.history_key, normalized);
-      this.queueChanged.next(null);
     });
     socket.fromEvent('updated').subscribe((strdata: string) => {
       const data: Download = JSON.parse(strdata);
-      const dl: Download | undefined = this.queue.get(data.url);
-      if (!data.history_key && dl?.history_key) {
-        data.history_key = dl.history_key;
+      let targetKey: string | undefined;
+      let existing: Download | undefined;
+      if (data.id) {
+        targetKey = data.id;
+        existing = this.queue.get(targetKey);
+      } else if (data.url) {
+        for (const [k, v] of this.queue.entries()) {
+          if (v.url === data.url) {
+            targetKey = k;
+            existing = v;
+            data.id = k;
+            break;
+          }
+        }
+      } else {
+        return; // cannot update without id or url
       }
-      data.checked = dl?.checked;
-      data.deleting = dl?.deleting;
-      const normalized = this.normalizeDownload(data);
-      if (!normalized) {
-        return;
+      if (existing) {
+        if (!data.history_key) {
+          data.history_key = existing.history_key;
+        }
+        data.checked = existing.checked;
+        data.deleting = existing.deleting;
       }
-      this.queue.set(normalized.url ?? normalized.history_key, normalized);
-      this.queueChanged.next(null);
-      this.updated.next(null);
+      const normalized = this.normalizeDownload(data, targetKey);
+      if (normalized && targetKey) {
+        this.queue.set(targetKey, normalized);
+        this.queueChanged.next(null);
+        this.updated.next(null);
+      }
     });
     socket.fromEvent('completed').subscribe((strdata: string) => {
       const data: Download = JSON.parse(strdata);
-      const normalized = this.normalizeDownload(data);
+      let queueTargetKey: string | undefined;
+      if (data.id) {
+        if (this.queue.has(data.id)) {
+          queueTargetKey = data.id;
+        }
+      } else if (data.url) {
+        for (const [k, v] of this.queue.entries()) {
+          if (v.url === data.url) {
+            queueTargetKey = k;
+            data.id = k;
+            break;
+          }
+        }
+      }
+      if (queueTargetKey) {
+        this.queue.delete(queueTargetKey);
+      }
+      const normalized = this.normalizeDownload(data, data.id);
       if (!normalized) {
         return;
       }
-      const queueKey = normalized.url ?? normalized.history_key;
-      this.queue.delete(queueKey);
-
-      const existing = this.done.get(normalized.history_key) || this.done.get(queueKey);
+      const doneTargetKey = normalized.id;
+      const existing = doneTargetKey ? this.done.get(doneTargetKey) : undefined;
       if (existing) {
         normalized.checked = existing.checked;
         normalized.deleting = existing.deleting;
-        if (normalized.history_key !== queueKey) {
-          this.done.delete(queueKey);
-        }
       }
-
-      this.done.set(normalized.history_key, normalized);
+      this.done.set(doneTargetKey, normalized);
       this.queueChanged.next(null);
       this.doneChanged.next(null);
     });
     socket.fromEvent('canceled').subscribe((strdata: string) => {
-      let data: string = JSON.parse(strdata);
-      this.queue.delete(data);
-      this.queueChanged.next(null);
+      const dataStr: string = JSON.parse(strdata);
+      let deleted = false;
+      if (this.queue.has(dataStr)) {
+        this.queue.delete(dataStr);
+        deleted = true;
+      } else {
+        for (const [k, v] of this.queue.entries()) {
+          if (v.id === dataStr || v.url === dataStr || v.history_key === dataStr) {
+            this.queue.delete(k);
+            deleted = true;
+            break;
+          }
+        }
+      }
+      if (deleted) {
+        this.queueChanged.next(null);
+      }
     });
     socket.fromEvent('cleared').subscribe((strdata: string) => {
       const key: string = JSON.parse(strdata);
@@ -183,7 +231,7 @@ export class DownloadsService {
 
       if (!removed) {
         for (const [mapKey, download] of this.done.entries()) {
-          if (download.history_key === key || download.url === key) {
+          if (download.history_key === key || download.url === key || download.id === key) {
             this.done.delete(mapKey);
             removed = true;
             break;
@@ -197,34 +245,54 @@ export class DownloadsService {
     });
     socket.fromEvent('renamed').subscribe((strdata: string) => {
       const data: Download = JSON.parse(strdata);
-      const normalized = this.normalizeDownload(data);
+      let targetKey: string | undefined;
+      let existing: Download | undefined;
+      if (data.id) {
+        targetKey = data.id;
+        existing = this.done.get(targetKey);
+      } else if (data.url) {
+        for (const [k, v] of this.done.entries()) {
+          if (v.url === data.url) {
+            targetKey = k;
+            data.id = k;
+            existing = v;
+            break;
+          }
+        }
+      } else if (data.history_key) {
+        for (const [k, v] of this.done.entries()) {
+          if (v.history_key === data.history_key) {
+            targetKey = k;
+            data.id = k;
+            existing = v;
+            break;
+          }
+        }
+      }
+      if (!targetKey) {
+        const normalized = this.normalizeDownload(data);
+        if (normalized && normalized.id) {
+          this.done.set(normalized.id, normalized);
+          this.doneChanged.next(null);
+          return;
+        } else {
+          return;
+        }
+      }
+      const normalized = this.normalizeDownload(data, targetKey);
       if (!normalized) {
         return;
       }
-
-      const key = normalized.history_key || normalized.url;
-      let existing: Download | undefined = this.done.get(key);
-
-      const urlKey = normalized.url ?? normalized.history_key;
-
-      if (!existing && normalized.history_key && this.done.has(urlKey)) {
-        existing = this.done.get(urlKey);
-        this.done.delete(urlKey);
+      if (existing) {
+        const merged = {
+          ...existing,
+          ...normalized,
+          history_key: normalized.history_key ?? existing.history_key
+        };
+        this.done.set(targetKey, merged);
+      } else {
+        this.done.set(targetKey, normalized);
       }
-
-      if (!existing) {
-        this.done.set(key, normalized);
-        this.doneChanged.next(null);
-        return;
-      }
-
-      const merged = {
-        ...existing,
-        ...normalized,
-        history_key: normalized.history_key ?? existing.history_key
-      };
-
-      this.done.set(key, merged);
       this.doneChanged.next(null);
     });
     socket.fromEvent('configuration').subscribe((strdata: string) => {

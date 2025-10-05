@@ -35,8 +35,16 @@ class DownloadQueueNotifier:
 
 class DownloadInfo:
     def __init__(self, id, title, url, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookiefile=None, user_id=None):
-        self.id = id if len(custom_name_prefix) == 0 else f'{custom_name_prefix}.{id}'
-        self.title = title if len(custom_name_prefix) == 0 else f'{custom_name_prefix}.{title}'
+        import uuid
+        self.id = id if id else str(uuid.uuid4())
+        if len(custom_name_prefix) > 0:
+            self.id = f'{custom_name_prefix}.{self.id}'
+            if title:
+                self.title = f'{custom_name_prefix}.{title}'
+            else:
+                self.title = f'{custom_name_prefix}.Unknown'
+        else:
+            self.title = title or 'Unknown'
         self.url = url
         self.quality = quality
         self.format = format
@@ -51,7 +59,7 @@ class DownloadInfo:
         self.playlist_item_limit = playlist_item_limit
         self.cookiefile = cookiefile
         self.user_id = user_id
-        self.history_key = f"{self.url}::{self.timestamp}"
+        self.history_key = self.id
 
 class Download:
     manager = None
@@ -194,13 +202,15 @@ class PersistentQueue:
         self.dict = OrderedDict()
 
     def load(self):
-        for k, v in self.saved_items():
-            if not hasattr(v, 'timestamp') or v.timestamp is None:
-                v.timestamp = time.time_ns()
-            if not hasattr(v, 'history_key') or not v.history_key:
-                base = getattr(v, 'url', '') or getattr(v, 'id', '')
-                v.history_key = f"{base}::{v.timestamp}"
-            self.dict[k] = Download(None, None, None, None, None, None, {}, v)
+        for shelve_key, info in self.saved_items():
+            if not hasattr(info, 'id') or not info.id:
+                info.id = shelve_key
+            key = info.id
+            if not hasattr(info, 'timestamp') or info.timestamp is None:
+                info.timestamp = time.time_ns()
+            if not hasattr(info, 'history_key') or not info.history_key:
+                info.history_key = info.id
+            self.dict[key] = Download(None, None, None, None, None, None, {}, info)
 
     def exists(self, key):
         return key in self.dict
@@ -217,7 +227,7 @@ class PersistentQueue:
 
     def put(self, value, key=None):
         if key is None:
-            key = value.info.url
+            key = value.info.id
         self.dict[key] = value
         with shelve.open(self.path, 'w') as shelf:
             shelf[key] = value.info
@@ -286,10 +296,13 @@ class DownloadQueue:
     def _normalize_done_entries(self):
         for key, download in list(self.done.items()):
             info = download.info
-            history_key = self._ensure_history_key(info)
-            if key != history_key:
+            if not hasattr(info, 'id') or not info.id:
+                info.id = key
+            target_key = info.id
+            info.history_key = info.id
+            if key != target_key:
                 self.done.delete(key)
-                self.done.put(download, history_key)
+                self.done.put(download, target_key)
 
     def _resolve_download_directory(self, info):
         base_directory = self.config.DOWNLOAD_DIR if (info.quality != 'audio' and info.format not in AUDIO_FORMATS) else self.config.AUDIO_DOWNLOAD_DIR
@@ -346,8 +359,7 @@ class DownloadQueue:
             if download.canceled:
                 asyncio.create_task(self.notifier.canceled(download.info.url))
             else:
-                history_key = self._ensure_history_key(download.info)
-                self.done.put(download, history_key)
+                self.done.put(download, download.info.id)
                 asyncio.create_task(self.notifier.completed(download.info))
 
     def __extract_info(self, url, playlist_strict_mode):
@@ -449,7 +461,7 @@ class DownloadQueue:
         elif etype == 'video' or (etype.startswith('url') and 'id' in entry and 'title' in entry):
             log.debug('Processing as a video')
             key = entry.get('webpage_url') or entry['url']
-            if not self.queue.exists(key):
+            if not self.queue.exists(entry['id']):
                 dl = DownloadInfo(entry['id'], entry.get('title') or entry['id'], key, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookie_path, self.user_id)
                 await self.__add_download(dl, auto_start, cookie_path)
             return {'status': 'ok'}
@@ -475,7 +487,7 @@ class DownloadQueue:
                 log.warn(f'requested start for non-existent download {id}')
                 continue
             dl = self.pending.get(id)
-            self.queue.put(dl)
+            self.queue.put(dl, dl.info.id)
             self.pending.delete(id)
             asyncio.create_task(self.__start_download(dl))
         return {'status': 'ok'}
@@ -489,8 +501,9 @@ class DownloadQueue:
             if not self.queue.exists(id):
                 log.warn(f'requested cancel for non-existent download {id}')
                 continue
-            if self.queue.get(id).started():
-                self.queue.get(id).cancel()
+            dl = self.queue.get(id)
+            if dl.started():
+                dl.cancel()
             else:
                 self.queue.delete(id)
                 await self.notifier.canceled(id)
