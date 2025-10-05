@@ -21,7 +21,7 @@ Everything the upstream project offered—robust yt-dlp integration, playlist su
 ### Option 1: One-liner install (recommended)
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/NaxonM/metube-extended/master/install.sh | bash
+bash <(curl -sSL https://raw.githubusercontent.com/NaxonM/metube-extended/master/install.sh) master
 ```
 
 Run the script again at any time to update to the latest release. To remove the deployment, pass `uninstall`.
