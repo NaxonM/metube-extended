@@ -193,11 +193,33 @@ EOF
         echo "$config_cf_token" > ".cf_token"
         chmod 600 ".cf_token"
         log_success "Cloudflare token saved to .cf_token with restricted permissions."
-
-        cat <<EOF >> "$ENV_FILE"
-CLOUDFLARE_TOKEN_PATH="$(pwd)/.cf_token"
-EOF
+        local token_path="$(pwd)/.cf_token"
+        append_cloudflare_token_path "$token_path"
     fi
+}
+
+append_cloudflare_token_path() {
+    local token_path="$1"
+    if [ -z "$token_path" ] || [ ! -f "$ENV_FILE" ]; then
+        return
+    fi
+    if grep -q '^CLOUDFLARE_TOKEN_PATH=' "$ENV_FILE"; then
+        sed -i "s|^CLOUDFLARE_TOKEN_PATH=.*$|CLOUDFLARE_TOKEN_PATH=\"$token_path\"|" "$ENV_FILE"
+    else
+        printf 'CLOUDFLARE_TOKEN_PATH="%s"\n' "$token_path" >> "$ENV_FILE"
+    fi
+}
+
+ensure_cloudflare_token_export() {
+    if [ "$DEPLOYMENT_TYPE" != "domain" ]; then
+        return
+    fi
+    local token_path="${CLOUDFLARE_TOKEN_PATH:-}"
+    if [ -z "$token_path" ]; then
+        token_path="$(pwd)/.cf_token"
+        append_cloudflare_token_path "$token_path"
+    fi
+    export CLOUDFLARE_TOKEN_PATH="$token_path"
 }
 
 # Downloads the latest source code from the repository.
@@ -282,7 +304,7 @@ install_system() {
         fi
         # Prepend env var for compose command
         export ACME_JSON_PATH="$PERSISTENT_DATA_DIR/acme.json"
-        export CLOUDFLARE_TOKEN_PATH="$(pwd)/.cf_token"
+        ensure_cloudflare_token_export
         log "Enabling domain setup."
     else
         compose_files="$compose_files -f docker-compose.ip.yml"
