@@ -78,7 +78,11 @@
 </nav>
 
 <main role="main" class="container container-xl">
-  <div *ngIf="cookieStatusNotice" class="cookie-toast alert alert-warning alert-dismissible fade show" role="alert">
+  <div
+    *ngIf="cookieStatusNotice"
+    class="alert alert-warning alert-dismissible fade show position-fixed top-0 end-0 m-3 shadow"
+    style="max-width:320px;width:90vw;z-index:1080;"
+    role="alert">
     <div class="d-flex align-items-start gap-2">
       <fa-icon [icon]="faTriangleExclamation" class="flex-shrink-0 mt-1"></fa-icon>
       <div class="flex-grow-1">
@@ -785,7 +789,7 @@
                   <span *ngIf="download.value.msg && !isCookieRelatedFailure(download.value)"><br>{{download.value.msg}}</span>
                   <span *ngIf="download.value.error && !isCookieRelatedFailure(download.value)"><br>Error: {{download.value.error}}</span>
                 </ng-template>
-                <div *ngIf="download.value.status === 'error' && isCookieRelatedFailure(download.value)" class="cookie-error-callout mt-2">
+                <div *ngIf="download.value.status === 'error' && isCookieRelatedFailure(download.value)" class="alert alert-warning mt-2 py-2 px-3">
                   <div class="d-flex align-items-start gap-2">
                     <fa-icon [icon]="faTriangleExclamation" class="mt-1 text-warning"></fa-icon>
                     <div>
