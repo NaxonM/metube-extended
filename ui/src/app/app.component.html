@@ -776,29 +776,18 @@
           </td>
           <td>
             <div class="d-flex gap-3 align-items-start">
-              <div class="pt-1 flex-shrink-0" style="width: 1.5rem;">
+              <div style="width: 1.5rem;">
                 <fa-icon *ngIf="download.value.status == 'finished'" [icon]="faCheckCircle" class="text-success"></fa-icon>
                 <fa-icon *ngIf="download.value.status == 'error'" [icon]="faTimesCircle" class="text-danger"></fa-icon>
               </div>
               <div class="flex-grow-1">
-                <div class="fw-semibold">
-                  <ng-container *ngIf="download.value.filename; else noDownloadLink">
-                    <a
-                      href="{{buildDownloadLink(download.value)}}"
-                      target="_blank"
-                      class="text-reset text-decoration-none"
-                      [ngbTooltip]="[download.value.msg, download.value.error].filter(Boolean).join(' | ')"
-                    >
-                      {{ download.value.title || download.value.filename }}
-                    </a>
-                  </ng-container>
-                </div>
+                <span [ngbTooltip]="[download.value.msg, download.value.error].filter(Boolean).join(' | ')">
+                  <a *ngIf="!!download.value.filename; else noDownloadLink" href="{{buildDownloadLink(download.value)}}" target="_blank">{{ download.value.title }}</a>
+                </span>
                 <ng-template #noDownloadLink>
-                  <div [ngbTooltip]="[download.value.msg, download.value.error].filter(Boolean).join(' | ')">
-                    {{ download.value.title || 'Download entry' }}
-                    <div *ngIf="download.value.msg && !isCookieRelatedFailure(download.value)" class="small text-muted">{{download.value.msg}}</div>
-                    <div *ngIf="download.value.error && !isCookieRelatedFailure(download.value)" class="small text-danger">Error: {{download.value.error}}</div>
-                  </div>
+                  {{download.value.title}}
+                  <span *ngIf="download.value.msg && !isCookieRelatedFailure(download.value)"><br>{{download.value.msg}}</span>
+                  <span *ngIf="download.value.error && !isCookieRelatedFailure(download.value)"><br>Error: {{download.value.error}}</span>
                 </ng-template>
                 <div *ngIf="download.value.status === 'error' && isCookieRelatedFailure(download.value)" class="alert alert-warning mt-2 py-2 px-3">
                   <div class="d-flex align-items-start gap-2">
