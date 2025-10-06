@@ -97,8 +97,6 @@ export interface Download {
   size?: number;
   checked?: boolean;
   deleting?: boolean;
-  cookie_warning?: string;
-  cookie_warning_at?: number;
 }
 
 export interface CurrentUser {

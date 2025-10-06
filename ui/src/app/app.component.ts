@@ -49,11 +49,6 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   cookieStatus: CookieStatusResponse = { has_cookies: false, state: 'missing' };
   cookiesStatusMessage = '';
   cookiesInProgress = false;
-  cookieStatusNotice: string | null = null;
-  private dismissedCookieNoticeState: CookieStatusResponse['state'] | null = null;
-  pendingCookieRetry: Download | null = null;
-  pendingCookieRetryKey: string | null = null;
-  cookieModalNotice: string | null = null;
 
   get cookiesConfigured(): boolean {
     return !!this.cookieStatus?.has_cookies;
@@ -86,14 +81,6 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   private systemStatsIntervalId: number | null = null;
   private previousSystemStats: SystemStats | null = null;
   systemStatsRequestActive = false;
-  private readonly cookieErrorMarkers: string[] = [
-    'cookies are no longer valid',
-    "sign in to confirm you're not a bot",
-    "sign in to confirm you’re not a bot",
-    'use --cookies',
-    'cookies for the authentication',
-    'please sign in'
-  ];
 
   streamModalOpen = false;
   streamSource: string | null = null;
@@ -184,8 +171,6 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     this.downloads.updated.subscribe(() => {
       this.updateMetrics();
     });
-
-    this.updateCookieNotice(null, this.cookieStatus);
   }
 
   ngOnInit() {
@@ -391,10 +376,6 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   retryDownload(key: string, download: Download) {
-    if (this.isCookieRelatedFailure(download) && !this.areYoutubeCookiesReady()) {
-      this.beginCookieRetry(key, download);
-      return;
-    }
     this.addDownload(download.url, download.quality, download.format, download.folder, download.custom_name_prefix, download.playlist_strict_mode, download.playlist_item_limit, true);
     this.downloads.delById('done', [key]).subscribe();
   }
@@ -692,11 +673,10 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     }
   }
 
-  openCookiesModal(message?: string): void {
+  openCookiesModal(): void {
     this.cookiesModalOpen = true;
     this.cookiesText = '';
     this.cookiesStatusMessage = '';
-    this.cookieModalNotice = message ?? null;
     this.refreshCookiesStatus();
   }
 
@@ -704,14 +684,11 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     this.cookiesModalOpen = false;
     this.cookiesInProgress = false;
     this.cookiesText = '';
-    this.cookieModalNotice = null;
-    this.pendingCookieRetry = null;
-    this.pendingCookieRetryKey = null;
   }
 
   refreshCookiesStatus(): void {
     this.downloads.getCookiesStatus().subscribe(data => {
-      this.setCookieStatus(this.normalizeCookieStatus(data));
+      this.cookieStatus = this.normalizeCookieStatus(data);
     });
   }
 
@@ -739,16 +716,19 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
         return;
       }
       const updated = this.normalizeCookieStatus(status.cookies ?? { has_cookies: false, state: 'missing' });
-      this.setCookieStatus(updated);
+      this.cookieStatus = updated;
       this.cookiesStatusMessage = 'Cookies cleared.';
       this.refreshCookiesStatus();
     });
   }
 
   get cookieStatusSummary(): string {
+    if (this.cookiesStatusMessage) {
+      return this.cookiesStatusMessage;
+    }
     const status = this.cookieStatus;
-    if (!status || !status.has_cookies || status.state === 'missing') {
-      return 'No YouTube cookies are saved yet. Paste them below before downloading private or age-restricted videos.';
+    if (!status || !status.has_cookies) {
+      return 'No cookies are configured.';
     }
     switch (status.state) {
       case 'valid':
@@ -759,76 +739,31 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       }
       case 'unknown':
       default:
-        return 'Cookies are saved but have not been verified yet. The next YouTube download will validate them automatically.';
+        return 'Cookies are saved but have not been verified yet. Paste a fresh set if downloads fail.';
     }
-  }
-
-  get cookieStatusBadgeClass(): string {
-    const status = this.cookieStatus;
-    if (!status || !status.has_cookies || status.state === 'missing') {
-      return 'bg-warning text-dark';
-    }
-    if (status.state === 'valid') {
-      return 'bg-success';
-    }
-    if (status.state === 'invalid') {
-      return 'bg-danger';
-    }
-    return 'bg-info text-dark';
-  }
-
-  get cookieStatusBadgeText(): string {
-    const status = this.cookieStatus;
-    if (!status || !status.has_cookies || status.state === 'missing') {
-      return 'No cookies';
-    }
-    if (status.state === 'valid') {
-      return 'Cookies active';
-    }
-    if (status.state === 'invalid') {
-      return 'Needs update';
-    }
-    return 'Awaiting verification';
-  }
-
-  get cookieStatusLastChecked(): string | null {
-    const status = this.cookieStatus;
-    if (!status || status.state === 'missing') {
-      return null;
-    }
-    if (status.checked_at) {
-      return `Checked ${this.formatCookieTimestamp(status.checked_at)}`;
-    }
-    if (status.has_cookies) {
-      return 'Not verified yet';
-    }
-    return null;
   }
 
   get cookieStatusTooltip(): string {
     const status = this.cookieStatus;
-    if (!status || !status.has_cookies || status.state === 'missing') {
-      return 'YouTube cookies are not configured. Click to add them.';
+    if (!status || !status.has_cookies) {
+      return 'No YouTube cookies are configured. Click to add them now.';
     }
     switch (status.state) {
       case 'valid':
-        return `YouTube cookies look good (checked ${this.formatCookieTimestamp(status.checked_at)}). Click to manage or replace.`;
+        return `YouTube cookies look good (last checked ${this.formatCookieTimestamp(status.checked_at)}). Click to manage.`;
       case 'invalid': {
         const reason = status.message || 'The saved cookies appear to be invalid or expired.';
         return `${reason} Click to update cookies.`;
       }
       case 'unknown':
       default:
-        return 'Cookies are saved but not yet verified. Click to replace or remove them.';
+        return 'Cookies are saved but have not been verified yet. Click to replace or remove them.';
     }
   }
 
   get cookieSmartButtonLabel(): string {
     if (this.cookiesInProgress) {
       return 'Working...';
-    }
-    if (this.pendingCookieRetry) {
-      return 'Save cookies and retry download';
     }
     return this.cookiesConfigured ? 'Paste or remove cookies' : 'Paste cookies from clipboard';
   }
@@ -855,38 +790,12 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       case 'invalid':
         return 'text-danger';
       default:
-        return 'text-info';
+        return 'text-warning';
     }
   }
 
   get shouldShowCookieIndicator(): boolean {
     return this.isYoutubeUrl(this.addUrl);
-  }
-
-  dismissCookieNotice(): void {
-    if (this.cookieStatus) {
-      this.dismissedCookieNoticeState = this.cookieStatus.state;
-    }
-    this.cookieStatusNotice = null;
-  }
-
-  openCookiesModalForNotice(): void {
-    this.cookieStatusNotice = null;
-    this.dismissedCookieNoticeState = null;
-    const state = this.cookieStatus?.state;
-    const notice = state === 'invalid'
-      ? 'Paste a fresh export of your YouTube cookies to restore downloads. The previous set appears to be invalid.'
-      : 'Export your YouTube cookies in Netscape format using a "Get cookies.txt" extension (see links in the modal) and paste them below.';
-    this.openCookiesModal(notice);
-  }
-
-  beginCookieRetry(key: string, download: Download): void {
-    this.pendingCookieRetry = download;
-    this.pendingCookieRetryKey = key;
-    const failure = this.cookieFailureMessage(download);
-    this.cookieStatusNotice = `${failure} Click to update cookies.`;
-    this.dismissedCookieNoticeState = null;
-    this.openCookiesModal(`${failure} Paste a fresh export of your YouTube cookies below to retry.`);
   }
 
   async handleCookieSmartAction(): Promise<void> {
@@ -906,11 +815,6 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     const manual = this.cookiesText?.trim();
     if (manual) {
       this.persistCookies(manual);
-      return;
-    }
-
-    if (this.pendingCookieRetry) {
-      this.cookiesStatusMessage = 'Copy your updated YouTube cookies to the clipboard, then click the button again to retry the download.';
       return;
     }
 
@@ -943,22 +847,10 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
         return;
       }
       const updated = this.normalizeCookieStatus(status.cookies ?? { has_cookies: true, state: 'unknown' });
-      const pending = this.pendingCookieRetry;
-      const pendingKey = this.pendingCookieRetryKey;
-      this.setCookieStatus(updated);
-      if (pending) {
-        this.pendingCookieRetry = null;
-        this.pendingCookieRetryKey = null;
-        this.cookieModalNotice = null;
-        this.closeCookiesModal();
-        this.refreshCookiesStatus();
-        setTimeout(() => this.completePendingCookieRetry(pendingKey ?? null, pending), 0);
-      } else {
-        this.cookiesText = '';
-        this.cookiesStatusMessage = 'Cookies saved successfully.';
-        this.cookieModalNotice = null;
-        this.refreshCookiesStatus();
-      }
+      this.cookieStatus = updated;
+      this.cookiesText = '';
+      this.cookiesStatusMessage = 'Cookies saved successfully.';
+      this.refreshCookiesStatus();
     });
   }
 
@@ -985,43 +877,11 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!trimmed) {
       return false;
     }
-    const lines = trimmed
-      .split(/\r?\n/)
-      .map(line => line.trim())
-      .filter(line => !!line && !line.startsWith('#'));
+    const lines = trimmed.split(/\r?\n/).filter(line => !!line && !line.startsWith('#'));
     if (!lines.length) {
       return trimmed.includes('youtube.com');
     }
-
-    const booleanTokens = new Set(['TRUE', 'FALSE']);
-
-    return lines.some(rawLine => {
-      const line = rawLine.startsWith('#HttpOnly_') ? rawLine.substring('#HttpOnly_'.length) : rawLine;
-      const tabParts = line.split('\t');
-      const parts = tabParts.length >= 7 ? tabParts : line.split(/\s+/);
-      if (parts.length < 7) {
-        return false;
-      }
-      const [domain, includeFlag, path, secureFlag, expires, name, ...rest] = parts;
-      if (!domain || !domain.toLowerCase().includes('youtube.com')) {
-        return false;
-      }
-      if (!booleanTokens.has(includeFlag.toUpperCase()) || !booleanTokens.has(secureFlag.toUpperCase())) {
-        return false;
-      }
-      const expiryNumber = Number(expires);
-      if (!Number.isFinite(expiryNumber)) {
-        return false;
-      }
-      if (!path || !path.startsWith('/')) {
-        return false;
-      }
-      if (!name) {
-        return false;
-      }
-      const value = rest.join('\t');
-      return value.length > 0;
-    });
+    return lines.some(line => line.split('\t').length >= 7 || line.includes('youtube.com'));
   }
 
   private normalizeCookieStatus(data?: CookieStatusResponse | null): CookieStatusResponse {
@@ -1078,92 +938,6 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       return false;
     }
     return true;
-  }
-
-  private setCookieStatus(next: CookieStatusResponse): void {
-    const previous = this.cookieStatus;
-    this.cookieStatus = next;
-    this.updateCookieNotice(previous, next);
-  }
-
-  private updateCookieNotice(previous: CookieStatusResponse | null, next: CookieStatusResponse): void {
-    const prevState = previous?.state ?? (previous?.has_cookies ? 'unknown' : 'missing');
-    const nextState = next?.state ?? (next?.has_cookies ? 'unknown' : 'missing');
-
-    if (prevState !== nextState) {
-      this.dismissedCookieNoticeState = null;
-    }
-
-    const prevHadCookies = !!previous?.has_cookies;
-    const showInvalid = nextState === 'invalid';
-    const showMissing = nextState === 'missing' && (prevHadCookies || this.cookieStatus.has_cookies);
-
-    if (showInvalid || showMissing) {
-      if (this.pendingCookieRetry && this.cookieStatusNotice) {
-        return;
-      }
-      if (this.dismissedCookieNoticeState === nextState) {
-        return;
-      }
-      if (showInvalid) {
-        const reason = next?.message || 'The saved cookies appear to be invalid or expired.';
-        this.cookieStatusNotice = `${reason} Update your YouTube cookies to continue downloading.`;
-      } else {
-        this.cookieStatusNotice = 'YouTube cookies were removed. Paste them before downloading private or age-restricted videos.';
-      }
-    } else {
-      this.cookieStatusNotice = null;
-      this.dismissedCookieNoticeState = null;
-    }
-  }
-
-  private completePendingCookieRetry(key: string | null, download: Download): void {
-    this.addDownload(download.url, download.quality, download.format, download.folder, download.custom_name_prefix, download.playlist_strict_mode, download.playlist_item_limit, true);
-    if (key) {
-      this.downloads.delById('done', [key]).subscribe();
-    }
-  }
-
-  isCookieRelatedFailure(download: Download): boolean {
-    if (!download) {
-      return false;
-    }
-    if (download.cookie_warning && this.containsCookieMarker(download.cookie_warning)) {
-      return true;
-    }
-    if (download.error && this.containsCookieMarker(download.error)) {
-      return true;
-    }
-    if (download.msg && this.containsCookieMarker(download.msg)) {
-      return true;
-    }
-    return false;
-  }
-
-  cookieFailureMessage(download: Download): string {
-    if (download.cookie_warning) {
-      return download.cookie_warning;
-    }
-    if (download.error && this.containsCookieMarker(download.error)) {
-      return download.error;
-    }
-    if (download.msg && this.containsCookieMarker(download.msg)) {
-      return download.msg;
-    }
-    return 'This download failed because YouTube required updated cookies.';
-  }
-
-  cookieFailureTimestamp(download: Download): string {
-    const timestamp = download.cookie_warning_at ?? undefined;
-    return this.formatCookieTimestamp(timestamp);
-  }
-
-  private containsCookieMarker(value?: string | null): boolean {
-    if (!value) {
-      return false;
-    }
-    const normalized = value.toLowerCase();
-    return this.cookieErrorMarkers.some(marker => normalized.includes(marker));
   }
 
   loadCurrentUser(): void {
