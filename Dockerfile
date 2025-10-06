@@ -1,9 +1,14 @@
+# syntax=docker/dockerfile:1.6
+
 FROM node:lts-alpine AS builder
 
 WORKDIR /metube
-COPY ui ./
-RUN npm ci && \
-    node_modules/.bin/ng build --configuration production
+COPY ui/package*.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
+
+COPY ui/ ./
+RUN npm run build -- --configuration production
 
 
 FROM python:3.13-alpine
@@ -14,7 +19,8 @@ COPY pyproject.toml uv.lock docker-entrypoint.sh ./
 
 # Use sed to strip carriage-return characters from the entrypoint script (in case building on Windows)
 # Install dependencies
-RUN sed -i 's/\r$//g' docker-entrypoint.sh && \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    sed -i 's/\r$//g' docker-entrypoint.sh && \
     chmod +x docker-entrypoint.sh && \
     apk add --update ffmpeg aria2 coreutils shadow su-exec curl tini deno && \
     apk add --update --virtual .build-deps gcc g++ musl-dev linux-headers uv && \

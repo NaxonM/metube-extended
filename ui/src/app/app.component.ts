@@ -1,7 +1,7 @@
 import { Component, ViewChild, ElementRef, AfterViewInit, OnInit, OnDestroy } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { faTrashAlt, faCheckCircle, faTimesCircle, IconDefinition } from '@fortawesome/free-regular-svg-icons';
-import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt, faPen, faCookieBite, faUserShield, faUserPlus, faUserSlash, faKey, faRightFromBracket, faPlay, faWindowMinimize, faWindowRestore, faArrowsLeftRight } from '@fortawesome/free-solid-svg-icons';
+import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt, faPen, faCookieBite, faUserShield, faUserPlus, faUserSlash, faKey, faRightFromBracket, faPlay, faWindowMinimize, faWindowRestore, faArrowsLeftRight, faChevronDown, faChevronUp } from '@fortawesome/free-solid-svg-icons';
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { CookieService } from 'ngx-cookie-service';
 
@@ -10,6 +10,8 @@ import { MasterCheckboxComponent } from './master-checkbox.component';
 import { Formats, Format, Quality } from './formats';
 import { Theme, Themes } from './theme';
 import {KeyValue} from "@angular/common";
+
+type AdminSection = 'proxy' | 'system' | 'users';
 
 @Component({
     selector: 'app-root',
@@ -51,6 +53,11 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   currentUser: CurrentUser | null = null;
   isAdmin = false;
   adminToolsOpen = false;
+  adminSectionState: Record<AdminSection, boolean> = {
+    proxy: true,
+    system: false,
+    users: false
+  };
   adminUsers: ManagedUser[] = [];
   adminLoading = false;
   adminError = '';
@@ -118,6 +125,8 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   faCheck = faCheck;
   faCircleHalfStroke = faCircleHalfStroke;
   faDownload = faDownload;
+  faChevronDown = faChevronDown;
+  faChevronUp = faChevronUp;
   faExternalLinkAlt = faExternalLinkAlt;
   faFileImport = faFileImport;
   faFileExport = faFileExport;
@@ -271,10 +280,35 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
     if (this.adminToolsOpen) {
-      this.startSystemStatsPolling();
+      if (this.isAdminSectionOpen('system')) {
+        this.startSystemStatsPolling();
+      }
     } else {
       this.stopSystemStatsPolling();
     }
+  }
+
+  isAdminSectionOpen(section: AdminSection): boolean {
+    return !!this.adminSectionState[section];
+  }
+
+  toggleAdminSection(section: AdminSection): void {
+    this.adminSectionState[section] = !this.adminSectionState[section];
+    if (section === 'system') {
+      if (this.isAdminSectionOpen('system') && this.adminToolsOpen) {
+        this.startSystemStatsPolling();
+      } else {
+        this.stopSystemStatsPolling();
+      }
+    }
+  }
+
+  private resetAdminSectionState(): void {
+    this.adminSectionState = {
+      proxy: true,
+      system: false,
+      users: false
+    };
   }
 
   queueSelectionChanged(checked: number) {
@@ -690,7 +724,7 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       if (this.isAdmin) {
         this.refreshUsers();
         this.refreshProxySettings();
-        if (this.adminToolsOpen) {
+        if (this.adminToolsOpen && this.isAdminSectionOpen('system')) {
           this.startSystemStatsPolling();
         } else {
           this.stopSystemStatsPolling();
@@ -700,6 +734,7 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
         this.resetProxySettingsState();
         this.stopSystemStatsPolling();
         this.resetSystemStatsState();
+        this.resetAdminSectionState();
       }
     });
   }
@@ -811,7 +846,7 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   startSystemStatsPolling(): void {
-    if (!this.isAdmin || !this.adminToolsOpen) {
+    if (!this.isAdmin || !this.adminToolsOpen || !this.isAdminSectionOpen('system')) {
       return;
     }
     this.stopSystemStatsPolling();
@@ -828,14 +863,14 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   refreshSystemStats(): void {
-    if (!this.isAdmin || !this.adminToolsOpen) {
+    if (!this.isAdmin || !this.adminToolsOpen || !this.isAdminSectionOpen('system')) {
       return;
     }
     this.fetchSystemStats();
   }
 
   private fetchSystemStats(): void {
-    if (!this.isAdmin || !this.adminToolsOpen || this.systemStatsRequestActive) {
+    if (!this.isAdmin || !this.adminToolsOpen || !this.isAdminSectionOpen('system') || this.systemStatsRequestActive) {
       return;
     }
     this.systemStatsRequestActive = true;

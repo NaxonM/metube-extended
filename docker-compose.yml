@@ -2,7 +2,15 @@ version: '3.8'
 
 services:
   metube:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+      cache_from:
+        - type=local,src=.docker-cache
+      cache_to:
+        - type=local,dest=.docker-cache,mode=max
     container_name: "${COMPOSE_PROJECT_NAME}-metube"
     restart: unless-stopped
     expose:

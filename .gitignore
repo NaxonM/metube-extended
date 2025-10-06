@@ -23,6 +23,8 @@ queue-wal
 node_modules
 /ui/dist/
 /ui/coverage/
+.docker-cache/
+docker-cache/
 
 # Python
 __pycache__/

@@ -255,192 +255,243 @@
          class="collapse admin-panel-wrapper"
          [ngbCollapse]="!adminToolsOpen">
       <div class="admin-panel">
-        <div class="admin-grid">
-          <div class="admin-card admin-card--compact">
-            <div class="admin-card-header d-flex align-items-center gap-2">
-              <fa-icon [icon]="faTachometerAlt" class="text-primary"></fa-icon>
-              <span class="fw-semibold">Proxy download limits</span>
-            </div>
-            <p class="small text-muted mb-3">Configure the maximum size allowed for direct proxy downloads. These settings apply to all users.</p>
-
-            <div *ngIf="proxySettingsLoading" class="d-flex align-items-center gap-2 py-2">
-              <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
-              <span>Loading settings…</span>
-            </div>
-
-            <ng-container *ngIf="!proxySettingsLoading">
-              <div class="form-check form-switch mb-3">
-                <input class="form-check-input" type="checkbox" id="proxyLimitToggle" [checked]="proxyLimitEnabled" (change)="onProxyLimitToggle($event.target.checked)" [disabled]="proxySettingsSaving || proxySettingsLoading">
-                <label class="form-check-label" for="proxyLimitToggle">Enforce download size limit</label>
-              </div>
-
-              <div class="mb-3">
-                <label class="form-label" for="proxyLimitMb">Maximum size (MB)</label>
-                <input id="proxyLimitMb" type="number" class="form-control" min="0" [value]="proxyLimitMb" (input)="onProxyLimitMbChange($event.target.value)" (change)="onProxyLimitMbChange($event.target.value)" (blur)="onProxyLimitMbChange($event.target.value)" [disabled]="proxySettingsSaving || proxySettingsLoading || !proxyLimitEnabled">
-                <small class="text-muted">Set to 0 for unlimited downloads.</small>
-              </div>
-
-              <div *ngIf="proxySettingsError" class="alert alert-danger py-2" role="alert">
-                {{ proxySettingsError }}
-              </div>
-
-              <div class="d-flex justify-content-end">
-                <button type="button" class="btn btn-primary" (click)="saveProxySettings()" [disabled]="proxySettingsSaving || proxySettingsLoading || !proxySettingsDirty">
-                  <span *ngIf="proxySettingsSaving" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                  Save changes
-                </button>
-              </div>
-            </ng-container>
-          </div>
-
-          <div class="admin-card admin-card--compact">
-            <div class="admin-card-header d-flex align-items-center gap-2">
-              <fa-icon [icon]="faTachometerAlt" class="text-success"></fa-icon>
-              <span class="fw-semibold">System resource monitor</span>
-            </div>
-            <p class="small text-muted mb-3">Live view of server CPU, memory, swap, and network usage.</p>
-
-            <div *ngIf="systemStatsLoading" class="d-flex align-items-center gap-2 py-2">
-              <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
-              <span>Fetching system statistics…</span>
-            </div>
-
-            <div *ngIf="systemStatsError" class="alert alert-danger py-2" role="alert">
-              {{ systemStatsError }}
-            </div>
-
-            <div *ngIf="systemStats && !systemStatsLoading" class="small">
-              <div class="admin-stats-grid">
-                <div class="stat-tile">
-                  <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="text-muted text-uppercase small">CPU</span>
-                    <span class="fw-semibold">{{ systemStats.cpu.percent | number:'1.0-1' }}%</span>
-                  </div>
-                  <div class="text-muted">Cores: {{ systemStats.cpu.cores }}, Threads: {{ systemStats.cpu.threads }}</div>
-                </div>
-
-                <div class="stat-tile">
-                  <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="text-muted text-uppercase small">Memory</span>
-                    <span class="fw-semibold">{{ systemStats.memory.percent | number:'1.0-1' }}%</span>
-                  </div>
-                  <div class="text-muted">{{ formatBytes(systemStats.memory.used) }} / {{ formatBytes(systemStats.memory.total) }}</div>
-                  <div class="text-muted">Free: {{ formatBytes(systemStats.memory.available) }}</div>
-                </div>
-
-                <div class="stat-tile" *ngIf="systemStats.swap.total > 0">
-                  <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="text-muted text-uppercase small">Swap</span>
-                    <span class="fw-semibold">{{ systemStats.swap.percent | number:'1.0-1' }}%</span>
-                  </div>
-                  <div class="text-muted">{{ formatBytes(systemStats.swap.used) }} / {{ formatBytes(systemStats.swap.total) }}</div>
-                </div>
-
-                <div class="stat-tile" *ngIf="systemStats.swap.total === 0">
-                  <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="text-muted text-uppercase small">Swap</span>
-                    <span class="badge bg-secondary">Off</span>
-                  </div>
-                  <div class="text-muted">Swap disabled</div>
-                </div>
-
-                <div class="stat-tile">
-                  <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="text-muted text-uppercase small">Uptime</span>
-                    <span class="fw-semibold">{{ formatDuration(systemStats.uptime_seconds) }}</span>
-                  </div>
-                  <div class="text-muted">Since {{ formatTimestampLocal(systemStats.timestamp - systemStats.uptime_seconds) }}</div>
-                </div>
-
-                <div class="stat-tile stat-wide">
-                  <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="text-muted text-uppercase small">Network</span>
-                    <span class="fw-semibold">TX {{ formatRate(systemStatsRates.sentPerSec) }} · RX {{ formatRate(systemStatsRates.recvPerSec) }}</span>
-                  </div>
-                  <div class="text-muted">Total sent {{ formatBytes(systemStats.network.bytes_sent) }}, received {{ formatBytes(systemStats.network.bytes_recv) }}</div>
+        <section class="admin-section">
+          <div class="admin-card admin-card--collapsible" [class.is-open]="isAdminSectionOpen('proxy')">
+            <button type="button"
+                    class="admin-section-toggle"
+                    (click)="toggleAdminSection('proxy')"
+                    [attr.aria-expanded]="isAdminSectionOpen('proxy')"
+                    aria-controls="adminSectionProxy">
+              <div class="admin-section-heading">
+                <fa-icon [icon]="faTachometerAlt" class="text-primary"></fa-icon>
+                <div class="admin-section-text">
+                  <span class="admin-section-title">Proxy download limits</span>
+                  <span class="admin-section-subtitle">Set global size constraints for direct proxy downloads.</span>
                 </div>
               </div>
-            </div>
+              <fa-icon [icon]="isAdminSectionOpen('proxy') ? faChevronUp : faChevronDown" class="admin-section-chevron"></fa-icon>
+            </button>
+            <div id="adminSectionProxy"
+                 class="admin-section-body"
+                 [ngbCollapse]="!isAdminSectionOpen('proxy')">
+              <div class="admin-section-content">
+                <p class="small text-muted mb-3">Configure the maximum size allowed for direct proxy downloads. These settings apply to all users.</p>
 
-            <div class="d-flex justify-content-between align-items-center mt-3 small text-muted">
-              <span>Last update: {{ formatTimestampLocal(systemStats?.timestamp) }}</span>
-              <button type="button" class="btn btn-outline-secondary btn-sm" (click)="refreshSystemStats()" [disabled]="systemStatsRequestActive">
-                <span *ngIf="systemStatsRequestActive" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                Refresh
-              </button>
+                <div *ngIf="proxySettingsLoading" class="d-flex align-items-center gap-2 py-2">
+                  <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+                  <span>Loading settings…</span>
+                </div>
+
+                <ng-container *ngIf="!proxySettingsLoading">
+                  <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="proxyLimitToggle" [checked]="proxyLimitEnabled" (change)="onProxyLimitToggle($event.target.checked)" [disabled]="proxySettingsSaving || proxySettingsLoading">
+                    <label class="form-check-label" for="proxyLimitToggle">Enforce download size limit</label>
+                  </div>
+
+                  <div class="mb-3">
+                    <label class="form-label" for="proxyLimitMb">Maximum size (MB)</label>
+                    <input id="proxyLimitMb" type="number" class="form-control" min="0" [value]="proxyLimitMb" (input)="onProxyLimitMbChange($event.target.value)" (change)="onProxyLimitMbChange($event.target.value)" (blur)="onProxyLimitMbChange($event.target.value)" [disabled]="proxySettingsSaving || proxySettingsLoading || !proxyLimitEnabled">
+                    <small class="text-muted">Set to 0 for unlimited downloads.</small>
+                  </div>
+
+                  <div *ngIf="proxySettingsError" class="alert alert-danger py-2" role="alert">
+                    {{ proxySettingsError }}
+                  </div>
+
+                  <div class="d-flex justify-content-end">
+                    <button type="button" class="btn btn-primary" (click)="saveProxySettings()" [disabled]="proxySettingsSaving || proxySettingsLoading || !proxySettingsDirty">
+                      <span *ngIf="proxySettingsSaving" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      Save changes
+                    </button>
+                  </div>
+                </ng-container>
+              </div>
             </div>
           </div>
+        </section>
 
-          <div class="admin-card admin-card--wide">
-            <div class="admin-card-header d-flex justify-content-between align-items-center">
-              <div class="d-flex align-items-center gap-2">
+        <section class="admin-section">
+          <div class="admin-card admin-card--collapsible" [class.is-open]="isAdminSectionOpen('system')">
+            <button type="button"
+                    class="admin-section-toggle"
+                    (click)="toggleAdminSection('system')"
+                    [attr.aria-expanded]="isAdminSectionOpen('system')"
+                    aria-controls="adminSectionSystem">
+              <div class="admin-section-heading">
+                <fa-icon [icon]="faTachometerAlt" class="text-success"></fa-icon>
+                <div class="admin-section-text">
+                  <span class="admin-section-title">System resource monitor</span>
+                  <span class="admin-section-subtitle">Live view of CPU, memory, swap and network usage.</span>
+                </div>
+              </div>
+              <fa-icon [icon]="isAdminSectionOpen('system') ? faChevronUp : faChevronDown" class="admin-section-chevron"></fa-icon>
+            </button>
+            <div id="adminSectionSystem"
+                 class="admin-section-body"
+                 [ngbCollapse]="!isAdminSectionOpen('system')">
+              <div class="admin-section-content">
+                <div *ngIf="systemStatsLoading" class="d-flex align-items-center gap-2 py-2">
+                  <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+                  <span>Fetching system statistics…</span>
+                </div>
+
+                <div *ngIf="systemStatsError" class="alert alert-danger py-2" role="alert">
+                  {{ systemStatsError }}
+                </div>
+
+                <div *ngIf="systemStats && !systemStatsLoading" class="small">
+                  <div class="admin-stats-grid">
+                    <div class="stat-tile">
+                      <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted text-uppercase small">CPU</span>
+                        <span class="fw-semibold">{{ systemStats.cpu.percent | number:'1.0-1' }}%</span>
+                      </div>
+                      <div class="text-muted">Cores: {{ systemStats.cpu.cores }}, Threads: {{ systemStats.cpu.threads }}</div>
+                    </div>
+
+                    <div class="stat-tile">
+                      <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted text-uppercase small">Memory</span>
+                        <span class="fw-semibold">{{ systemStats.memory.percent | number:'1.0-1' }}%</span>
+                      </div>
+                      <div class="text-muted">{{ formatBytes(systemStats.memory.used) }} / {{ formatBytes(systemStats.memory.total) }}</div>
+                      <div class="text-muted">Free: {{ formatBytes(systemStats.memory.available) }}</div>
+                    </div>
+
+                    <div class="stat-tile" *ngIf="systemStats.swap.total > 0">
+                      <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted text-uppercase small">Swap</span>
+                        <span class="fw-semibold">{{ systemStats.swap.percent | number:'1.0-1' }}%</span>
+                      </div>
+                      <div class="text-muted">{{ formatBytes(systemStats.swap.used) }} / {{ formatBytes(systemStats.swap.total) }}</div>
+                    </div>
+
+                    <div class="stat-tile" *ngIf="systemStats.swap.total === 0">
+                      <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted text-uppercase small">Swap</span>
+                        <span class="badge bg-secondary">Off</span>
+                      </div>
+                      <div class="text-muted">Swap disabled</div>
+                    </div>
+
+                    <div class="stat-tile">
+                      <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted text-uppercase small">Uptime</span>
+                        <span class="fw-semibold">{{ formatDuration(systemStats.uptime_seconds) }}</span>
+                      </div>
+                      <div class="text-muted">Since {{ formatTimestampLocal(systemStats.timestamp - systemStats.uptime_seconds) }}</div>
+                    </div>
+
+                    <div class="stat-tile stat-wide">
+                      <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted text-uppercase small">Network</span>
+                        <span class="fw-semibold">TX {{ formatRate(systemStatsRates.sentPerSec) }} · RX {{ formatRate(systemStatsRates.recvPerSec) }}</span>
+                      </div>
+                      <div class="text-muted">Total sent {{ formatBytes(systemStats.network.bytes_sent) }}, received {{ formatBytes(systemStats.network.bytes_recv) }}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-3 small text-muted">
+                  <span>Last update: {{ formatTimestampLocal(systemStats?.timestamp) }}</span>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" (click)="refreshSystemStats()" [disabled]="systemStatsRequestActive">
+                    <span *ngIf="systemStatsRequestActive" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                    Refresh
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="admin-section admin-section--wide">
+          <div class="admin-card admin-card--collapsible" [class.is-open]="isAdminSectionOpen('users')">
+            <button type="button"
+                    class="admin-section-toggle"
+                    (click)="toggleAdminSection('users')"
+                    [attr.aria-expanded]="isAdminSectionOpen('users')"
+                    aria-controls="adminSectionUsers">
+              <div class="admin-section-heading">
                 <fa-icon [icon]="faUserShield" class="text-info"></fa-icon>
-                <span class="fw-semibold">User management</span>
+                <div class="admin-section-text">
+                  <span class="admin-section-title">User management</span>
+                  <span class="admin-section-subtitle">Manage accounts, roles and access levels.</span>
+                </div>
               </div>
-              <button type="button" class="btn btn-primary btn-sm" (click)="promptCreateUser()">
-                <fa-icon [icon]="faUserPlus" class="me-1"></fa-icon>
-                Add user
-              </button>
-            </div>
+              <fa-icon [icon]="isAdminSectionOpen('users') ? faChevronUp : faChevronDown" class="admin-section-chevron"></fa-icon>
+            </button>
+            <div id="adminSectionUsers"
+                 class="admin-section-body"
+                 [ngbCollapse]="!isAdminSectionOpen('users')">
+              <div class="admin-section-content">
+                <div class="admin-user-actions d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <span class="small text-muted">View current users, adjust privileges, and reset credentials.</span>
+                  <button type="button" class="btn btn-primary btn-sm" (click)="promptCreateUser()">
+                    <fa-icon [icon]="faUserPlus" class="me-1"></fa-icon>
+                    Add user
+                  </button>
+                </div>
 
-            <div class="table-responsive small">
-              <table class="table table-sm align-middle mb-0">
-                <thead class="table-dark">
-                  <tr>
-                    <th scope="col">User</th>
-                    <th scope="col" class="text-center">Role</th>
-                    <th scope="col" class="text-center">Status</th>
-                    <th scope="col">Last login</th>
-                    <th scope="col" class="text-end">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngIf="adminLoading">
-                    <td colspan="5" class="text-center py-3">
-                      <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                      Loading users...
-                    </td>
-                  </tr>
-                  <tr *ngFor="let user of adminUsers">
-                    <td>
-                      <div class="d-flex align-items-center gap-2">
-                        <fa-icon *ngIf="user.role === 'admin'" [icon]="faUserShield" class="text-warning"></fa-icon>
-                        <span [ngClass]="{'fw-semibold': user.role === 'admin'}">{{ user.username }}</span>
-                        <span class="badge bg-secondary" *ngIf="isSelf(user)">You</span>
-                      </div>
-                    </td>
-                    <td class="text-center">
-                      <span class="badge" [ngClass]="user.role === 'admin' ? 'bg-warning text-dark' : 'bg-info text-dark'">{{ user.role }}</span>
-                    </td>
-                    <td class="text-center">
-                      <span class="badge" [ngClass]="user.disabled ? 'bg-danger' : 'bg-success'">{{ user.disabled ? 'Disabled' : 'Active' }}</span>
-                    </td>
-                    <td>{{ formatTimestamp(user.last_login_at) }}</td>
-                    <td class="text-end">
-                      <div class="btn-group btn-group-sm" role="group">
-                        <button type="button" class="btn btn-outline-secondary" [disabled]="(user.role === 'admin' && activeAdminCount() <= 1)" (click)="toggleUserRole(user)" ngbTooltip="Toggle role">
-                          <fa-icon [icon]="faPen"></fa-icon>
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary" [disabled]="user.role === 'admin' && activeAdminCount() <= 1" (click)="toggleUserDisabled(user)" ngbTooltip="Toggle active state">
-                          <fa-icon [icon]="faUserSlash"></fa-icon>
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary" (click)="resetUserPassword(user)" ngbTooltip="Reset password">
-                          <fa-icon [icon]="faKey"></fa-icon>
-                        </button>
-                        <button type="button" class="btn btn-outline-danger" [disabled]="isSelf(user) || (user.role === 'admin' && activeAdminCount() <= 1)" (click)="deleteUser(user)" ngbTooltip="Delete user">
-                          <fa-icon [icon]="faTrashAlt"></fa-icon>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr *ngIf="!adminLoading && adminUsers.length === 0">
-                    <td colspan="5" class="text-center text-muted py-3">No users available.</td>
-                  </tr>
-                </tbody>
-              </table>
+                <div class="table-responsive small">
+                  <table class="table table-sm align-middle mb-0">
+                    <thead class="table-dark">
+                      <tr>
+                        <th scope="col">User</th>
+                        <th scope="col" class="text-center">Role</th>
+                        <th scope="col" class="text-center">Status</th>
+                        <th scope="col">Last login</th>
+                        <th scope="col" class="text-end">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngIf="adminLoading">
+                        <td colspan="5" class="text-center py-3">
+                          <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                          Loading users...
+                        </td>
+                      </tr>
+                      <tr *ngFor="let user of adminUsers">
+                        <td>
+                          <div class="d-flex align-items-center gap-2">
+                            <fa-icon *ngIf="user.role === 'admin'" [icon]="faUserShield" class="text-warning"></fa-icon>
+                            <span [ngClass]="{'fw-semibold': user.role === 'admin'}">{{ user.username }}</span>
+                            <span class="badge bg-secondary" *ngIf="isSelf(user)">You</span>
+                          </div>
+                        </td>
+                        <td class="text-center">
+                          <span class="badge" [ngClass]="user.role === 'admin' ? 'bg-warning text-dark' : 'bg-info text-dark'">{{ user.role }}</span>
+                        </td>
+                        <td class="text-center">
+                          <span class="badge" [ngClass]="user.disabled ? 'bg-danger' : 'bg-success'">{{ user.disabled ? 'Disabled' : 'Active' }}</span>
+                        </td>
+                        <td>{{ formatTimestamp(user.last_login_at) }}</td>
+                        <td class="text-end">
+                          <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-secondary" [disabled]="(user.role === 'admin' && activeAdminCount() <= 1)" (click)="toggleUserRole(user)" ngbTooltip="Toggle role">
+                              <fa-icon [icon]="faPen"></fa-icon>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" [disabled]="user.role === 'admin' && activeAdminCount() <= 1" (click)="toggleUserDisabled(user)" ngbTooltip="Toggle active state">
+                              <fa-icon [icon]="faUserSlash"></fa-icon>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" (click)="resetUserPassword(user)" ngbTooltip="Reset password">
+                              <fa-icon [icon]="faKey"></fa-icon>
+                            </button>
+                            <button type="button" class="btn btn-outline-danger" [disabled]="isSelf(user) || (user.role === 'admin' && activeAdminCount() <= 1)" (click)="deleteUser(user)" ngbTooltip="Delete user">
+                              <fa-icon [icon]="faTrashAlt"></fa-icon>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr *ngIf="!adminLoading && adminUsers.length === 0">
+                        <td colspan="5" class="text-center text-muted py-3">No users available.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   </div>

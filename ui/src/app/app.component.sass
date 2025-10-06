@@ -92,21 +92,16 @@
     border-radius: 1rem
     background: var(--bs-card-bg)
     border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
-
-.admin-grid
     display: grid
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr))
     gap: 1.5rem
-    width: 100%
-    max-width: 1100px
-    margin: 0 auto
-    justify-content: center
-    align-items: stretch
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr))
 
-.admin-card--compact
-    height: 100%
+.admin-section
+    display: flex
+    flex-direction: column
+    min-width: 0
 
-.admin-card--wide
+.admin-section--wide
     grid-column: 1 / -1
 
 .admin-panel-header
@@ -129,6 +124,80 @@
     flex-direction: column
     gap: 1rem
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12)
+
+.admin-card--collapsible
+    padding: 0
+    gap: 0
+
+.admin-card--collapsible.is-open .admin-section-toggle
+    background-color: rgba(var(--bs-body-color-rgb), 0.04)
+
+.admin-section-toggle
+    display: flex
+    align-items: center
+    justify-content: space-between
+    gap: 1rem
+    padding: 1.25rem 1.5rem
+    width: 100%
+    background: transparent
+    border: none
+    color: inherit
+    text-align: left
+    cursor: pointer
+    font-size: 0.95rem
+    text-transform: uppercase
+    letter-spacing: 0.06em
+    font-weight: 600
+    border-radius: 0.75rem
+    transition: background-color 0.2s ease
+
+.admin-card--collapsible .admin-section-toggle
+    border-radius: 0.75rem 0.75rem 0 0
+
+.admin-section-toggle:hover
+    background-color: rgba(var(--bs-body-color-rgb), 0.06)
+
+.admin-section-toggle:focus-visible
+    outline: 2px solid var(--bs-primary)
+    outline-offset: 2px
+
+.admin-section-heading
+    display: flex
+    align-items: center
+    gap: 0.75rem
+
+.admin-section-text
+    display: flex
+    flex-direction: column
+    gap: 0.15rem
+
+.admin-section-title
+    font-size: 0.9rem
+    letter-spacing: 0.06em
+
+.admin-section-subtitle
+    font-size: 0.78rem
+    color: rgba(var(--bs-body-color-rgb), 0.6)
+
+.admin-section-chevron
+    color: rgba(var(--bs-body-color-rgb), 0.55)
+    font-size: 0.85rem
+
+.admin-section-body
+    border-top: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+    border-radius: 0 0 0.75rem 0.75rem
+    overflow: hidden
+
+.admin-section-content
+    padding: 1.5rem
+    display: flex
+    flex-direction: column
+    gap: 1.25rem
+
+.admin-user-actions
+    width: 100%
+    padding-bottom: 1rem
+    border-bottom: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
 
 .admin-card-header
     font-size: 0.9rem
@@ -161,10 +230,17 @@
     .admin-tools-toggle button
         width: 100%
     .admin-panel
-        padding: 1.5rem
-    .admin-grid
-        max-width: none
+        padding: 1.25rem
         grid-template-columns: 1fr
+    .admin-section-toggle
+        flex-direction: column
+        align-items: flex-start
+        gap: 0.5rem
+    .admin-section-content
+        padding: 1.25rem
+    .admin-user-actions
+        align-items: flex-start
+        gap: 0.75rem
     .admin-stats-grid
         grid-template-columns: repeat(auto-fit, minmax(140px, 1fr))
     .advanced-actions
