@@ -78,6 +78,16 @@
 </nav>
 
 <main role="main" class="container container-xl">
+  <div *ngIf="cookieStatusNotice" class="cookie-toast alert alert-warning alert-dismissible fade show" role="alert">
+    <div class="d-flex align-items-start gap-2">
+      <fa-icon [icon]="faTriangleExclamation" class="flex-shrink-0 mt-1"></fa-icon>
+      <div class="flex-grow-1">
+        <div>{{ cookieStatusNotice }}</div>
+        <button type="button" class="btn btn-link btn-sm px-0 mt-2" (click)="openCookiesModalForNotice()">Manage cookies</button>
+      </div>
+      <button type="button" class="btn-close" aria-label="Dismiss" (click)="dismissCookieNotice()"></button>
+    </div>
+  </div>
   <form #f="ngForm">
     <div class="container add-url-box">
       <!-- Main URL Input with Download Button -->
@@ -96,7 +106,7 @@
                     type="button"
                     class="btn btn-lg cookie-status-button"
                     [ngClass]="cookieStatusVariantClass"
-                    (click)="openCookiesModal()"
+                    (click)="openCookiesModalForNotice()"
                     [ngbTooltip]="cookieStatusTooltip"
                     container="body"
                     aria-label="Manage YouTube cookies">
@@ -541,10 +551,26 @@
           <button type="button" class="btn-close" aria-label="Close" (click)="closeCookiesModal()" [disabled]="cookiesInProgress"></button>
         </div>
         <div class="modal-body">
-          <p>Paste your YouTube cookies in Netscape format. You can export them using browser extensions like <strong>Get cookies.txt</strong>.</p>
+          <div class="cookie-status-overview mb-3">
+            <div class="d-flex align-items-center flex-wrap gap-2">
+              <span class="badge rounded-pill px-3 py-2" [ngClass]="cookieStatusBadgeClass">{{ cookieStatusBadgeText }}</span>
+              <span class="small text-muted" *ngIf="cookieStatusLastChecked">{{ cookieStatusLastChecked }}</span>
+            </div>
+            <div class="small text-body-secondary mt-2">{{ cookieStatusSummary }}</div>
+          </div>
+          <div *ngIf="cookieModalNotice" class="alert alert-info py-2 small mb-3" role="alert">
+            {{ cookieModalNotice }}
+          </div>
+          <p class="small text-muted mb-2">
+            Export your YouTube cookies in Netscape format using
+            <a href="https://addons.mozilla.org/en-US/firefox/addon/get-cookies-txt-locally/" target="_blank" rel="noopener noreferrer">Get cookies.txt for Firefox</a>,
+            <a href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc" target="_blank" rel="noopener noreferrer">Get cookies.txt for Chrome</a>,
+            or follow the
+            <a href="https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies" target="_blank" rel="noopener noreferrer">yt-dlp YouTube cookie guide</a>.
+          </p>
           <textarea [(ngModel)]="cookiesText" class="form-control" rows="6" placeholder="Paste cookies here" [disabled]="cookiesInProgress"></textarea>
-          <div class="mt-2">
-            <small>{{ cookieStatusSummary }}</small>
+          <div class="mt-2" *ngIf="cookiesStatusMessage">
+            <small>{{ cookiesStatusMessage }}</small>
           </div>
         </div>
         <div class="modal-footer">
@@ -745,23 +771,46 @@
             <app-slave-checkbox [id]="download.key" [master]="doneMasterCheckbox" [checkable]="download.value"></app-slave-checkbox>
           </td>
           <td>
-            <div style="display: inline-block; width: 1.5rem;">
-              <fa-icon *ngIf="download.value.status == 'finished'" [icon]="faCheckCircle" class="text-success"></fa-icon>
-              <fa-icon *ngIf="download.value.status == 'error'" [icon]="faTimesCircle" class="text-danger"></fa-icon>
+            <div class="d-flex gap-3 align-items-start">
+              <div style="width: 1.5rem;">
+                <fa-icon *ngIf="download.value.status == 'finished'" [icon]="faCheckCircle" class="text-success"></fa-icon>
+                <fa-icon *ngIf="download.value.status == 'error'" [icon]="faTimesCircle" class="text-danger"></fa-icon>
+              </div>
+              <div class="flex-grow-1">
+                <span [ngbTooltip]="[download.value.msg, download.value.error].filter(Boolean).join(' | ')">
+                  <a *ngIf="!!download.value.filename; else noDownloadLink" href="{{buildDownloadLink(download.value)}}" target="_blank">{{ download.value.title }}</a>
+                </span>
+                <ng-template #noDownloadLink>
+                  {{download.value.title}}
+                  <span *ngIf="download.value.msg && !isCookieRelatedFailure(download.value)"><br>{{download.value.msg}}</span>
+                  <span *ngIf="download.value.error && !isCookieRelatedFailure(download.value)"><br>Error: {{download.value.error}}</span>
+                </ng-template>
+                <div *ngIf="download.value.status === 'error' && isCookieRelatedFailure(download.value)" class="cookie-error-callout mt-2">
+                  <div class="d-flex align-items-start gap-2">
+                    <fa-icon [icon]="faTriangleExclamation" class="mt-1 text-warning"></fa-icon>
+                    <div>
+                      <div class="fw-semibold">Cookies required</div>
+                      <div class="small">{{ cookieFailureMessage(download.value) }}</div>
+                      <div class="small text-muted" *ngIf="download.value.cookie_warning_at">{{ cookieFailureTimestamp(download.value) }}</div>
+                    </div>
+                  </div>
+                </div>
+                <div *ngIf="download.value.status === 'error' && !isCookieRelatedFailure(download.value) && download.value.error" class="small text-danger mt-2">
+                  {{ download.value.error }}
+                </div>
+              </div>
             </div>
-            <span ngbTooltip="{{download.value.msg}} | {{download.value.error}}"><a *ngIf="!!download.value.filename; else noDownloadLink" href="{{buildDownloadLink(download.value)}}" target="_blank">{{ download.value.title }}</a></span>
-            <ng-template #noDownloadLink>
-              {{download.value.title}}
-              <span *ngIf="download.value.msg"><br>{{download.value.msg}}</span>
-              <span *ngIf="download.value.error"><br>Error: {{download.value.error}}</span>
-            </ng-template>
           </td>
           <td>
             <span *ngIf="download.value.size">{{ download.value.size | fileSize }}</span>
           </td>
           <td>
-            <div class="d-flex">
-              <button *ngIf="download.value.status == 'error'" type="button" class="btn btn-link" (click)="retryDownload(download.key, download.value)"><fa-icon [icon]="faRedoAlt"></fa-icon></button>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <button *ngIf="download.value.status == 'error' && isCookieRelatedFailure(download.value)" type="button" class="btn btn-outline-warning btn-sm" (click)="beginCookieRetry(download.key, download.value)">
+                <fa-icon [icon]="faCookieBite" class="me-1"></fa-icon>
+                Update cookies &amp; retry
+              </button>
+              <button *ngIf="download.value.status == 'error' && !isCookieRelatedFailure(download.value)" type="button" class="btn btn-link" (click)="retryDownload(download.key, download.value)"><fa-icon [icon]="faRedoAlt"></fa-icon></button>
               <button *ngIf="download.value.filename" type="button" class="btn btn-link" (click)="renameDownload(download.key, download.value)"><fa-icon [icon]="faPen"></fa-icon></button>
               <button *ngIf="download.value.filename && download.value.status == 'finished'" type="button" class="btn btn-link" (click)="openStream(download.key, download.value)"><fa-icon [icon]="faPlay"></fa-icon></button>
               <a *ngIf="download.value.filename" href="{{buildDownloadLink(download.value)}}" download class="btn btn-link"><fa-icon [icon]="faDownload"></fa-icon></a>
