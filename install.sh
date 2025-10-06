@@ -311,6 +311,9 @@ install_system() {
         log "Enabling IP-based setup."
     fi
 
+    export DOCKER_BUILDKIT=${DOCKER_BUILDKIT:-1}
+    export COMPOSE_DOCKER_CLI_BUILD=${COMPOSE_DOCKER_CLI_BUILD:-1}
+
     docker compose $compose_files up -d --build --remove-orphans
 
     echo
