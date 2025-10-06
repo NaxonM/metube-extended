@@ -782,15 +782,15 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   get cookieStatusVariantClass(): string {
     const state = this.cookieStatus?.state;
     if (!this.cookieStatus?.has_cookies) {
-      return 'cookie-status-button--missing';
+      return 'text-warning opacity-75';
     }
     switch (state) {
       case 'valid':
-        return 'cookie-status-button--valid';
+        return 'text-success';
       case 'invalid':
-        return 'cookie-status-button--invalid';
+        return 'text-danger';
       default:
-        return 'cookie-status-button--unknown';
+        return 'text-warning';
     }
   }
 
