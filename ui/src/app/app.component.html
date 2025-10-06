@@ -92,6 +92,16 @@
                    name="addUrl" 
                    [(ngModel)]="addUrl" 
                    [disabled]="addInProgress || downloads.loading">
+            <button *ngIf="shouldShowCookieIndicator"
+                    type="button"
+                    class="btn btn-lg cookie-status-button"
+                    [ngClass]="cookieStatusVariantClass"
+                    (click)="openCookiesModal()"
+                    [ngbTooltip]="cookieStatusTooltip"
+                    container="body"
+                    aria-label="Manage YouTube cookies">
+              <fa-icon [icon]="cookieStatusIcon"></fa-icon>
+            </button>
             <button class="btn btn-primary btn-lg px-4" 
                     type="submit" 
                     (click)="addDownload()" 
@@ -534,18 +544,14 @@
           <p>Paste your YouTube cookies in Netscape format. You can export them using browser extensions like <strong>Get cookies.txt</strong>.</p>
           <textarea [(ngModel)]="cookiesText" class="form-control" rows="6" placeholder="Paste cookies here" [disabled]="cookiesInProgress"></textarea>
           <div class="mt-2">
-            <small *ngIf="cookiesStatusMessage">{{ cookiesStatusMessage }}</small>
-            <small *ngIf="!cookiesStatusMessage && cookiesConfigured">Cookies are currently configured.</small>
-            <small *ngIf="!cookiesStatusMessage && !cookiesConfigured">No cookies are configured.</small>
+            <small>{{ cookieStatusSummary }}</small>
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-danger me-auto" (click)="clearCookies()" [disabled]="cookiesInProgress || !cookiesConfigured">
-            Clear Cookies
-          </button>
           <button type="button" class="btn btn-secondary" (click)="closeCookiesModal()" [disabled]="cookiesInProgress">Close</button>
-          <button type="button" class="btn btn-primary" (click)="saveCookies()" [disabled]="cookiesInProgress || !cookiesText || !cookiesText.trim()">
-            Save Cookies
+          <button type="button" class="btn btn-primary" (click)="handleCookieSmartAction()" [disabled]="cookiesInProgress">
+            <span *ngIf="cookiesInProgress" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            {{ cookieSmartButtonLabel }}
           </button>
         </div>
       </div>

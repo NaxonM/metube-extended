@@ -1,11 +1,11 @@
 import { Component, ViewChild, ElementRef, AfterViewInit, OnInit, OnDestroy } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { faTrashAlt, faCheckCircle, faTimesCircle, IconDefinition } from '@fortawesome/free-regular-svg-icons';
-import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt, faPen, faCookieBite, faUserShield, faUserPlus, faUserSlash, faKey, faRightFromBracket, faPlay, faWindowMinimize, faWindowRestore, faArrowsLeftRight, faChevronDown, faChevronUp } from '@fortawesome/free-solid-svg-icons';
+import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt, faPen, faCookieBite, faUserShield, faUserPlus, faUserSlash, faKey, faRightFromBracket, faPlay, faWindowMinimize, faWindowRestore, faArrowsLeftRight, faChevronDown, faChevronUp, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons';
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { CookieService } from 'ngx-cookie-service';
 
-import { Download, DownloadsService, Status, CurrentUser, ManagedUser, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, ProxySettings, SystemStats } from './downloads.service';
+import { Download, DownloadsService, Status, CurrentUser, ManagedUser, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, ProxySettings, SystemStats, CookieStatusResponse } from './downloads.service';
 import { MasterCheckboxComponent } from './master-checkbox.component';
 import { Formats, Format, Quality } from './formats';
 import { Theme, Themes } from './theme';
@@ -46,9 +46,13 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
 
   cookiesModalOpen = false;
   cookiesText = '';
-  cookiesConfigured = false;
+  cookieStatus: CookieStatusResponse = { has_cookies: false, state: 'missing' };
   cookiesStatusMessage = '';
   cookiesInProgress = false;
+
+  get cookiesConfigured(): boolean {
+    return !!this.cookieStatus?.has_cookies;
+  }
 
   currentUser: CurrentUser | null = null;
   isAdmin = false;
@@ -136,6 +140,7 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   faTachometerAlt = faTachometerAlt;
   faPen = faPen;
   faCookieBite = faCookieBite;
+  faTriangleExclamation = faTriangleExclamation;
   faUserShield = faUserShield;
   faUserPlus = faUserPlus;
   faUserSlash = faUserSlash;
@@ -329,16 +334,28 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   addDownload(url?: string, quality?: string, format?: string, folder?: string, customNamePrefix?: string, playlistStrictMode?: boolean, playlistItemLimit?: number, autoStart?: boolean) {
-    url = url ?? this.addUrl
-    quality = quality ?? this.quality
-    format = format ?? this.format
-    folder = folder ?? this.folder
-    customNamePrefix = customNamePrefix ?? this.customNamePrefix
-    playlistStrictMode = playlistStrictMode ?? this.playlistStrictMode
-    playlistItemLimit = playlistItemLimit ?? this.playlistItemLimit
-    autoStart = autoStart ?? this.autoStart
+    url = (url ?? this.addUrl)?.trim();
+    if (!url) {
+      alert('Please provide a URL to download.');
+      return;
+    }
+    quality = quality ?? this.quality;
+    format = format ?? this.format;
+    folder = folder ?? this.folder;
+    customNamePrefix = customNamePrefix ?? this.customNamePrefix;
+    playlistStrictMode = playlistStrictMode ?? this.playlistStrictMode;
+    playlistItemLimit = playlistItemLimit ?? this.playlistItemLimit;
+    autoStart = autoStart ?? this.autoStart;
 
-    console.debug('Downloading: url='+url+' quality='+quality+' format='+format+' folder='+folder+' customNamePrefix='+customNamePrefix+' playlistStrictMode='+playlistStrictMode+' playlistItemLimit='+playlistItemLimit+' autoStart='+autoStart);
+    if (this.isYoutubeUrl(url) && !this.areYoutubeCookiesReady()) {
+      const wantsToUpdateCookies = confirm('YouTube downloads require valid cookies. Would you like to open the cookies manager now? Click Cancel to continue without cookies.');
+      if (wantsToUpdateCookies) {
+        this.openCookiesModal();
+        return;
+      }
+    }
+
+    console.debug('Downloading:', { url, quality, format, folder, customNamePrefix, playlistStrictMode, playlistItemLimit, autoStart });
     this.addInProgress = true;
     this.downloads.add(url, quality, format, folder, customNamePrefix, playlistStrictMode, playlistItemLimit, autoStart).subscribe((status: Status) => {
       this.addInProgress = false;
@@ -671,30 +688,17 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
 
   refreshCookiesStatus(): void {
     this.downloads.getCookiesStatus().subscribe(data => {
-      this.cookiesConfigured = data.has_cookies;
+      this.cookieStatus = this.normalizeCookieStatus(data);
     });
   }
 
   saveCookies(): void {
-    if (!this.cookiesText || !this.cookiesText.trim()) {
+    const text = this.cookiesText?.trim();
+    if (!text) {
       alert('Please paste your cookies in the provided text area.');
       return;
     }
-
-    this.cookiesInProgress = true;
-    this.cookiesStatusMessage = '';
-
-    this.downloads.setCookies(this.cookiesText).subscribe((status: Status) => {
-      this.cookiesInProgress = false;
-      if (status.status === 'error') {
-        alert(`Error saving cookies: ${status.msg}`);
-        return;
-      }
-      this.cookiesText = '';
-      this.cookiesStatusMessage = 'Cookies saved successfully.';
-      this.cookiesConfigured = true;
-      this.refreshCookiesStatus();
-    });
+    this.persistCookies(text);
   }
 
   clearCookies(): void {
@@ -705,16 +709,235 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     this.cookiesInProgress = true;
     this.cookiesStatusMessage = '';
 
-    this.downloads.clearCookies().subscribe((status: Status) => {
+    this.downloads.clearCookies().subscribe((status: Status & {cookies?: CookieStatusResponse}) => {
       this.cookiesInProgress = false;
       if (status.status === 'error') {
         alert(`Error clearing cookies: ${status.msg}`);
         return;
       }
-      this.cookiesConfigured = false;
+      const updated = this.normalizeCookieStatus(status.cookies ?? { has_cookies: false, state: 'missing' });
+      this.cookieStatus = updated;
       this.cookiesStatusMessage = 'Cookies cleared.';
       this.refreshCookiesStatus();
     });
+  }
+
+  get cookieStatusSummary(): string {
+    if (this.cookiesStatusMessage) {
+      return this.cookiesStatusMessage;
+    }
+    const status = this.cookieStatus;
+    if (!status || !status.has_cookies) {
+      return 'No cookies are configured.';
+    }
+    switch (status.state) {
+      case 'valid':
+        return `Cookies were last confirmed working on ${this.formatCookieTimestamp(status.checked_at)}.`;
+      case 'invalid': {
+        const reason = status.message || 'The saved cookies appear to be invalid or expired.';
+        return `${reason}${status.checked_at ? ` (Last checked ${this.formatCookieTimestamp(status.checked_at)}.)` : ''}`;
+      }
+      case 'unknown':
+      default:
+        return 'Cookies are saved but have not been verified yet. Paste a fresh set if downloads fail.';
+    }
+  }
+
+  get cookieStatusTooltip(): string {
+    const status = this.cookieStatus;
+    if (!status || !status.has_cookies) {
+      return 'No YouTube cookies are configured. Click to add them now.';
+    }
+    switch (status.state) {
+      case 'valid':
+        return `YouTube cookies look good (last checked ${this.formatCookieTimestamp(status.checked_at)}). Click to manage.`;
+      case 'invalid': {
+        const reason = status.message || 'The saved cookies appear to be invalid or expired.';
+        return `${reason} Click to update cookies.`;
+      }
+      case 'unknown':
+      default:
+        return 'Cookies are saved but have not been verified yet. Click to replace or remove them.';
+    }
+  }
+
+  get cookieSmartButtonLabel(): string {
+    if (this.cookiesInProgress) {
+      return 'Working...';
+    }
+    return this.cookiesConfigured ? 'Paste or remove cookies' : 'Paste cookies from clipboard';
+  }
+
+  get cookieStatusIcon(): IconDefinition {
+    const state = this.cookieStatus?.state;
+    if (state === 'valid') {
+      return this.faCheckCircle;
+    }
+    if (state === 'invalid') {
+      return this.faTriangleExclamation;
+    }
+    return this.faCookieBite;
+  }
+
+  get cookieStatusVariantClass(): string {
+    const state = this.cookieStatus?.state;
+    if (!this.cookieStatus?.has_cookies) {
+      return 'cookie-status-button--missing';
+    }
+    switch (state) {
+      case 'valid':
+        return 'cookie-status-button--valid';
+      case 'invalid':
+        return 'cookie-status-button--invalid';
+      default:
+        return 'cookie-status-button--unknown';
+    }
+  }
+
+  get shouldShowCookieIndicator(): boolean {
+    return this.isYoutubeUrl(this.addUrl);
+  }
+
+  async handleCookieSmartAction(): Promise<void> {
+    if (this.cookiesInProgress) {
+      return;
+    }
+
+    this.cookiesStatusMessage = '';
+
+    const clipboardText = await this.readClipboardText();
+    if (this.looksLikeCookies(clipboardText)) {
+      this.cookiesText = clipboardText?.trim() || '';
+      this.persistCookies(this.cookiesText);
+      return;
+    }
+
+    const manual = this.cookiesText?.trim();
+    if (manual) {
+      this.persistCookies(manual);
+      return;
+    }
+
+    if (this.cookiesConfigured) {
+      const confirmClear = confirm('No cookies were detected in your clipboard. Would you like to remove the saved cookies instead?');
+      if (confirmClear) {
+        this.clearCookies();
+      } else {
+        this.cookiesStatusMessage = 'Copy your YouTube cookies to the clipboard, then click the button again.';
+      }
+    } else {
+      this.cookiesStatusMessage = 'Copy your YouTube cookies to the clipboard, then click the button to paste them automatically.';
+    }
+  }
+
+  private persistCookies(rawText: string): void {
+    const text = rawText.trim();
+    if (!text) {
+      this.cookiesStatusMessage = 'Please paste your cookies in the provided text area.';
+      return;
+    }
+
+    this.cookiesInProgress = true;
+    this.cookiesStatusMessage = '';
+
+    this.downloads.setCookies(text).subscribe((status: Status & {cookies?: CookieStatusResponse}) => {
+      this.cookiesInProgress = false;
+      if (status.status === 'error') {
+        alert(`Error saving cookies: ${status.msg}`);
+        return;
+      }
+      const updated = this.normalizeCookieStatus(status.cookies ?? { has_cookies: true, state: 'unknown' });
+      this.cookieStatus = updated;
+      this.cookiesText = '';
+      this.cookiesStatusMessage = 'Cookies saved successfully.';
+      this.refreshCookiesStatus();
+    });
+  }
+
+  private async readClipboardText(): Promise<string | null> {
+    if (typeof navigator === 'undefined' || !navigator.clipboard || !navigator.clipboard.readText) {
+      return null;
+    }
+    try {
+      return await navigator.clipboard.readText();
+    } catch (error) {
+      console.warn('Unable to read clipboard:', error);
+      if (!this.cookiesStatusMessage) {
+        this.cookiesStatusMessage = 'Unable to access clipboard. Paste your cookies manually.';
+      }
+      return null;
+    }
+  }
+
+  private looksLikeCookies(text: string | null | undefined): boolean {
+    if (!text) {
+      return false;
+    }
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return false;
+    }
+    const lines = trimmed.split(/\r?\n/).filter(line => !!line && !line.startsWith('#'));
+    if (!lines.length) {
+      return trimmed.includes('youtube.com');
+    }
+    return lines.some(line => line.split('\t').length >= 7 || line.includes('youtube.com'));
+  }
+
+  private normalizeCookieStatus(data?: CookieStatusResponse | null): CookieStatusResponse {
+    if (!data) {
+      return { has_cookies: false, state: 'missing' };
+    }
+    const hasCookies = !!data.has_cookies;
+    const state = data.state ?? (hasCookies ? 'unknown' : 'missing');
+    const checkedAt = typeof data.checked_at === 'number' ? data.checked_at : undefined;
+    const message = data.message ?? (state === 'invalid' ? 'The saved cookies appear to be invalid or expired.' : undefined);
+    return {
+      has_cookies: hasCookies,
+      state,
+      message,
+      checked_at: checkedAt,
+    };
+  }
+
+  private formatCookieTimestamp(timestamp?: number): string {
+    if (!timestamp || Number.isNaN(timestamp)) {
+      return 'recently';
+    }
+    try {
+      const millis = timestamp > 1e12 ? timestamp : timestamp * 1000;
+      return new Date(millis).toLocaleString();
+    } catch {
+      return 'recently';
+    }
+  }
+
+  private isYoutubeUrl(url?: string | null): boolean {
+    if (!url) {
+      return false;
+    }
+    const trimmed = url.trim();
+    if (!trimmed) {
+      return false;
+    }
+    try {
+      const parsed = trimmed.startsWith('http') ? new URL(trimmed) : new URL(`https://${trimmed}`);
+      const hostname = parsed.hostname.toLowerCase();
+      return hostname === 'youtu.be' || hostname.endsWith('.youtu.be') || hostname.endsWith('youtube.com');
+    } catch {
+      return /^(https?:\/\/)?(www\.|m\.)?(youtube\.com|youtu\.be)/i.test(trimmed);
+    }
+  }
+
+  private areYoutubeCookiesReady(): boolean {
+    const status = this.cookieStatus;
+    if (!status || !status.has_cookies) {
+      return false;
+    }
+    if (status.state === 'invalid' || status.state === 'missing') {
+      return false;
+    }
+    return true;
   }
 
   loadCurrentUser(): void {

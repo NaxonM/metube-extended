@@ -6,6 +6,37 @@
     max-width: 960px
     margin: 4rem auto
 
+.cookie-status-button
+    border: none
+    border-left: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.12)
+    background: transparent
+    color: rgba(var(--bs-body-color-rgb), 0.6)
+    display: inline-flex
+    align-items: center
+    justify-content: center
+    min-width: 3rem
+    font-size: 1.25rem
+    padding: 0 1rem
+    transition: color 0.2s ease, background-color 0.2s ease
+    flex: 0 0 auto
+    &:hover
+        color: rgba(var(--bs-body-color-rgb), 0.9)
+    &:focus-visible
+        outline: 2px solid var(--bs-primary)
+        outline-offset: -2px
+
+.cookie-status-button--valid
+    color: var(--bs-success)
+
+.cookie-status-button--invalid
+    color: var(--bs-danger)
+
+.cookie-status-button--unknown
+    color: rgba(var(--bs-warning-rgb, 255,193,7), 0.9)
+
+.cookie-status-button--missing
+    color: rgba(var(--bs-warning-rgb, 255,193,7), 0.75)
+
 .advanced-card
     border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.1)
     background-color: var(--bs-card-bg)

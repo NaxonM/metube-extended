@@ -8,7 +8,7 @@ import secrets
 import time
 from contextlib import suppress
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 from aiohttp import web
 from aiohttp.client_exceptions import ClientConnectionResetError
 from aiohttp.log import access_logger
@@ -187,12 +187,99 @@ class ObjectSerializer(json.JSONEncoder):
         # Fall back to default behavior
         return json.JSONEncoder.default(self, obj)
 
+COOKIE_ERROR_MARKERS = (
+    'cookies are no longer valid',
+    "sign in to confirm you're not a bot",
+    "sign in to confirm you’re not a bot",
+    'use --cookies',
+    'cookies for the authentication',
+    'please sign in',
+)
+
+
+def is_cookie_error_message(message: Optional[str]) -> bool:
+    if not message:
+        return False
+    lowered = message.lower()
+    return any(marker in lowered for marker in COOKIE_ERROR_MARKERS)
+
+
+class CookieStatusStore:
+    def __init__(self):
+        self._states: Dict[str, Dict[str, Any]] = {}
+
+    def _ensure(self, user_id: str) -> Dict[str, Any]:
+        state = self._states.get(user_id)
+        if state is None:
+            state = {
+                'has_cookies': False,
+                'state': 'missing',
+                'message': None,
+                'checked_at': None,
+            }
+            self._states[user_id] = state
+        return state
+
+    def sync_presence(self, user_id: str, has_cookies: bool) -> Dict[str, Any]:
+        state = self._ensure(user_id)
+        if has_cookies:
+            state['has_cookies'] = True
+            if state['state'] == 'missing':
+                state['state'] = 'unknown'
+                state['message'] = None
+                state['checked_at'] = None
+        else:
+            state['has_cookies'] = False
+            state['state'] = 'missing'
+            state['message'] = None
+            state['checked_at'] = time.time()
+        return dict(state)
+
+    def mark_unknown(self, user_id: str) -> Dict[str, Any]:
+        state = self._ensure(user_id)
+        state['has_cookies'] = True
+        state['state'] = 'unknown'
+        state['message'] = None
+        state['checked_at'] = time.time()
+        return dict(state)
+
+    def mark_valid(self, user_id: str) -> Dict[str, Any]:
+        state = self._ensure(user_id)
+        state['has_cookies'] = True
+        state['state'] = 'valid'
+        state['message'] = None
+        state['checked_at'] = time.time()
+        return dict(state)
+
+    def mark_invalid(self, user_id: str, message: Optional[str] = None) -> Dict[str, Any]:
+        state = self._ensure(user_id)
+        state['has_cookies'] = True
+        state['state'] = 'invalid'
+        state['message'] = message
+        state['checked_at'] = time.time()
+        return dict(state)
+
+    def clear(self, user_id: str) -> Dict[str, Any]:
+        state = self._ensure(user_id)
+        state['has_cookies'] = False
+        state['state'] = 'missing'
+        state['message'] = None
+        state['checked_at'] = time.time()
+        return dict(state)
+
+    def get(self, user_id: str) -> Dict[str, Any]:
+        state = self._ensure(user_id)
+        return dict(state)
+
+
 serializer = ObjectSerializer()
+cookie_status_store = CookieStatusStore()
 app = web.Application()
 sio = socketio.AsyncServer(cors_allowed_origins='*', cors_credentials=True)
 sio.attach(app, socketio_path=config.URL_PREFIX + 'socket.io')
 routes = web.RouteTableDef()
 MAX_STREAM_CHUNK = 4 * 1024 * 1024  # 4MB chunks for ranged streaming
+
 
 class UserNotifier(DownloadQueueNotifier):
     def __init__(self, sio_server: socketio.AsyncServer, user_id: str):
@@ -226,13 +313,14 @@ class UserNotifier(DownloadQueueNotifier):
 
 
 class DownloadManager:
-    def __init__(self, config, sio_server: socketio.AsyncServer, proxy_settings: ProxySettingsStore):
+    def __init__(self, config, sio_server: socketio.AsyncServer, proxy_settings: ProxySettingsStore, cookie_status_store: CookieStatusStore):
         self.config = config
         self.sio = sio_server
         self._queues: Dict[str, DownloadQueue] = {}
         self._proxy_queues: Dict[str, ProxyDownloadManager] = {}
         self._notifiers: Dict[str, UserNotifier] = {}
         self.proxy_settings = proxy_settings
+        self.cookie_status_store = cookie_status_store
         self._lock = asyncio.Lock()
 
     def _state_dir_for(self, user_id: str) -> str:
@@ -253,7 +341,13 @@ class DownloadManager:
                 notifier = UserNotifier(self.sio, user_id)
                 self._notifiers[user_id] = notifier
 
-            queue = DownloadQueue(self.config, notifier, state_dir=self._state_dir_for(user_id), user_id=user_id)
+            queue = DownloadQueue(
+                self.config,
+                notifier,
+                state_dir=self._state_dir_for(user_id),
+                user_id=user_id,
+                cookie_status_store=self.cookie_status_store,
+            )
             await queue.initialize()
             self._queues[user_id] = queue
 
@@ -275,7 +369,7 @@ class DownloadManager:
         return primary_queue + proxy_queue_items, primary_done + proxy_done_items
 
 
-download_manager = DownloadManager(config, sio, proxy_settings)
+download_manager = DownloadManager(config, sio, proxy_settings, cookie_status_store)
 
 
 async def get_user_context(request):
@@ -506,6 +600,8 @@ async def add(request):
         }
         if not status.get('msg'):
             status['msg'] = 'This URL is not supported by yt-dlp. You can still download it directly through the server.'
+    elif status.get('status') == 'error' and cookie_path and is_cookie_error_message(status.get('msg')):
+        cookie_status_store.mark_invalid(user_id, status.get('msg'))
     return web.Response(text=serializer.encode(status))
 
 @routes.post(config.URL_PREFIX + 'delete')
@@ -633,8 +729,8 @@ async def get_cookies(request):
         if not cookie_path.startswith(user_dir) or not os.path.exists(cookie_path):
             cookie_path = None
             session.pop('cookie_file', None)
-    has_cookies = bool(cookie_path)
-    return web.json_response({'has_cookies': has_cookies})
+    state = cookie_status_store.sync_presence(user_id, bool(cookie_path))
+    return web.json_response(state)
 
 
 @routes.post(config.URL_PREFIX + 'cookies')
@@ -672,8 +768,9 @@ async def set_cookies(request):
         raise web.HTTPInternalServerError(text='Failed to persist cookies')
 
     session['cookie_file'] = cookie_path
+    state = cookie_status_store.mark_unknown(user_id)
 
-    return web.json_response({'status': 'ok'})
+    return web.json_response({'status': 'ok', 'cookies': state})
 
 
 @routes.delete(config.URL_PREFIX + 'cookies')
@@ -692,8 +789,9 @@ async def clear_cookies(request):
             raise web.HTTPInternalServerError(text='Failed to remove cookies')
 
     session.pop('cookie_file', None)
+    state = cookie_status_store.clear(user_id)
 
-    return web.json_response({'status': 'ok'})
+    return web.json_response({'status': 'ok', 'cookies': state})
 
 
 @routes.get(config.URL_PREFIX + 'me')

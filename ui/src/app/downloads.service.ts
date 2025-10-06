@@ -105,6 +105,13 @@ export interface CurrentUser {
   role: 'admin' | 'user';
 }
 
+export interface CookieStatusResponse {
+  has_cookies: boolean;
+  state: 'missing' | 'unknown' | 'valid' | 'invalid';
+  message?: string;
+  checked_at?: number;
+}
+
 export interface ManagedUser extends CurrentUser {
   disabled: boolean;
   created_at: number;
@@ -342,8 +349,8 @@ export class DownloadsService {
   }
 
   public getCookiesStatus() {
-    return this.http.get<{has_cookies: boolean}>('cookies').pipe(
-      catchError(() => of({has_cookies: false}))
+    return this.http.get<CookieStatusResponse>('cookies').pipe(
+      catchError(() => of({has_cookies: false, state: 'missing'} as CookieStatusResponse))
     );
   }
 

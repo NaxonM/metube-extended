@@ -14,6 +14,15 @@ from datetime import datetime
 
 log = logging.getLogger('ytdl')
 
+COOKIE_WARNING_MARKERS = (
+    'cookies are no longer valid',
+    "sign in to confirm you're not a bot",
+    "sign in to confirm you’re not a bot",
+    'use --cookies',
+    'cookies for the authentication',
+    'please sign in',
+)
+
 class DownloadQueueNotifier:
     async def added(self, dl):
         raise NotImplementedError
@@ -54,6 +63,8 @@ class DownloadInfo:
         self.cookiefile = cookiefile
         self.user_id = user_id
         self.provider = provider
+        self.cookie_warning = None
+        self.cookie_warning_at = None
 
 class Download:
     manager = None
@@ -99,6 +110,25 @@ class Download:
                         filename = d['info_dict']['filepath']
                     self.status_queue.put({'status': 'finished', 'filename': filename})
 
+            status_queue = self.status_queue
+
+            class QueueLogger:
+                def debug(self, msg):
+                    log.debug(msg)
+
+                def info(self, msg):
+                    log.info(msg)
+
+                def warning(self, msg):
+                    log.warning(msg)
+                    text = str(msg)
+                    lowered = text.lower()
+                    if any(marker in lowered for marker in COOKIE_WARNING_MARKERS):
+                        status_queue.put({'__event': 'cookie_warning', 'message': text})
+
+                def error(self, msg):
+                    log.error(msg)
+
             ret = yt_dlp.YoutubeDL(params={
                 'quiet': True,
                 'no_color': True,
@@ -109,13 +139,14 @@ class Download:
                 'ignore_no_formats_error': True,
                 'progress_hooks': [put_status],
                 'postprocessor_hooks': [put_status_postprocessor],
+                'logger': QueueLogger(),
                 **self.ytdl_opts,
             }).download([self.info.url])
             self.status_queue.put({'status': 'finished' if ret == 0 else 'error'})
             log.info(f"Finished download for: {self.info.title}")
         except yt_dlp.utils.YoutubeDLError as exc:
             log.error(f"Download error for {self.info.title}: {str(exc)}")
-            self.status_queue.put({'status': 'error', 'msg': str(exc)})
+            self.status_queue.put({'status': 'error', 'msg': str(exc), '__event': 'download_error'})
 
     async def start(self, notifier):
         log.info(f"Preparing download for: {self.info.title}")
@@ -164,6 +195,11 @@ class Download:
             if status is None:
                 log.info(f"Status update finished for: {self.info.title}")
                 return
+            event = status.get('__event') if isinstance(status, dict) else None
+            if event == 'cookie_warning':
+                self.info.cookie_warning = status.get('message')
+                self.info.cookie_warning_at = time.time()
+                continue
             if self.canceled:
                 log.info(f"Download {self.info.title} is canceled; stopping status updates.")
                 return
@@ -232,7 +268,7 @@ class PersistentQueue:
         return not bool(self.dict)
 
 class DownloadQueue:
-    def __init__(self, config, notifier, state_dir=None, user_id=None):
+    def __init__(self, config, notifier, state_dir=None, user_id=None, cookie_status_store=None):
         self.config = config
         self.notifier = notifier
         self.user_id = user_id
@@ -243,6 +279,7 @@ class DownloadQueue:
         self.pending = PersistentQueue(os.path.join(self.state_dir, 'pending'))
         self.active_downloads = set()
         self.semaphore = None
+        self.cookie_status_store = cookie_status_store
         # For sequential mode, use an asyncio lock to ensure one-at-a-time execution.
         if self.config.DOWNLOAD_MODE == 'sequential':
             self.seq_lock = asyncio.Lock()
@@ -307,6 +344,12 @@ class DownloadQueue:
         await download.start(self.notifier)
         self._post_download_cleanup(download)
 
+    def _is_cookie_error(self, message):
+        if not message:
+            return False
+        lowered = str(message).lower()
+        return any(marker in lowered for marker in COOKIE_WARNING_MARKERS)
+
     def _post_download_cleanup(self, download):
         if download.info.status != 'finished':
             if download.tmpfilename and os.path.isfile(download.tmpfilename):
@@ -316,6 +359,17 @@ class DownloadQueue:
                     pass
             download.info.status = 'error'
         download.close()
+        if (
+            self.cookie_status_store
+            and download.info.cookiefile
+            and download.info.user_id
+        ):
+            if download.info.status == 'finished':
+                self.cookie_status_store.mark_valid(download.info.user_id)
+            else:
+                message = download.info.cookie_warning or download.info.msg
+                if download.info.cookie_warning or self._is_cookie_error(message):
+                    self.cookie_status_store.mark_invalid(download.info.user_id, message)
         if self.queue.exists(download.info.url):
             self.queue.delete(download.info.url)
             if download.canceled:
