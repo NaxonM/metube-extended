@@ -1166,6 +1166,27 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     return this.cookieErrorMarkers.some(marker => normalized.includes(marker));
   }
 
+  downloadDisplayLabel(download: Download | null | undefined): string {
+    if (!download) {
+      return 'Download entry';
+    }
+    const title = download.title?.trim();
+    if (title) {
+      return title;
+    }
+    const filename = download.filename?.trim();
+    if (filename) {
+      const parts = filename.split(/[\\/]/);
+      const basename = parts[parts.length - 1];
+      return basename || filename;
+    }
+    const url = download.url?.trim();
+    if (url) {
+      return url;
+    }
+    return 'Download entry';
+  }
+
   loadCurrentUser(): void {
     this.downloads.getCurrentUser().subscribe(user => {
       this.currentUser = user;

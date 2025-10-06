@@ -782,20 +782,21 @@
               </div>
               <div class="flex-grow-1">
                 <div class="fw-semibold text-break">
-                  <a
-                    *ngIf="download.value.filename; else noDownloadLink"
-                    href="{{buildDownloadLink(download.value)}}"
-                    target="_blank"
-                    class="text-decoration-none"
-                    [ngbTooltip]="[download.value.msg, download.value.error].filter(Boolean).join(' | ')"
-                  >
-                    {{ download.value.title || download.value.filename || download.value.url }}
-                  </a>
+                  <ng-container *ngIf="download.value.filename; else noDownloadTitle">
+                    <a
+                      href="{{buildDownloadLink(download.value)}}"
+                      target="_blank"
+                      class="text-reset text-decoration-none"
+                      [ngbTooltip]="[download.value.msg, download.value.error].filter(Boolean).join(' | ')"
+                    >
+                      {{ downloadDisplayLabel(download.value) }}
+                    </a>
+                  </ng-container>
                 </div>
-                <ng-template #noDownloadLink>
-                  <span [ngbTooltip]="[download.value.msg, download.value.error].filter(Boolean).join(' | ')">
-                    {{ download.value.title || download.value.url || 'Download entry' }}
-                  </span>
+                <ng-template #noDownloadTitle>
+                  <div class="fw-semibold text-break" [ngbTooltip]="[download.value.msg, download.value.error].filter(Boolean).join(' | ')">
+                    {{ downloadDisplayLabel(download.value) }}
+                  </div>
                 </ng-template>
                 <div *ngIf="download.value.msg && !isCookieRelatedFailure(download.value)" class="small text-muted">
                   {{ download.value.msg }}
