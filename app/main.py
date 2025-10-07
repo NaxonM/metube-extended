@@ -26,7 +26,7 @@ from watchfiles import DefaultFilter, Change, awatch
 
 from ytdl import DownloadQueueNotifier, DownloadQueue
 from proxy_downloads import ProxyDownloadManager, ProxySettingsStore
-from hqporner import (
+from hq-dl import (
     HQPornerError,
     HQPornerUnsupportedError,
     is_hqporner_url,
