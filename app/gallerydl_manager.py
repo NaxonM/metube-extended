@@ -1,5 +1,4 @@
 import asyncio
-import functools
 import json
 import logging
 import os
@@ -14,6 +13,9 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import urlparse
+
+_extractor_cache: Dict[str, Tuple[Dict[str, Optional[str]], ...]] = {}
+_domain_cache: Dict[str, Tuple[str, ...]] = {}
 
 from ytdl import DownloadInfo
 
@@ -102,7 +104,10 @@ def _candidate_executables(preferred: Optional[str]) -> Tuple[str, ...]:
 
 def _resolve_domains(executable_path: Optional[str]) -> Tuple[str, ...]:
     for candidate in _candidate_executables(executable_path):
-        domains = _list_gallerydl_domains_cli(candidate)
+        try:
+            domains = _list_gallerydl_domains_cli(candidate)
+        except FileNotFoundError:
+            continue
         if domains:
             return domains
     return tuple()
@@ -147,8 +152,10 @@ def list_gallerydl_sites(executable_path: Optional[str] = None) -> List[str]:
     return sorted(hosts)
 
 
-@functools.lru_cache(maxsize=4)
 def _list_gallerydl_extractors_cli(executable_path: str) -> Tuple[Dict[str, Optional[str]], ...]:
+    cached = _extractor_cache.get(executable_path)
+    if cached is not None:
+        return cached
     try:
         completed = subprocess.run(
             [executable_path, "--list-extractors"],
@@ -157,8 +164,8 @@ def _list_gallerydl_extractors_cli(executable_path: str) -> Tuple[Dict[str, Opti
             text=True,
             check=True,
         )
-    except FileNotFoundError:
-        return tuple()
+    except FileNotFoundError as exc:
+        raise exc
     except Exception as exc:
         log.warning("Failed to enumerate gallery-dl extractors via %s: %s", executable_path, exc)
         return tuple()
@@ -193,14 +200,21 @@ def _list_gallerydl_extractors_cli(executable_path: str) -> Tuple[Dict[str, Opti
                 "host": _extract_host(example),
             }
         )
-    return tuple(entries)
+    result = tuple(entries)
+    if result:
+        _extractor_cache[executable_path] = result
+    return result
 
 
-@functools.lru_cache(maxsize=4)
 def _list_gallerydl_domains_cli(executable_path: str) -> Tuple[str, ...]:
+    cached = _domain_cache.get(executable_path)
+    if cached is not None:
+        return cached
     entries = _list_gallerydl_extractors_cli(executable_path)
-    hosts = sorted({entry["host"] for entry in entries if entry.get("host")})
-    return tuple(hosts)
+    hosts = tuple(sorted({entry["host"] for entry in entries if entry.get("host")}))
+    if hosts:
+        _domain_cache[executable_path] = hosts
+    return hosts
 
 
 def _normalize_options(options: Optional[Iterable[str]]) -> List[str]:
