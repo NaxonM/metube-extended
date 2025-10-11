@@ -314,7 +314,17 @@ install_system() {
     export DOCKER_BUILDKIT=${DOCKER_BUILDKIT:-1}
     export COMPOSE_DOCKER_CLI_BUILD=${COMPOSE_DOCKER_CLI_BUILD:-1}
 
-    docker compose $compose_files up -d --build --remove-orphans
+    local compose_cmd="docker compose $compose_files"
+
+    if [ "${METUBE_PULL_IMAGES:-0}" = "1" ]; then
+        log "Pulling prebuilt container images (METUBE_PULL_IMAGES=1)..."
+        $compose_cmd pull
+        log "Starting containers using pulled images..."
+        $compose_cmd up -d --remove-orphans
+    else
+        log "Building and starting containers locally..."
+        $compose_cmd up -d --build --remove-orphans
+    fi
 
     echo
     log_success "--- Deployment Complete ---"

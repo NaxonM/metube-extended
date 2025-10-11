@@ -5,6 +5,7 @@ services:
       dockerfile: Dockerfile
       args:
         VERSION: ${VERSION:-dev}
+    image: "${METUBE_IMAGE:-ghcr.io/naxonm/metube-extended:latest}"
     container_name: "${COMPOSE_PROJECT_NAME}-metube"
     restart: unless-stopped
     expose:
