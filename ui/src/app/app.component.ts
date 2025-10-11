@@ -105,6 +105,9 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   galleryPromptData: GalleryDlPrompt | null = null;
   galleryPromptMessage = '';
   galleryConfirmInProgress = false;
+  galleryRange = '';
+  galleryWriteMetadata = false;
+  galleryExtraArgs = '';
 
   supportedSitesModalOpen = false;
   supportedSitesLoading = false;
@@ -517,9 +520,13 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   private showGalleryPrompt(data: GalleryDlPrompt) {
-    this.galleryPromptData = {...data};
+    this.galleryPromptData = {
+      ...data,
+      options: Array.isArray(data.options) ? [...data.options] : []
+    };
     this.galleryPromptMessage = '';
     this.galleryConfirmInProgress = false;
+    this.resetGalleryOptions(this.galleryPromptData);
     this.galleryPromptOpen = true;
   }
 
@@ -528,6 +535,9 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     this.galleryPromptData = null;
     this.galleryPromptMessage = '';
     this.galleryConfirmInProgress = false;
+    this.galleryRange = '';
+    this.galleryWriteMetadata = false;
+    this.galleryExtraArgs = '';
   }
 
   confirmGalleryDownload() {
@@ -535,11 +545,13 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
 
+    const options = this.buildGalleryOptions();
+
     const payload = {
       url: this.galleryPromptData.url,
       title: this.galleryPromptData.title || this.extractFileName(this.galleryPromptData.url),
       auto_start: this.galleryPromptData.auto_start !== false,
-      options: this.galleryPromptData.options || []
+      options
     };
 
     this.galleryConfirmInProgress = true;
@@ -556,6 +568,72 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       const msg = (error?.error && typeof error.error === 'string') ? error.error : '';
       this.galleryPromptMessage = msg || 'Unable to start the gallery download.';
     });
+  }
+
+  private resetGalleryOptions(prompt: GalleryDlPrompt) {
+    const baseOptions = Array.isArray(prompt.options) ? [...prompt.options] : [];
+    this.galleryRange = '';
+    this.galleryWriteMetadata = false;
+    const extras: string[] = [];
+    for (let i = 0; i < baseOptions.length; i++) {
+      const option = baseOptions[i];
+      if (option === '--range' && i + 1 < baseOptions.length) {
+        this.galleryRange = baseOptions[i + 1];
+        i++;
+        continue;
+      }
+      if (option === '--write-metadata') {
+        this.galleryWriteMetadata = true;
+        continue;
+      }
+      extras.push(option);
+    }
+    this.galleryExtraArgs = extras.join('\n');
+  }
+
+  private buildGalleryOptions(): string[] {
+    const args: string[] = [];
+    if (this.galleryExtraArgs) {
+      this.galleryExtraArgs.split(/\r?\n/).forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          return;
+        }
+        this.parseGalleryOptionLine(trimmed).forEach(token => {
+          const value = token.trim();
+          if (value) {
+            args.push(value);
+          }
+        });
+      });
+    }
+
+    const rangeValue = this.galleryRange.trim();
+    if (rangeValue) {
+      args.push('--range', rangeValue);
+    }
+
+    if (this.galleryWriteMetadata) {
+      args.push('--write-metadata');
+    }
+
+    return args.slice(0, 64);
+  }
+
+  private parseGalleryOptionLine(line: string): string[] {
+    if (!line) {
+      return [];
+    }
+    const tokens: string[] = [];
+    const regex = /"([^"]*)"|'([^']*)'|(\S+)/g;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(line)) !== null) {
+      const value = match[1] ?? match[2] ?? match[3];
+      if (value !== undefined) {
+        tokens.push(value);
+      }
+    }
+    return tokens;
   }
 
   openSupportedSitesModal() {

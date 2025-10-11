@@ -13,6 +13,7 @@ import zipfile
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+from urllib.parse import urlparse
 
 from ytdl import DownloadInfo
 
@@ -47,36 +48,146 @@ def _ensure_gallerydl_module() -> Optional[Any]:
         return None
 
 
-def is_gallerydl_supported(url: str) -> bool:
+def _extract_host(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if not text.startswith(("http://", "https://")):
+        text = "https://" + text
+    parsed = urlparse(text)
+    host = parsed.netloc
+    if not host:
+        return None
+    host = host.lower()
+    if "@" in host:
+        host = host.split("@", 1)[-1]
+    if ":" in host:
+        host = host.split(":", 1)[0]
+    if host.startswith("www."):
+        host = host[4:]
+    return host or None
+
+
+def is_gallerydl_supported(url: str, executable_path: Optional[str] = None) -> bool:
     module = _ensure_gallerydl_module()
-    if not module:
+    if module:
+        try:
+            from gallery_dl.extractor import find  # type: ignore
+
+            return find(url) is not None
+        except Exception:  # pragma: no cover - defensive
+            pass
+
+    host = _extract_host(url)
+    if not host:
         return False
-    try:
-        from gallery_dl.extractor import find  # type: ignore
 
-        return find(url) is not None
-    except Exception:  # pragma: no cover - defensive
+    exec_path = executable_path or os.environ.get("GALLERY_DL_EXEC") or shutil.which("gallery-dl") or "gallery-dl"
+    domains = _list_gallerydl_domains_cli(exec_path)
+    if not domains:
         return False
+    return any(host == domain or host.endswith(f".{domain}") for domain in domains)
 
 
-@functools.lru_cache(maxsize=1)
-def list_gallerydl_sites() -> List[str]:
+def list_gallerydl_sites(executable_path: Optional[str] = None) -> List[str]:
     module = _ensure_gallerydl_module()
-    if not module:
-        return []
-    try:
-        from gallery_dl.extractor import extractors  # type: ignore
+    hosts: set[str] = set()
+    if module:
+        try:
+            from gallery_dl.extractor import extractors  # type: ignore
 
-        return sorted({extr.category for extr in extractors() if getattr(extr, "category", None)})
-    except Exception:  # pragma: no cover - defensive
+            for extr in extractors():
+                example = getattr(extr, "example", None)
+                host = _extract_host(example)
+                if host:
+                    hosts.add(host)
+        except Exception:  # pragma: no cover - defensive
+            log.debug("Falling back to CLI for gallery-dl site list", exc_info=True)
+
+    exec_path = executable_path or os.environ.get("GALLERY_DL_EXEC") or shutil.which("gallery-dl") or "gallery-dl"
+    hosts.update(_list_gallerydl_domains_cli(exec_path))
+    return sorted(hosts)
+
+
+@functools.lru_cache(maxsize=4)
+def _list_gallerydl_extractors_cli(executable_path: str) -> Tuple[Dict[str, Optional[str]], ...]:
+    try:
+        completed = subprocess.run(
+            [executable_path, "--list-extractors"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+    except Exception as exc:
+        log.warning("Failed to enumerate gallery-dl extractors via %s: %s", executable_path, exc)
+        return tuple()
+
+    entries: List[Dict[str, Optional[str]]] = []
+    for block in completed.stdout.split("\n\n"):
+        lines = [line.strip() for line in block.splitlines() if line.strip()]
+        if not lines:
+            continue
+        name = lines[0]
+        category = subcategory = example = None
+        for line in lines[1:]:
+            if line.startswith("Category:"):
+                try:
+                    _, rest = line.split("Category:", 1)
+                    if "Subcategory:" in rest:
+                        cat_part, sub_part = rest.split("Subcategory:", 1)
+                        category = cat_part.strip().strip("-").strip()
+                        subcategory = sub_part.strip()
+                    else:
+                        category = rest.strip()
+                except ValueError:
+                    pass
+            elif line.lower().startswith("example"):
+                example = line.split(":", 1)[1].strip()
+        entries.append(
+            {
+                "name": name,
+                "category": category,
+                "subcategory": subcategory,
+                "example": example,
+                "host": _extract_host(example),
+            }
+        )
+    return tuple(entries)
+
+
+@functools.lru_cache(maxsize=4)
+def _list_gallerydl_domains_cli(executable_path: str) -> Tuple[str, ...]:
+    entries = _list_gallerydl_extractors_cli(executable_path)
+    hosts = sorted({entry["host"] for entry in entries if entry.get("host")})
+    return tuple(hosts)
+
+
+def _normalize_options(options: Optional[Iterable[str]]) -> List[str]:
+    if not options:
         return []
+    sanitized: List[str] = []
+    for option in options:
+        if not isinstance(option, str):
+            continue
+        value = option.strip()
+        if not value:
+            continue
+        if len(value) > 200:
+            value = value[:200]
+        sanitized.append(value)
+        if len(sanitized) >= 64:
+            break
+    return sanitized
 
 
 class GalleryDlJob:
     def __init__(self, info: DownloadInfo, url: str, options: Optional[List[str]] = None):
         self.info = info
         self.url = url
-        self.options = options or []
+        self.options = _normalize_options(options)
         self.process: Optional[subprocess.Popen] = None
         self.temp_dir: Optional[str] = None
         self.archive_path: Optional[str] = None
@@ -436,7 +547,7 @@ class GalleryDlManager:
             info.msg = record.get("msg")
             info.percent = 100.0 if info.status == "finished" else None
 
-            job = GalleryDlJob(info, record.get("url") or record.get("original_url") or "")
+            job = GalleryDlJob(info, record.get("url") or record.get("original_url") or "", options=record.get("options"))
             job.archive_path = record.get("archive_path")
             self.done[storage_key] = job
 
@@ -459,6 +570,7 @@ class GalleryDlManager:
                     "archive_path": job.archive_path,
                     "quality": info.quality,
                     "format": info.format,
+                    "options": job.options,
                 }
             )
         try:

@@ -609,7 +609,7 @@ async def add(request):
 
     gallery_queue = await download_manager.get_gallery_queue(user_id)
 
-    if is_gallerydl_supported(url):
+    if is_gallerydl_supported(url, getattr(config, 'GALLERY_DL_EXEC', 'gallery-dl')):
         status = {
             'status': 'gallerydl',
             'gallerydl': {
@@ -806,10 +806,22 @@ async def gallerydl_add(request):
     options = post.get('options') or []
     if not isinstance(options, list):
         raise web.HTTPBadRequest(text='options must be an array')
+    sanitized_options = []
+    for option in options:
+        if not isinstance(option, str):
+            raise web.HTTPBadRequest(text='options must contain only strings')
+        value = option.strip()
+        if not value:
+            continue
+        if len(value) > 200:
+            value = value[:200]
+        sanitized_options.append(value)
+        if len(sanitized_options) >= 64:
+            break
 
     _session, user_id, _ = await get_user_context(request)
     gallery_queue = await download_manager.get_gallery_queue(user_id)
-    result = await gallery_queue.add_job(url=url, title=title, auto_start=auto_start, options=options)
+    result = await gallery_queue.add_job(url=url, title=title, auto_start=auto_start, options=sanitized_options)
     return web.Response(text=serializer.encode(result))
 
 
@@ -818,7 +830,7 @@ async def supported_sites(request):
     _session, user_id, _ = await get_user_context(request)
     providers = {
         'ytdlp': list_ytdlp_sites(),
-        'gallerydl': list_gallerydl_sites(),
+        'gallerydl': list_gallerydl_sites(getattr(config, 'GALLERY_DL_EXEC', 'gallery-dl')),
         'hqporner': ['hqporner'],
         'proxy': ['direct-link'],
     }

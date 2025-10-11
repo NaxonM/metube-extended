@@ -651,6 +651,27 @@
             </dl>
           </div>
 
+          <div class="mb-3">
+            <label class="form-label" for="galleryRangeInput">Range (optional)</label>
+            <input id="galleryRangeInput" name="galleryRange" type="text" class="form-control" [(ngModel)]="galleryRange" placeholder="e.g. 1-20 or ::5">
+            <small class="text-muted">Maps to the <code>--range</code> argument. Leave blank to download the full gallery.</small>
+          </div>
+
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="galleryWriteMetadataToggle" name="galleryWriteMetadata" [(ngModel)]="galleryWriteMetadata">
+            <label class="form-check-label" for="galleryWriteMetadataToggle">Write metadata files (<code>--write-metadata</code>)</label>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="galleryExtraArgs">Additional gallery-dl options</label>
+            <textarea id="galleryExtraArgs" name="galleryExtraArgs" class="form-control" rows="4" [(ngModel)]="galleryExtraArgs" placeholder="One argument per line, e.g.&#10;--cookies-from-browser chrome&#10;-o extractor.some_option=value"></textarea>
+            <small class="text-muted">
+              Lines are tokenized like a shell command; quotes are supported. Refer to
+              <a href="https://github.com/mikf/gallery-dl/blob/master/docs/options.md" target="_blank" rel="noopener">gallery-dl documentation</a>
+              for available flags.
+            </small>
+          </div>
+
           <div *ngIf="galleryPromptMessage" class="alert alert-warning" role="alert">
             {{ galleryPromptMessage }}
           </div>
