@@ -109,7 +109,11 @@
     border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
     display: grid
     gap: 1.5rem
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr))
+    grid-template-columns: 1fr
+
+@media (min-width: 992px)
+    .admin-panel
+        grid-template-columns: repeat(2, minmax(0, 1fr))
 
 .admin-section
     display: flex
@@ -360,6 +364,11 @@ td
 .modal-body
   textarea.form-control
     resize: vertical
+
+.gallerydl-modal .advanced-options
+    border-top: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+    margin-top: 0.5rem
+    padding-top: 1rem
 
 .add-url
   display: inline-flex

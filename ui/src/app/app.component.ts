@@ -58,7 +58,7 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   isAdmin = false;
   adminToolsOpen = false;
   adminSectionState: Record<AdminSection, boolean> = {
-    proxy: true,
+    proxy: false,
     system: false,
     users: false
   };
@@ -108,6 +108,7 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   galleryRange = '';
   galleryWriteMetadata = false;
   galleryExtraArgs = '';
+  galleryAdvancedOpen = false;
   gallerySelectedCredential: string | null = null;
   gallerySelectedCookie: string | null = null;
   galleryProxy = '';
@@ -361,7 +362,7 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
 
   private resetAdminSectionState(): void {
     this.adminSectionState = {
-      proxy: true,
+      proxy: false,
       system: false,
       users: false
     };
@@ -574,6 +575,7 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     this.galleryRange = '';
     this.galleryWriteMetadata = false;
     this.galleryExtraArgs = '';
+    this.galleryAdvancedOpen = false;
     this.gallerySelectedCredential = null;
     this.gallerySelectedCookie = null;
     this.galleryProxy = '';
@@ -672,6 +674,21 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       extras.push(option);
     }
     this.galleryExtraArgs = extras.join('\n');
+    const advancedActive = !!(
+      this.gallerySelectedCredential ||
+      this.gallerySelectedCookie ||
+      this.galleryProxy.trim() ||
+      (this.galleryRetries !== null && this.galleryRetries !== undefined) ||
+      this.gallerySleepRequest.trim() ||
+      this.gallerySleep429.trim() ||
+      this.galleryWriteMetadata ||
+      this.galleryWriteInfoJson ||
+      this.galleryWriteTags ||
+      this.galleryDownloadArchive ||
+      this.galleryArchiveId.trim() ||
+      this.galleryExtraArgs.trim()
+    );
+    this.galleryAdvancedOpen = advancedActive;
   }
 
   private buildGalleryOptions(): string[] {

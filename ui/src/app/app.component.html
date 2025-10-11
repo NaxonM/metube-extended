@@ -657,24 +657,26 @@
             </dl>
           </div>
 
-          <div *ngIf="galleryCredentials.length > 0" class="mb-3">
-            <label class="form-label" for="galleryCredentialSelect">Credential profile</label>
-            <select id="galleryCredentialSelect" name="galleryCredentialSelect" class="form-select" [(ngModel)]="gallerySelectedCredential">
-              <option [ngValue]="null">None</option>
-              <option *ngFor="let cred of galleryCredentials" [ngValue]="cred.id">
-                {{ cred.name }}<span *ngIf="cred.username"> &mdash; {{ cred.username }}</span>
-              </option>
-            </select>
-            <small class="text-muted">Use saved credentials for sites that require authentication.</small>
-          </div>
+          <div class="row g-3" *ngIf="galleryCredentials.length > 0 || galleryCookies.length > 0">
+            <div class="col-md-6" *ngIf="galleryCredentials.length > 0">
+              <label class="form-label" for="galleryCredentialSelect">Credential profile</label>
+              <select id="galleryCredentialSelect" name="galleryCredentialSelect" class="form-select" [(ngModel)]="gallerySelectedCredential">
+                <option [ngValue]="null">None</option>
+                <option *ngFor="let cred of galleryCredentials" [ngValue]="cred.id">
+                  {{ cred.name }}<span *ngIf="cred.username"> &mdash; {{ cred.username }}</span>
+                </option>
+              </select>
+              <small class="text-muted">Use saved credentials for sites that require authentication.</small>
+            </div>
 
-          <div *ngIf="galleryCookies.length > 0" class="mb-3">
-            <label class="form-label" for="galleryCookieSelect">Cookie file</label>
-            <select id="galleryCookieSelect" name="galleryCookieSelect" class="form-select" [(ngModel)]="gallerySelectedCookie">
-              <option [ngValue]="null">None</option>
-              <option *ngFor="let cookie of galleryCookies" [ngValue]="cookie.name">{{ cookie.name }}</option>
-            </select>
-            <small class="text-muted">Cookies are stored in the server state directory and passed via <code>--cookies</code>.</small>
+            <div class="col-md-6" *ngIf="galleryCookies.length > 0">
+              <label class="form-label" for="galleryCookieSelect">Cookie file</label>
+              <select id="galleryCookieSelect" name="galleryCookieSelect" class="form-select" [(ngModel)]="gallerySelectedCookie">
+                <option [ngValue]="null">None</option>
+                <option *ngFor="let cookie of galleryCookies" [ngValue]="cookie.name">{{ cookie.name }}</option>
+              </select>
+              <small class="text-muted">Cookies are stored in the server state directory and passed via <code>--cookies</code>.</small>
+            </div>
           </div>
 
           <div class="mb-3">
@@ -683,69 +685,78 @@
             <small class="text-muted">Maps to the <code>--range</code> argument. Leave blank to download the full gallery.</small>
           </div>
 
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label class="form-label" for="galleryProxyInput">Proxy</label>
-              <input id="galleryProxyInput" name="galleryProxy" type="text" class="form-control" [(ngModel)]="galleryProxy" placeholder="http://user:pass@host:port">
-              <small class="text-muted">Applies the <code>--proxy</code> argument.</small>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0">Advanced options</h6>
+            <button type="button" class="btn btn-sm btn-outline-secondary" (click)="galleryAdvancedOpen = !galleryAdvancedOpen" [attr.aria-expanded]="galleryAdvancedOpen" aria-controls="galleryAdvancedOptions">
+              {{ galleryAdvancedOpen ? 'Hide' : 'Show' }}
+            </button>
+          </div>
+
+          <div id="galleryAdvancedOptions" class="advanced-options" [ngbCollapse]="!galleryAdvancedOpen">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label" for="galleryProxyInput">Proxy</label>
+                <input id="galleryProxyInput" name="galleryProxy" type="text" class="form-control" [(ngModel)]="galleryProxy" placeholder="http://user:pass@host:port">
+                <small class="text-muted">Applies the <code>--proxy</code> argument.</small>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" for="galleryRetriesInput">Retries</label>
+                <input id="galleryRetriesInput" name="galleryRetries" type="number" min="0" class="form-control" [(ngModel)]="galleryRetries">
+                <small class="text-muted">Maximum retry count (<code>--retries</code>).</small>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" for="gallerySleepRequestInput">Sleep/request</label>
+                <input id="gallerySleepRequestInput" name="gallerySleepRequest" type="text" class="form-control" [(ngModel)]="gallerySleepRequest" placeholder="e.g. 1.5 or 2-3">
+                <small class="text-muted">Delay between requests (<code>--sleep-request</code>).</small>
+              </div>
             </div>
-            <div class="col-md-3">
-              <label class="form-label" for="galleryRetriesInput">Retries</label>
-              <input id="galleryRetriesInput" name="galleryRetries" type="number" min="0" class="form-control" [(ngModel)]="galleryRetries">
-              <small class="text-muted">Maximum retry count (<code>--retries</code>).</small>
+
+            <div class="row g-3 mt-1">
+              <div class="col-md-3">
+                <label class="form-label" for="gallerySleep429Input">Sleep 429</label>
+                <input id="gallerySleep429Input" name="gallerySleep429" type="text" class="form-control" [(ngModel)]="gallerySleep429" placeholder="e.g. 30">
+                <small class="text-muted">Backoff after HTTP 429 (<code>--sleep-429</code>).</small>
+              </div>
+              <div class="col-md-9 d-flex align-items-end">
+                <small class="text-muted">Leave blank to use gallery-dl defaults.</small>
+              </div>
             </div>
-            <div class="col-md-3">
-              <label class="form-label" for="gallerySleepRequestInput">Sleep/request</label>
-              <input id="gallerySleepRequestInput" name="gallerySleepRequest" type="text" class="form-control" [(ngModel)]="gallerySleepRequest" placeholder="e.g. 1.5 or 2-3">
-              <small class="text-muted">Delay between requests (<code>--sleep-request</code>).</small>
+
+            <div class="form-check form-switch mb-2 mt-3">
+              <input class="form-check-input" type="checkbox" id="galleryWriteMetadataToggle" name="galleryWriteMetadata" [(ngModel)]="galleryWriteMetadata">
+              <label class="form-check-label" for="galleryWriteMetadataToggle">Write metadata files (<code>--write-metadata</code>)</label>
             </div>
-          </div>
 
-          <div class="row g-3 mt-1">
-            <div class="col-md-3">
-              <label class="form-label" for="gallerySleep429Input">Sleep 429</label>
-              <input id="gallerySleep429Input" name="gallerySleep429" type="text" class="form-control" [(ngModel)]="gallerySleep429" placeholder="e.g. 30">
-              <small class="text-muted">Backoff after HTTP 429 (<code>--sleep-429</code>).</small>
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" id="galleryWriteInfoJsonToggle" name="galleryWriteInfoJson" [(ngModel)]="galleryWriteInfoJson">
+              <label class="form-check-label" for="galleryWriteInfoJsonToggle">Write info JSON (<code>--write-info-json</code>)</label>
             </div>
-            <div class="col-md-9 d-flex align-items-end">
-              <small class="text-muted">Leave blank to use gallery-dl defaults.</small>
+
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" id="galleryWriteTagsToggle" name="galleryWriteTags" [(ngModel)]="galleryWriteTags">
+              <label class="form-check-label" for="galleryWriteTagsToggle">Write tag files (<code>--write-tags</code>)</label>
             </div>
-          </div>
 
-          <div class="form-check form-switch mb-2 mt-3">
-            <input class="form-check-input" type="checkbox" id="galleryWriteMetadataToggle" name="galleryWriteMetadata" [(ngModel)]="galleryWriteMetadata">
-            <label class="form-check-label" for="galleryWriteMetadataToggle">Write metadata files (<code>--write-metadata</code>)</label>
-          </div>
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" id="galleryDownloadArchiveToggle" name="galleryDownloadArchive" [(ngModel)]="galleryDownloadArchive">
+              <label class="form-check-label" for="galleryDownloadArchiveToggle">Track downloaded items (<code>--download-archive</code>)</label>
+            </div>
 
-          <div class="form-check form-switch mb-2">
-            <input class="form-check-input" type="checkbox" id="galleryWriteInfoJsonToggle" name="galleryWriteInfoJson" [(ngModel)]="galleryWriteInfoJson">
-            <label class="form-check-label" for="galleryWriteInfoJsonToggle">Write info JSON (<code>--write-info-json</code>)</label>
-          </div>
+            <div *ngIf="galleryDownloadArchive" class="mb-3">
+              <label class="form-label" for="galleryArchiveIdInput">Archive identifier</label>
+              <input id="galleryArchiveIdInput" name="galleryArchiveId" type="text" class="form-control" [(ngModel)]="galleryArchiveId" placeholder="default or custom-slug">
+              <small class="text-muted">Archive entries are stored under the server state path <code>gallerydl/archives</code>.</small>
+            </div>
 
-          <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" id="galleryWriteTagsToggle" name="galleryWriteTags" [(ngModel)]="galleryWriteTags">
-            <label class="form-check-label" for="galleryWriteTagsToggle">Write tag files (<code>--write-tags</code>)</label>
-          </div>
-
-          <div class="form-check form-switch mb-2">
-            <input class="form-check-input" type="checkbox" id="galleryDownloadArchiveToggle" name="galleryDownloadArchive" [(ngModel)]="galleryDownloadArchive">
-            <label class="form-check-label" for="galleryDownloadArchiveToggle">Track downloaded items (<code>--download-archive</code>)</label>
-          </div>
-
-          <div *ngIf="galleryDownloadArchive" class="mb-3">
-            <label class="form-label" for="galleryArchiveIdInput">Archive identifier</label>
-            <input id="galleryArchiveIdInput" name="galleryArchiveId" type="text" class="form-control" [(ngModel)]="galleryArchiveId" placeholder="default or custom-slug">
-            <small class="text-muted">Archive entries are stored under the server state path <code>gallerydl/archives</code>.</small>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label" for="galleryExtraArgs">Additional gallery-dl options</label>
-            <textarea id="galleryExtraArgs" name="galleryExtraArgs" class="form-control" rows="4" [(ngModel)]="galleryExtraArgs" placeholder="One argument per line, e.g.&#10;--cookies-from-browser chrome&#10;-o extractor.some_option=value"></textarea>
-            <small class="text-muted">
-              Lines are tokenized like a shell command; quotes are supported. Refer to
-              <a href="https://github.com/mikf/gallery-dl/blob/master/docs/options.md" target="_blank" rel="noopener">gallery-dl documentation</a>
-              for available flags.
-            </small>
+            <div class="mb-3">
+              <label class="form-label" for="galleryExtraArgs">Additional gallery-dl options</label>
+              <textarea id="galleryExtraArgs" name="galleryExtraArgs" class="form-control" rows="4" [(ngModel)]="galleryExtraArgs" placeholder="One argument per line, e.g.&#10;--cookies-from-browser chrome&#10;-o extractor.some_option=value"></textarea>
+              <small class="text-muted">
+                Lines are tokenized like a shell command; quotes are supported. Refer to
+                <a href="https://github.com/mikf/gallery-dl/blob/master/docs/options.md" target="_blank" rel="noopener">gallery-dl documentation</a>
+                for available flags.
+              </small>
+            </div>
           </div>
 
           <div *ngIf="galleryPromptMessage" class="alert alert-warning" role="alert">
