@@ -107,8 +107,10 @@ def _resolve_domains(executable_path: Optional[str]) -> Tuple[str, ...]:
         try:
             domains = _list_gallerydl_domains_cli(candidate)
         except FileNotFoundError:
+            log.info("gallery-dl executable not found at %s", candidate)
             continue
         if domains:
+            log.info("gallery-dl domains resolved via %s", candidate)
             return domains
     return tuple()
 
@@ -129,8 +131,11 @@ def is_gallerydl_supported(url: str, executable_path: Optional[str] = None) -> b
 
     domains = _resolve_domains(executable_path)
     if not domains:
+        log.info("gallery-dl support check: no domains resolved for executable %s", executable_path)
         return False
-    return any(host == domain or host.endswith(f".{domain}") for domain in domains)
+    result = any(host == domain or host.endswith(f".{domain}") for domain in domains)
+    log.info("gallery-dl support check: host=%s match=%s", host, result)
+    return result
 
 
 def list_gallerydl_sites(executable_path: Optional[str] = None) -> List[str]:
@@ -212,6 +217,7 @@ def _list_gallerydl_domains_cli(executable_path: str) -> Tuple[str, ...]:
         return cached
     entries = _list_gallerydl_extractors_cli(executable_path)
     hosts = tuple(sorted({entry["host"] for entry in entries if entry.get("host")}))
+    log.info("gallery-dl domain cache update: exec=%s count=%d", executable_path, len(hosts))
     if hosts:
         _domain_cache[executable_path] = hosts
     return hosts
@@ -232,6 +238,8 @@ def _normalize_options(options: Optional[Iterable[str]]) -> List[str]:
         sanitized.append(value)
         if len(sanitized) >= 64:
             break
+    if sanitized:
+        log.info("gallery-dl options normalized: %s", sanitized)
     return sanitized
 
 
