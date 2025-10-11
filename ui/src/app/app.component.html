@@ -235,6 +235,12 @@
                   <fa-icon [icon]="faCookieBite" class="me-2"></fa-icon>
                   Manage Cookies
                 </button>
+                <button *ngIf="isAdmin" type="button"
+                        class="btn btn-outline-secondary advanced-action"
+                        (click)="openGallerySettingsModal()">
+                  <fa-icon [icon]="faKey" class="me-2"></fa-icon>
+                  Gallery-dl settings
+                </button>
                 <button type="button"
                         class="btn btn-outline-secondary advanced-action"
                         (click)="openSupportedSitesModal()">
@@ -651,15 +657,85 @@
             </dl>
           </div>
 
+          <div *ngIf="galleryCredentials.length > 0" class="mb-3">
+            <label class="form-label" for="galleryCredentialSelect">Credential profile</label>
+            <select id="galleryCredentialSelect" name="galleryCredentialSelect" class="form-select" [(ngModel)]="gallerySelectedCredential">
+              <option [ngValue]="null">None</option>
+              <option *ngFor="let cred of galleryCredentials" [ngValue]="cred.id">
+                {{ cred.name }}<span *ngIf="cred.username"> &mdash; {{ cred.username }}</span>
+              </option>
+            </select>
+            <small class="text-muted">Use saved credentials for sites that require authentication.</small>
+          </div>
+
+          <div *ngIf="galleryCookies.length > 0" class="mb-3">
+            <label class="form-label" for="galleryCookieSelect">Cookie file</label>
+            <select id="galleryCookieSelect" name="galleryCookieSelect" class="form-select" [(ngModel)]="gallerySelectedCookie">
+              <option [ngValue]="null">None</option>
+              <option *ngFor="let cookie of galleryCookies" [ngValue]="cookie.name">{{ cookie.name }}</option>
+            </select>
+            <small class="text-muted">Cookies are stored in the server state directory and passed via <code>--cookies</code>.</small>
+          </div>
+
           <div class="mb-3">
             <label class="form-label" for="galleryRangeInput">Range (optional)</label>
             <input id="galleryRangeInput" name="galleryRange" type="text" class="form-control" [(ngModel)]="galleryRange" placeholder="e.g. 1-20 or ::5">
             <small class="text-muted">Maps to the <code>--range</code> argument. Leave blank to download the full gallery.</small>
           </div>
 
-          <div class="form-check form-switch mb-3">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label" for="galleryProxyInput">Proxy</label>
+              <input id="galleryProxyInput" name="galleryProxy" type="text" class="form-control" [(ngModel)]="galleryProxy" placeholder="http://user:pass@host:port">
+              <small class="text-muted">Applies the <code>--proxy</code> argument.</small>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" for="galleryRetriesInput">Retries</label>
+              <input id="galleryRetriesInput" name="galleryRetries" type="number" min="0" class="form-control" [(ngModel)]="galleryRetries">
+              <small class="text-muted">Maximum retry count (<code>--retries</code>).</small>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" for="gallerySleepRequestInput">Sleep/request</label>
+              <input id="gallerySleepRequestInput" name="gallerySleepRequest" type="text" class="form-control" [(ngModel)]="gallerySleepRequest" placeholder="e.g. 1.5 or 2-3">
+              <small class="text-muted">Delay between requests (<code>--sleep-request</code>).</small>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-1">
+            <div class="col-md-3">
+              <label class="form-label" for="gallerySleep429Input">Sleep 429</label>
+              <input id="gallerySleep429Input" name="gallerySleep429" type="text" class="form-control" [(ngModel)]="gallerySleep429" placeholder="e.g. 30">
+              <small class="text-muted">Backoff after HTTP 429 (<code>--sleep-429</code>).</small>
+            </div>
+            <div class="col-md-9 d-flex align-items-end">
+              <small class="text-muted">Leave blank to use gallery-dl defaults.</small>
+            </div>
+          </div>
+
+          <div class="form-check form-switch mb-2 mt-3">
             <input class="form-check-input" type="checkbox" id="galleryWriteMetadataToggle" name="galleryWriteMetadata" [(ngModel)]="galleryWriteMetadata">
             <label class="form-check-label" for="galleryWriteMetadataToggle">Write metadata files (<code>--write-metadata</code>)</label>
+          </div>
+
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="galleryWriteInfoJsonToggle" name="galleryWriteInfoJson" [(ngModel)]="galleryWriteInfoJson">
+            <label class="form-check-label" for="galleryWriteInfoJsonToggle">Write info JSON (<code>--write-info-json</code>)</label>
+          </div>
+
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="galleryWriteTagsToggle" name="galleryWriteTags" [(ngModel)]="galleryWriteTags">
+            <label class="form-check-label" for="galleryWriteTagsToggle">Write tag files (<code>--write-tags</code>)</label>
+          </div>
+
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="galleryDownloadArchiveToggle" name="galleryDownloadArchive" [(ngModel)]="galleryDownloadArchive">
+            <label class="form-check-label" for="galleryDownloadArchiveToggle">Track downloaded items (<code>--download-archive</code>)</label>
+          </div>
+
+          <div *ngIf="galleryDownloadArchive" class="mb-3">
+            <label class="form-label" for="galleryArchiveIdInput">Archive identifier</label>
+            <input id="galleryArchiveIdInput" name="galleryArchiveId" type="text" class="form-control" [(ngModel)]="galleryArchiveId" placeholder="default or custom-slug">
+            <small class="text-muted">Archive entries are stored under the server state path <code>gallerydl/archives</code>.</small>
           </div>
 
           <div class="mb-3">
@@ -719,6 +795,124 @@
                     <span class="badge bg-light text-dark" *ngFor="let site of providerSites">{{ site }}</span>
                   </div>
                 </div>
+
+<div class="modal fade gallery-settings-modal" tabindex="-1" role="dialog" [ngClass]="{'show': gallerySettingsModalOpen}" [ngStyle]="{'display': gallerySettingsModalOpen ? 'block' : 'none'}">
+  <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Gallery-dl settings</h5>
+        <button type="button" class="btn-close" aria-label="Close" (click)="closeGallerySettingsModal()"></button>
+      </div>
+      <div class="modal-body">
+        <div *ngIf="gallerySettingsLoading" class="text-center py-3">
+          <div class="spinner-border" role="status"></div>
+        </div>
+        <div *ngIf="!gallerySettingsLoading && gallerySettingsError" class="alert alert-danger" role="alert">
+          {{ gallerySettingsError }}
+        </div>
+        <div *ngIf="!gallerySettingsLoading" class="row g-4">
+          <div class="col-lg-6">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <h6 class="mb-0">Credentials</h6>
+              <button type="button" class="btn btn-sm btn-outline-primary" (click)="newGalleryCredential()">New</button>
+            </div>
+            <div class="mb-3 credential-list">
+              <div *ngIf="galleryCredentials.length === 0" class="text-muted small">No credential profiles configured.</div>
+              <div class="list-group">
+                <button type="button"
+                        class="list-group-item list-group-item-action"
+                        [class.active]="galleryCredentialForm.id === cred.id"
+                        *ngFor="let cred of galleryCredentials"
+                        (click)="selectGalleryCredential(cred)">
+                  <div class="fw-semibold">{{ cred.name }}</div>
+                  <div class="small text-muted">
+                    <ng-container *ngIf="cred.username">{{ cred.username }} • </ng-container>
+                    Updated {{ cred.updated_at * 1000 | date:'medium' }}
+                  </div>
+                </button>
+              </div>
+            </div>
+            <div *ngIf="galleryCredentialLoading" class="text-muted small mb-2">Loading credential...</div>
+            <div *ngIf="galleryCredentialMessage" class="alert alert-info py-2">{{ galleryCredentialMessage }}</div>
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label" for="credentialNameInput">Name</label>
+                <input id="credentialNameInput" name="credentialNameInput" type="text" class="form-control" [(ngModel)]="galleryCredentialForm.name">
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="credentialExtractorInput">Extractor (optional)</label>
+                <input id="credentialExtractorInput" name="credentialExtractorInput" type="text" class="form-control" [(ngModel)]="galleryCredentialForm.extractor" placeholder="e.g. danbooru">
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="credentialUsernameInput">Username</label>
+                <input id="credentialUsernameInput" name="credentialUsernameInput" type="text" class="form-control" [(ngModel)]="galleryCredentialForm.username">
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="credentialPasswordInput">Password</label>
+                <input id="credentialPasswordInput" name="credentialPasswordInput" type="password" class="form-control" [(ngModel)]="galleryCredentialForm.password" (ngModelChange)="onGalleryCredentialPasswordChange()" placeholder="Leave blank to keep existing">
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="credentialTwofactorInput">Two-factor token</label>
+                <input id="credentialTwofactorInput" name="credentialTwofactorInput" type="text" class="form-control" [(ngModel)]="galleryCredentialForm.twofactor" placeholder="Optional backup code">
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="credentialExtraArgs">Extra CLI arguments</label>
+                <textarea id="credentialExtraArgs" name="credentialExtraArgs" class="form-control" rows="3" [(ngModel)]="galleryCredentialForm.extraArgs" placeholder="One argument per line"></textarea>
+              </div>
+            </div>
+            <div class="d-flex gap-2 mt-3">
+              <button type="button" class="btn btn-primary" (click)="saveGalleryCredential()" [disabled]="galleryCredentialSaving">
+                <span *ngIf="galleryCredentialSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
+                Save
+              </button>
+              <button type="button" class="btn btn-outline-secondary" (click)="newGalleryCredential()">Reset</button>
+              <button type="button" class="btn btn-outline-danger" (click)="deleteGalleryCredential()" [disabled]="!galleryCredentialForm.id">Delete</button>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <h6 class="mb-0">Cookie files</h6>
+              <button type="button" class="btn btn-sm btn-outline-primary" (click)="resetGalleryCookieForm()">New</button>
+            </div>
+            <div class="mb-3 cookie-list">
+              <div *ngIf="galleryCookies.length === 0" class="text-muted small">No cookie files uploaded.</div>
+              <div class="list-group">
+                <button type="button"
+                        class="list-group-item list-group-item-action"
+                        *ngFor="let cookie of galleryCookies"
+                        (click)="editGalleryCookie(cookie)">
+                  <div class="fw-semibold">{{ cookie.name }}</div>
+                  <div class="small text-muted">Updated {{ cookie.updated_at * 1000 | date:'medium' }}</div>
+                </button>
+              </div>
+            </div>
+            <div *ngIf="galleryCookieLoading" class="text-muted small mb-2">Loading cookie contents...</div>
+            <div *ngIf="galleryCookieMessage" class="alert alert-info py-2">{{ galleryCookieMessage }}</div>
+            <div class="mb-3">
+              <label class="form-label" for="cookieNameInput">Name</label>
+              <input id="cookieNameInput" name="cookieNameInput" type="text" class="form-control" [(ngModel)]="galleryCookieForm.name">
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="cookieContentInput">Cookie data</label>
+              <textarea id="cookieContentInput" name="cookieContent" class="form-control" rows="8" [(ngModel)]="galleryCookieForm.content" placeholder="# Netscape HTTP Cookie File"></textarea>
+            </div>
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-primary" (click)="saveGalleryCookie()" [disabled]="galleryCookieSaving">
+                <span *ngIf="galleryCookieSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
+                Save
+              </button>
+              <button type="button" class="btn btn-outline-secondary" (click)="resetGalleryCookieForm()">Reset</button>
+              <button type="button" class="btn btn-outline-danger" (click)="deleteGalleryCookie(galleryCookieForm.name)" [disabled]="!galleryCookieForm.name">Delete</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeGallerySettingsModal()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
               </ng-container>
             </ng-container>
           </ng-container>

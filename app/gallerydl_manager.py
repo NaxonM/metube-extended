@@ -2,6 +2,8 @@ import asyncio
 import json
 import logging
 import os
+import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -11,13 +13,16 @@ import uuid
 import zipfile
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import urlparse
 
 _extractor_cache: Dict[str, Tuple[Dict[str, Optional[str]], ...]] = {}
 _domain_cache: Dict[str, Tuple[str, ...]] = {}
 
 from ytdl import DownloadInfo
+
+if TYPE_CHECKING:
+    from gallerydl_credentials import CookieStore, CredentialStore
 
 log = logging.getLogger("gallerydl")
 
@@ -29,6 +34,23 @@ def _sanitize_filename(value: str) -> str:
         sanitized = sanitized.replace(ch, "_")
     sanitized = sanitized.replace("..", "_")
     return sanitized or f"gallerydl-{uuid.uuid4().hex}"
+
+
+def _clean_optional_str(value: Optional[str], max_length: int = 200) -> Optional[str]:
+    if not value or not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if len(text) > max_length:
+        text = text[:max_length]
+    return text
+
+
+def _sanitize_archive_name(value: Optional[str], fallback: str = "default") -> str:
+    candidate = _clean_optional_str(value, 120) or fallback
+    filtered = ''.join(ch for ch in candidate if ch.isalnum() or ch in ("-", "_", "."))
+    return filtered or fallback
 
 
 def _gallerydl_module_root() -> Optional[str]:
@@ -244,10 +266,39 @@ def _normalize_options(options: Optional[Iterable[str]]) -> List[str]:
 
 
 class GalleryDlJob:
-    def __init__(self, info: DownloadInfo, url: str, options: Optional[List[str]] = None):
+    def __init__(
+        self,
+        info: DownloadInfo,
+        url: str,
+        options: Optional[List[str]] = None,
+        *,
+        credential_id: Optional[str] = None,
+        cookie_name: Optional[str] = None,
+        proxy: Optional[str] = None,
+        retries: Optional[int] = None,
+        sleep_request: Optional[str] = None,
+        sleep429: Optional[str] = None,
+        write_metadata: bool = False,
+        write_info_json: bool = False,
+        write_tags: bool = False,
+        download_archive: bool = False,
+        archive_id: Optional[str] = None,
+    ):
         self.info = info
         self.url = url
         self.options = _normalize_options(options)
+        self.credential_id = _clean_optional_str(credential_id, 120)
+        self.cookie_name = _clean_optional_str(cookie_name, 120)
+        self.proxy = _clean_optional_str(proxy, 200)
+        self.retries = retries if isinstance(retries, int) and retries >= 0 else None
+        self.sleep_request = _clean_optional_str(sleep_request, 50)
+        self.sleep_429 = _clean_optional_str(sleep429, 50)
+        self.write_metadata = bool(write_metadata)
+        self.write_info_json = bool(write_info_json)
+        self.write_tags = bool(write_tags)
+        self.download_archive = bool(download_archive)
+        self.archive_id = _sanitize_archive_name(archive_id) if download_archive else None
+
         self.process: Optional[subprocess.Popen] = None
         self.temp_dir: Optional[str] = None
         self.archive_path: Optional[str] = None
@@ -265,12 +316,24 @@ class GalleryDlJob:
 
 
 class GalleryDlManager:
-    def __init__(self, config, notifier, state_dir: str, executable_path: Optional[str] = None):
+    def __init__(
+        self,
+        config,
+        notifier,
+        state_dir: str,
+        executable_path: Optional[str] = None,
+        credential_store: Optional["CredentialStore"] = None,
+        cookie_store: Optional["CookieStore"] = None,
+    ):
         self.config = config
         self.notifier = notifier
         self.state_dir = os.path.join(state_dir, "gallerydl")
         os.makedirs(self.state_dir, exist_ok=True)
         self._executable_path = executable_path or getattr(config, "GALLERY_DL_EXEC", "gallery-dl")
+        self.credential_store = credential_store
+        self.cookie_store = cookie_store
+        self.archive_dir = os.path.join(self.state_dir, "archives")
+        os.makedirs(self.archive_dir, exist_ok=True)
 
         self.queue: "OrderedDict[str, GalleryDlJob]" = OrderedDict()
         self.pending: "OrderedDict[str, GalleryDlJob]" = OrderedDict()
@@ -304,6 +367,17 @@ class GalleryDlManager:
         title: Optional[str] = None,
         auto_start: bool = True,
         options: Optional[List[str]] = None,
+        credential_id: Optional[str] = None,
+        cookie_name: Optional[str] = None,
+        proxy: Optional[str] = None,
+        retries: Optional[int] = None,
+        sleep_request: Optional[str] = None,
+        sleep429: Optional[str] = None,
+        write_metadata: bool = False,
+        write_info_json: bool = False,
+        write_tags: bool = False,
+        download_archive: bool = False,
+        archive_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         job_id = uuid.uuid4().hex
         storage_key = f"gallerydl:{job_id}"
@@ -330,7 +404,22 @@ class GalleryDlManager:
         info.speed = None
         info.eta = None
 
-        job = GalleryDlJob(info, url, options)
+        job = GalleryDlJob(
+            info,
+            url,
+            options,
+            credential_id=credential_id,
+            cookie_name=cookie_name,
+            proxy=proxy,
+            retries=retries,
+            sleep_request=sleep_request,
+            sleep429=sleep429,
+            write_metadata=write_metadata,
+            write_info_json=write_info_json,
+            write_tags=write_tags,
+            download_archive=download_archive,
+            archive_id=archive_id,
+        )
         self.pending[storage_key] = job
         await self.notifier.added(info)
 
@@ -432,7 +521,14 @@ class GalleryDlManager:
     async def _run_job(self, storage_key: str, job: GalleryDlJob) -> None:
         job.temp_dir = tempfile.mkdtemp(prefix="gallerydl-", dir=getattr(self.config, "TEMP_DIR", None))
         base_directory = job.temp_dir
-        cmd = self._build_command(job, base_directory)
+        try:
+            cmd = self._build_command(job, base_directory)
+        except Exception as exc:
+            job.info.status = "error"
+            job.info.msg = str(exc)
+            await self._finalize_failure(storage_key, job)
+            self._cleanup_temp(job)
+            return
 
         log.info("Starting gallery-dl job %s: %s", storage_key, cmd)
         try:
@@ -457,6 +553,7 @@ class GalleryDlManager:
                     continue
                 stdout_chunks.append(line)
                 job.info.msg = line
+                self._update_progress_from_line(job, line)
                 await self.notifier.updated(job.info)
             returncode = await process.wait()
 
@@ -525,9 +622,101 @@ class GalleryDlManager:
             "--destination",
             base_directory,
         ])
+        cmd.extend(self._credential_arguments(job))
+        cmd.extend(self._cookie_arguments(job))
+        cmd.extend(self._network_arguments(job))
+        cmd.extend(self._metadata_arguments(job))
         cmd.extend(job.options)
         cmd.append(job.url)
         return cmd
+
+    def _credential_arguments(self, job: GalleryDlJob) -> List[str]:
+        if not job.credential_id:
+            return []
+        if not self.credential_store:
+            raise RuntimeError("Credential store is not configured")
+
+        record = self.credential_store.get_credential(job.credential_id)
+        if not record:
+            raise RuntimeError("Credential profile not found")
+
+        values = record.get("values", {}) or {}
+        args: List[str] = []
+        username = _clean_optional_str(values.get("username"))
+        if username:
+            args.extend(["--username", username])
+        password = values.get("password")
+        if password:
+            args.extend(["--password", password])
+        twofactor = _clean_optional_str(values.get("twofactor"))
+        if twofactor:
+            args.extend(["--twofactor", twofactor])
+
+        extra_args = values.get("extra_args") or []
+        for entry in extra_args:
+            if not isinstance(entry, str):
+                continue
+            tokens = self._tokenize_argument(entry)
+            args.extend(tokens)
+        return args
+
+    def _cookie_arguments(self, job: GalleryDlJob) -> List[str]:
+        if not job.cookie_name:
+            return []
+        if not self.cookie_store:
+            raise RuntimeError("Cookie store is not configured")
+        path = self.cookie_store.resolve_path(job.cookie_name)
+        if not os.path.exists(path):
+            raise RuntimeError("Cookie file not found")
+        return ["--cookies", path]
+
+    def _network_arguments(self, job: GalleryDlJob) -> List[str]:
+        args: List[str] = []
+        if job.proxy:
+            args.extend(["--proxy", job.proxy])
+        if job.retries is not None:
+            args.extend(["--retries", str(job.retries)])
+        if job.sleep_request:
+            args.extend(["--sleep-request", job.sleep_request])
+        if job.sleep_429:
+            args.extend(["--sleep-429", job.sleep_429])
+        return args
+
+    def _metadata_arguments(self, job: GalleryDlJob) -> List[str]:
+        args: List[str] = []
+        if job.write_metadata:
+            args.append("--write-metadata")
+        if job.write_info_json:
+            args.append("--write-info-json")
+        if job.write_tags:
+            args.append("--write-tags")
+        if job.download_archive:
+            archive_name = job.archive_id or _sanitize_archive_name(_extract_host(job.url), "default")
+            archive_path = os.path.join(self.archive_dir, f"{archive_name}.txt")
+            args.extend(["--download-archive", archive_path])
+        return args
+
+    def _tokenize_argument(self, value: str) -> List[str]:
+        try:
+            tokens = shlex.split(value)
+            return tokens or [value]
+        except ValueError:
+            return [value]
+
+    def _update_progress_from_line(self, job: GalleryDlJob, line: str) -> None:
+        ratio_match = re.search(r"(\d+)\s*/\s*(\d+)", line)
+        if ratio_match:
+            current = int(ratio_match.group(1))
+            total = int(ratio_match.group(2))
+            if total > 0:
+                percent = min(100.0, (current / total) * 100.0)
+                job.info.percent = percent
+                return
+        percent_match = re.search(r"(\d+(?:\.\d+)?)%", line)
+        if percent_match:
+            percent = float(percent_match.group(1))
+            if percent >= 0:
+                job.info.percent = min(percent, 100.0)
 
     def _resolve_executable(self) -> str:
         exec_path = self._executable_path
@@ -617,7 +806,22 @@ class GalleryDlManager:
             info.msg = record.get("msg")
             info.percent = 100.0 if info.status == "finished" else None
 
-            job = GalleryDlJob(info, record.get("url") or record.get("original_url") or "", options=record.get("options"))
+            job = GalleryDlJob(
+                info,
+                record.get("url") or record.get("original_url") or "",
+                options=record.get("options"),
+                credential_id=record.get("credential_id"),
+                cookie_name=record.get("cookie_name"),
+                proxy=record.get("proxy"),
+                retries=record.get("retries"),
+                sleep_request=record.get("sleep_request"),
+                sleep429=record.get("sleep_429"),
+                write_metadata=record.get("write_metadata", False),
+                write_info_json=record.get("write_info_json", False),
+                write_tags=record.get("write_tags", False),
+                download_archive=record.get("download_archive", False),
+                archive_id=record.get("archive_id"),
+            )
             job.archive_path = record.get("archive_path")
             self.done[storage_key] = job
 
@@ -641,6 +845,17 @@ class GalleryDlManager:
                     "quality": info.quality,
                     "format": info.format,
                     "options": job.options,
+                    "credential_id": job.credential_id,
+                    "cookie_name": job.cookie_name,
+                    "proxy": job.proxy,
+                    "retries": job.retries,
+                    "sleep_request": job.sleep_request,
+                    "sleep_429": job.sleep_429,
+                    "write_metadata": job.write_metadata,
+                    "write_info_json": job.write_info_json,
+                    "write_tags": job.write_tags,
+                    "download_archive": job.download_archive,
+                    "archive_id": job.archive_id,
                 }
             )
         try:

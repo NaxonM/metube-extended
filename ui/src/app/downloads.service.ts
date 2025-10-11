@@ -9,6 +9,17 @@ export interface GalleryDlPrompt {
   title?: string;
   auto_start: boolean;
   options: string[];
+  credential_id?: string | null;
+  cookie_name?: string | null;
+  proxy?: string | null;
+  retries?: number | null;
+  sleep_request?: string | null;
+  sleep_429?: string | null;
+  write_metadata?: boolean;
+  write_info_json?: boolean;
+  write_tags?: boolean;
+  download_archive?: boolean;
+  archive_id?: string | null;
 }
 
 export interface Status {
@@ -90,10 +101,60 @@ export interface GalleryDlAddRequest {
   title?: string;
   auto_start: boolean;
   options: string[];
+  credential_id?: string | null;
+  cookie_name?: string | null;
+  proxy?: string | null;
+  retries?: number | null;
+  sleep_request?: string | null;
+  sleep_429?: string | null;
+  write_metadata?: boolean;
+  write_info_json?: boolean;
+  write_tags?: boolean;
+  download_archive?: boolean;
+  archive_id?: string | null;
 }
 
 export interface SupportedSitesResponse extends Partial<Status> {
   providers?: Record<string, string[]>;
+}
+
+export interface GalleryDlCredentialSummary {
+  id: string;
+  name: string;
+  extractor?: string | null;
+  username?: string | null;
+  has_password?: boolean;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface GalleryDlCredentialDetail extends GalleryDlCredentialSummary {
+  values: {
+    username?: string | null;
+    twofactor?: string | null;
+    extra_args?: string[];
+  };
+}
+
+export interface GalleryDlCookieFile {
+  name: string;
+  size: number;
+  updated_at: number;
+  content?: string;
+}
+
+export interface GalleryDlCredentialPayload {
+  name: string;
+  extractor?: string | null;
+  username?: string | null;
+  password?: string | null;
+  twofactor?: string | null;
+  extra_args?: string[];
+}
+
+export interface GalleryDlCookiePayload {
+  name: string;
+  content: string;
 }
 
 export interface Download {
@@ -258,6 +319,60 @@ export class DownloadsService {
   public gallerydlAdd(request: GalleryDlAddRequest) {
     return this.http.post<Status>('gallerydl/add', request).pipe(
       catchError(this.handleHTTPError)
+    );
+  }
+
+  public getGallerydlCredentials() {
+    return this.http.get<{status: string; credentials: GalleryDlCredentialSummary[]}>('gallerydl/credentials').pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<{status: string; credentials: GalleryDlCredentialSummary[]}>(error))
+    );
+  }
+
+  public getGallerydlCredential(id: string) {
+    return this.http.get<{status: string; credential: GalleryDlCredentialDetail}>('gallerydl/credentials/' + encodeURIComponent(id)).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<{status: string; credential: GalleryDlCredentialDetail}>(error))
+    );
+  }
+
+  public createGallerydlCredential(payload: GalleryDlCredentialPayload) {
+    return this.http.post<{status: string; credential: GalleryDlCredentialSummary}>('gallerydl/credentials', payload).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<{status: string; credential: GalleryDlCredentialSummary}>(error))
+    );
+  }
+
+  public updateGallerydlCredential(id: string, payload: Partial<GalleryDlCredentialPayload>) {
+    return this.http.patch<{status: string; credential: GalleryDlCredentialSummary}>('gallerydl/credentials/' + encodeURIComponent(id), payload).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<{status: string; credential: GalleryDlCredentialSummary}>(error))
+    );
+  }
+
+  public deleteGallerydlCredential(id: string) {
+    return this.http.delete<{status: string}>('gallerydl/credentials/' + encodeURIComponent(id)).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<{status: string}>(error))
+    );
+  }
+
+  public listGallerydlCookies() {
+    return this.http.get<{status: string; cookies: GalleryDlCookieFile[]}>('gallerydl/cookies').pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<{status: string; cookies: GalleryDlCookieFile[]}>(error))
+    );
+  }
+
+  public saveGallerydlCookie(payload: GalleryDlCookiePayload) {
+    return this.http.post<{status: string; cookie: GalleryDlCookieFile}>('gallerydl/cookies', payload).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<{status: string; cookie: GalleryDlCookieFile}>(error))
+    );
+  }
+
+  public getGallerydlCookie(name: string) {
+    return this.http.get<{status: string; name: string; content: string}>('gallerydl/cookies/' + encodeURIComponent(name)).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<{status: string; name: string; content: string}>(error))
+    );
+  }
+
+  public deleteGallerydlCookie(name: string) {
+    return this.http.delete<{status: string}>('gallerydl/cookies/' + encodeURIComponent(name)).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<{status: string}>(error))
     );
   }
 

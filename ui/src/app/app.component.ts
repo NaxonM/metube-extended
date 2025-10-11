@@ -5,7 +5,7 @@ import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAl
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { CookieService } from 'ngx-cookie-service';
 
-import { Download, DownloadsService, Status, CurrentUser, ManagedUser, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, ProxySettings, SystemStats, CookieStatusResponse, GalleryDlPrompt, SupportedSitesResponse } from './downloads.service';
+import { Download, DownloadsService, Status, CurrentUser, ManagedUser, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, ProxySettings, SystemStats, CookieStatusResponse, GalleryDlPrompt, SupportedSitesResponse, GalleryDlCredentialSummary, GalleryDlCredentialDetail, GalleryDlCookieFile } from './downloads.service';
 import { MasterCheckboxComponent } from './master-checkbox.component';
 import { Formats, Format, Quality } from './formats';
 import { Theme, Themes } from './theme';
@@ -108,12 +108,48 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   galleryRange = '';
   galleryWriteMetadata = false;
   galleryExtraArgs = '';
+  gallerySelectedCredential: string | null = null;
+  gallerySelectedCookie: string | null = null;
+  galleryProxy = '';
+  galleryRetries: number | null = null;
+  gallerySleepRequest = '';
+  gallerySleep429 = '';
+  galleryWriteInfoJson = false;
+  galleryWriteTags = false;
+  galleryDownloadArchive = false;
+  galleryArchiveId = '';
 
   supportedSitesModalOpen = false;
   supportedSitesLoading = false;
   supportedSitesError = '';
   supportedSites: { provider: string; sites: string[] }[] = [];
   supportedSitesFilter = '';
+
+  galleryCredentials: GalleryDlCredentialSummary[] = [];
+  galleryCookies: GalleryDlCookieFile[] = [];
+  gallerySettingsModalOpen = false;
+  gallerySettingsLoading = false;
+  gallerySettingsError = '';
+  galleryCredentialLoading = false;
+  galleryCredentialSaving = false;
+  galleryCredentialMessage = '';
+  galleryCredentialForm = {
+    id: null as string | null,
+    name: '',
+    extractor: '',
+    username: '',
+    password: '',
+    twofactor: '',
+    extraArgs: ''
+  };
+  galleryCredentialPasswordDirty = false;
+  galleryCookieForm = {
+    name: '',
+    content: ''
+  };
+  galleryCookieLoading = false;
+  galleryCookieSaving = false;
+  galleryCookieMessage = '';
 
   // Download metrics
   activeDownloads = 0;
@@ -538,6 +574,16 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     this.galleryRange = '';
     this.galleryWriteMetadata = false;
     this.galleryExtraArgs = '';
+    this.gallerySelectedCredential = null;
+    this.gallerySelectedCookie = null;
+    this.galleryProxy = '';
+    this.galleryRetries = null;
+    this.gallerySleepRequest = '';
+    this.gallerySleep429 = '';
+    this.galleryWriteInfoJson = false;
+    this.galleryWriteTags = false;
+    this.galleryDownloadArchive = false;
+    this.galleryArchiveId = '';
   }
 
   confirmGalleryDownload() {
@@ -546,12 +592,35 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     }
 
     const options = this.buildGalleryOptions();
+    const proxy = this.galleryProxy.trim();
+    const retriesRaw = this.galleryRetries;
+    let retries: number | null = null;
+    if (retriesRaw !== null && retriesRaw !== undefined) {
+      const parsed = Number(retriesRaw);
+      if (!isNaN(parsed) && parsed >= 0) {
+        retries = Math.min(Math.floor(parsed), 20);
+      }
+    }
+    const sleepRequest = this.gallerySleepRequest.trim();
+    const sleep429 = this.gallerySleep429.trim();
+    const archiveId = this.galleryArchiveId.trim();
 
     const payload = {
       url: this.galleryPromptData.url,
       title: this.galleryPromptData.title || this.extractFileName(this.galleryPromptData.url),
       auto_start: this.galleryPromptData.auto_start !== false,
-      options
+      options,
+      credential_id: this.gallerySelectedCredential || null,
+      cookie_name: this.gallerySelectedCookie || null,
+      proxy: proxy || null,
+      retries,
+      sleep_request: sleepRequest || null,
+      sleep_429: sleep429 || null,
+      write_metadata: this.galleryWriteMetadata,
+      write_info_json: this.galleryWriteInfoJson,
+      write_tags: this.galleryWriteTags,
+      download_archive: this.galleryDownloadArchive,
+      archive_id: this.galleryDownloadArchive ? (archiveId || null) : null
     };
 
     this.galleryConfirmInProgress = true;
@@ -573,7 +642,21 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   private resetGalleryOptions(prompt: GalleryDlPrompt) {
     const baseOptions = Array.isArray(prompt.options) ? [...prompt.options] : [];
     this.galleryRange = '';
-    this.galleryWriteMetadata = false;
+    const metadataSpecified = typeof prompt.write_metadata === 'boolean';
+    this.galleryWriteMetadata = !!prompt.write_metadata;
+    this.galleryWriteInfoJson = !!prompt.write_info_json;
+    this.galleryWriteTags = !!prompt.write_tags;
+    this.galleryDownloadArchive = !!prompt.download_archive;
+    this.galleryArchiveId = prompt.archive_id || '';
+    this.gallerySelectedCredential = prompt.credential_id || null;
+    this.gallerySelectedCookie = prompt.cookie_name || null;
+    this.galleryProxy = prompt.proxy || '';
+    this.galleryRetries = prompt.retries !== undefined && prompt.retries !== null ? Number(prompt.retries) : null;
+    if (this.galleryRetries !== null && (isNaN(this.galleryRetries) || this.galleryRetries < 0)) {
+      this.galleryRetries = null;
+    }
+    this.gallerySleepRequest = prompt.sleep_request || '';
+    this.gallerySleep429 = prompt.sleep_429 || '';
     const extras: string[] = [];
     for (let i = 0; i < baseOptions.length; i++) {
       const option = baseOptions[i];
@@ -582,7 +665,7 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
         i++;
         continue;
       }
-      if (option === '--write-metadata') {
+      if (option === '--write-metadata' && !metadataSpecified) {
         this.galleryWriteMetadata = true;
         continue;
       }
@@ -611,10 +694,6 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     const rangeValue = this.galleryRange.trim();
     if (rangeValue) {
       args.push('--range', rangeValue);
-    }
-
-    if (this.galleryWriteMetadata) {
-      args.push('--write-metadata');
     }
 
     return args.slice(0, 64);
@@ -1132,12 +1211,14 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
         } else {
           this.stopSystemStatsPolling();
         }
+        this.refreshGallerydlSettings();
       } else {
         this.adminUsers = [];
         this.resetProxySettingsState();
         this.stopSystemStatsPolling();
         this.resetSystemStatsState();
         this.resetAdminSectionState();
+        this.clearGallerydlSettings();
       }
     });
   }
@@ -1176,6 +1257,299 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     }, () => {
       this.proxySettingsLoading = false;
       this.proxySettingsError = 'Unable to load proxy settings.';
+    });
+  }
+
+  refreshGallerydlSettings(): void {
+    if (!this.isAdmin) {
+      this.clearGallerydlSettings();
+      return;
+    }
+    this.gallerySettingsLoading = true;
+    this.gallerySettingsError = '';
+    let pending = 2;
+    const finalize = () => {
+      pending -= 1;
+      if (pending <= 0) {
+        this.gallerySettingsLoading = false;
+      }
+    };
+    this.downloads.getGallerydlCredentials().subscribe(response => {
+      if ((response as any)?.status === 'error') {
+        this.gallerySettingsError = (response as any).msg || 'Unable to load credentials.';
+      } else {
+        this.galleryCredentials = (response?.credentials ?? []).slice().sort((a, b) => a.name.localeCompare(b.name));
+      }
+      finalize();
+    }, () => {
+      this.gallerySettingsError = 'Unable to load credentials.';
+      finalize();
+    });
+
+    this.downloads.listGallerydlCookies().subscribe(response => {
+      if ((response as any)?.status === 'error') {
+        this.gallerySettingsError = (response as any).msg || 'Unable to load cookies.';
+      } else {
+        this.galleryCookies = (response?.cookies ?? []).slice().sort((a, b) => a.name.localeCompare(b.name));
+      }
+      finalize();
+    }, () => {
+      this.gallerySettingsError = 'Unable to load cookies.';
+      finalize();
+    });
+  }
+
+  clearGallerydlSettings(): void {
+    this.galleryCredentials = [];
+    this.galleryCookies = [];
+    this.gallerySettingsModalOpen = false;
+    this.galleryCredentialForm = {
+      id: null,
+      name: '',
+      extractor: '',
+      username: '',
+      password: '',
+      twofactor: '',
+      extraArgs: ''
+    };
+    this.galleryCredentialPasswordDirty = false;
+    this.galleryCredentialMessage = '';
+    this.galleryCookieForm = {
+      name: '',
+      content: ''
+    };
+    this.galleryCookieMessage = '';
+  }
+
+  openGallerySettingsModal(): void {
+    if (!this.isAdmin) {
+      return;
+    }
+    this.gallerySettingsModalOpen = true;
+    this.galleryCredentialMessage = '';
+    this.galleryCookieMessage = '';
+    this.galleryCredentialPasswordDirty = false;
+    this.galleryCredentialForm.password = '';
+    this.refreshGallerydlSettings();
+  }
+
+  closeGallerySettingsModal(): void {
+    this.gallerySettingsModalOpen = false;
+  }
+
+  private convertExtraArgsToText(args?: string[] | null): string {
+    if (!args || !args.length) {
+      return '';
+    }
+    return args.join('\n');
+  }
+
+  private parseExtraArgsText(value: string): string[] {
+    if (!value) {
+      return [];
+    }
+    return value
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(line => !!line)
+      .slice(0, 32);
+  }
+
+  selectGalleryCredential(credential: GalleryDlCredentialSummary): void {
+    if (!this.isAdmin) {
+      return;
+    }
+    this.galleryCredentialLoading = true;
+    this.galleryCredentialMessage = '';
+    this.downloads.getGallerydlCredential(credential.id).subscribe(response => {
+      this.galleryCredentialLoading = false;
+      const detail = response?.credential as GalleryDlCredentialDetail;
+      if (!detail) {
+        return;
+      }
+      this.galleryCredentialForm = {
+        id: detail.id,
+        name: detail.name || '',
+        extractor: detail.extractor || '',
+        username: (detail.values?.username || '') as string,
+        password: '',
+        twofactor: (detail.values?.twofactor || '') as string,
+        extraArgs: this.convertExtraArgsToText(detail.values?.extra_args as string[])
+      };
+      this.galleryCredentialPasswordDirty = false;
+    }, () => {
+      this.galleryCredentialLoading = false;
+      this.galleryCredentialMessage = 'Unable to load credential.';
+    });
+  }
+
+  newGalleryCredential(): void {
+    this.galleryCredentialForm = {
+      id: null,
+      name: '',
+      extractor: '',
+      username: '',
+      password: '',
+      twofactor: '',
+      extraArgs: ''
+    };
+    this.galleryCredentialPasswordDirty = false;
+    this.galleryCredentialMessage = '';
+  }
+
+  onGalleryCredentialPasswordChange(): void {
+    this.galleryCredentialPasswordDirty = true;
+  }
+
+  saveGalleryCredential(): void {
+    if (!this.isAdmin) {
+      return;
+    }
+    const form = this.galleryCredentialForm;
+    const name = form.name.trim();
+    if (!name) {
+      this.galleryCredentialMessage = 'Name is required.';
+      return;
+    }
+    const payload: any = {
+      name,
+      extractor: form.extractor.trim() || null,
+      username: form.username.trim() || null,
+      twofactor: form.twofactor.trim() || null,
+      extra_args: this.parseExtraArgsText(form.extraArgs)
+    };
+
+    this.galleryCredentialSaving = true;
+    this.galleryCredentialMessage = '';
+
+    if (form.id) {
+      if (this.galleryCredentialPasswordDirty) {
+        payload.password = form.password;
+      }
+      this.downloads.updateGallerydlCredential(form.id, payload).subscribe(response => {
+        this.galleryCredentialSaving = false;
+        if ((response as any)?.status === 'error') {
+          this.galleryCredentialMessage = (response as any).msg || 'Unable to update credential.';
+          return;
+        }
+        this.galleryCredentialPasswordDirty = false;
+        this.galleryCredentialMessage = 'Credential updated.';
+        this.refreshGallerydlSettings();
+      }, error => {
+        this.galleryCredentialSaving = false;
+        this.galleryCredentialMessage = (error?.error && typeof error.error === 'string') ? error.error : 'Unable to update credential.';
+      });
+      return;
+    }
+
+    payload.password = form.password || '';
+    this.downloads.createGallerydlCredential(payload).subscribe(response => {
+      this.galleryCredentialSaving = false;
+      if ((response as any)?.status === 'error') {
+        this.galleryCredentialMessage = (response as any).msg || 'Unable to create credential.';
+        return;
+      }
+      this.galleryCredentialMessage = 'Credential created.';
+      this.newGalleryCredential();
+      this.refreshGallerydlSettings();
+    }, error => {
+      this.galleryCredentialSaving = false;
+      this.galleryCredentialMessage = (error?.error && typeof error.error === 'string') ? error.error : 'Unable to create credential.';
+    });
+  }
+
+  deleteGalleryCredential(): void {
+    const form = this.galleryCredentialForm;
+    if (!this.isAdmin || !form.id) {
+      return;
+    }
+    if (!confirm('Delete credential "' + form.name + '"?')) {
+      return;
+    }
+    this.downloads.deleteGallerydlCredential(form.id).subscribe(() => {
+      this.galleryCredentialMessage = 'Credential deleted.';
+      this.newGalleryCredential();
+      this.refreshGallerydlSettings();
+    }, error => {
+      this.galleryCredentialMessage = (error?.error && typeof error.error === 'string') ? error.error : 'Unable to delete credential.';
+    });
+  }
+
+  editGalleryCookie(cookie: GalleryDlCookieFile): void {
+    if (!this.isAdmin) {
+      return;
+    }
+    this.galleryCookieLoading = true;
+    this.galleryCookieMessage = '';
+    this.downloads.getGallerydlCookie(cookie.name).subscribe(response => {
+      this.galleryCookieLoading = false;
+      this.galleryCookieForm = {
+        name: response?.name || cookie.name,
+        content: response?.content || ''
+      };
+    }, error => {
+      this.galleryCookieLoading = false;
+      this.galleryCookieMessage = (error?.error && typeof error.error === 'string') ? error.error : 'Unable to load cookie.';
+    });
+  }
+
+  resetGalleryCookieForm(): void {
+    this.galleryCookieForm = {
+      name: '',
+      content: ''
+    };
+    this.galleryCookieMessage = '';
+  }
+
+  saveGalleryCookie(): void {
+    if (!this.isAdmin) {
+      return;
+    }
+    const name = this.galleryCookieForm.name.trim();
+    const content = this.galleryCookieForm.content.trim();
+    if (!name) {
+      this.galleryCookieMessage = 'Cookie name is required.';
+      return;
+    }
+    if (!content) {
+      this.galleryCookieMessage = 'Cookie content is required.';
+      return;
+    }
+    this.galleryCookieSaving = true;
+    this.galleryCookieMessage = '';
+    this.downloads.saveGallerydlCookie({name, content}).subscribe(response => {
+      this.galleryCookieSaving = false;
+      if ((response as any)?.status === 'error') {
+        this.galleryCookieMessage = (response as any).msg || 'Unable to save cookie.';
+        return;
+      }
+      this.galleryCookieMessage = 'Cookie saved.';
+      this.refreshGallerydlSettings();
+    }, error => {
+      this.galleryCookieSaving = false;
+      this.galleryCookieMessage = (error?.error && typeof error.error === 'string') ? error.error : 'Unable to save cookie.';
+    });
+  }
+
+  deleteGalleryCookie(name: string): void {
+    if (!this.isAdmin) {
+      return;
+    }
+    const trimmed = (name || '').trim();
+    if (!trimmed) {
+      return;
+    }
+    if (!confirm('Delete cookie "' + trimmed + '"?')) {
+      return;
+    }
+    this.downloads.deleteGallerydlCookie(trimmed).subscribe(() => {
+      this.galleryCookieMessage = 'Cookie deleted.';
+      if (this.galleryCookieForm.name.trim() === trimmed) {
+        this.resetGalleryCookieForm();
+      }
+      this.refreshGallerydlSettings();
+    }, error => {
+      this.galleryCookieMessage = (error?.error && typeof error.error === 'string') ? error.error : 'Unable to delete cookie.';
     });
   }
 
