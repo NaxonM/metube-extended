@@ -25,7 +25,11 @@ Everything the upstream project offered—robust yt-dlp integration, playlist su
 | **Use prebuilt images (recommended)** | `bash <(curl -fsSL https://raw.githubusercontent.com/NaxonM/metube-extended/master/install-prebuilt.sh)` |
 | **Build locally** | `bash <(curl -fsSL https://raw.githubusercontent.com/NaxonM/metube-extended/master/install-local.sh)` |
 
-- The prebuilt path pulls the latest CI image. To pin a tag, set `METUBE_IMAGE=ghcr.io/naxonm/metube-extended:vYYYY.MM.DD` before running the script.
+- The prebuilt path pulls the latest CI image. To pin a tag, prefix the command, for example:
+
+  ```bash
+  METUBE_IMAGE=ghcr.io/naxonm/metube-extended:v2025.10.11 bash <(curl -fsSL https://raw.githubusercontent.com/NaxonM/metube-extended/master/install-prebuilt.sh)
+  ```
 - The local build path compiles Angular and the Docker image on the host—useful for air-gapped or customized setups.
 - Both installers accept the same arguments as the core installer (e.g. `uninstall`).
 
