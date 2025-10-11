@@ -584,6 +584,31 @@ def _coerce_bool(value: Any) -> bool:
     return False
 
 
+def _inspect_cookie_file(path: str) -> Dict[str, Any]:
+    summary: Dict[str, Any] = {'path': path}
+    names = []
+    try:
+        with open(path, 'r', encoding='utf-8') as fh:
+            for line in fh:
+                if not line or line.startswith('#'):
+                    continue
+                parts = line.strip().split('\t')
+                if len(parts) >= 7:
+                    names.append(parts[5])
+        summary['cookie_count'] = len(names)
+        if names:
+            unique_names = sorted(set(names))
+            if len(unique_names) > 8:
+                summary['cookies'] = unique_names[:8] + ['…']
+            else:
+                summary['cookies'] = unique_names
+        summary['has_sessionid'] = 'sessionid' in names
+        summary['has_csrftoken'] = 'csrftoken' in names
+    except OSError as exc:
+        summary['error'] = str(exc)
+    return summary
+
+
 def get_ytdlp_cookie_store(user_id: str) -> CookieProfileStore:
     directory = os.path.join(ensure_cookie_directory(user_id), 'ytdlp')
     store = ytdlp_cookie_stores.get(directory)
@@ -710,7 +735,8 @@ async def add(request):
             if candidate_path:
                 cookie_profile_id = requested_cookie_profile
                 cookie_path = candidate_path
-                log.info('yt-dlp cookie profile explicitly selected: id=%s path=%s', cookie_profile_id, cookie_path)
+                details = _inspect_cookie_file(candidate_path)
+                log.info('yt-dlp cookie profile explicitly selected: id=%s details=%s', cookie_profile_id, details)
 
     if custom_name_prefix is None:
         custom_name_prefix = ''
@@ -803,11 +829,13 @@ async def add(request):
                 if candidate_path:
                     cookie_profile_id = matched_profile.get('id')
                     cookie_path = candidate_path
-                    log.info('yt-dlp cookie profile auto-matched: id=%s hosts=%s path=%s', cookie_profile_id, matched_profile.get('hosts'), candidate_path)
+                    details = _inspect_cookie_file(candidate_path)
+                    log.info('yt-dlp cookie profile auto-matched: id=%s hosts=%s details=%s', cookie_profile_id, matched_profile.get('hosts'), details)
         if cookie_path is None:
             cookie_path = legacy_cookie_path
             if cookie_path:
-                log.info('yt-dlp falling back to legacy cookie file: %s', cookie_path)
+                details = _inspect_cookie_file(cookie_path)
+                log.info('yt-dlp falling back to legacy cookie file: %s details=%s', cookie_path, details)
         status = await queue.add(
             url,
             quality,
