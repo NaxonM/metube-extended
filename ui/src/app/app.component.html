@@ -597,8 +597,11 @@
             <button type="button" class="btn btn-outline-secondary" (click)="handleCookieSmartAction()" [disabled]="cookiesWorking">
               Paste cookies from clipboard
             </button>
-            <button type="button" class="btn btn-link" (click)="startNewCookieProfile()" [disabled]="cookiesWorking">
-              Reset form
+            <button type="button" class="btn btn-outline-primary" (click)="prefillYoutubeProfile()" [disabled]="cookiesWorking">
+              Prefill YouTube defaults
+            </button>
+            <button type="button" class="btn btn-outline-secondary" (click)="startNewCookieProfile()" [disabled]="cookiesWorking">
+              New profile
             </button>
             <button type="button" class="btn btn-primary ms-auto" (click)="saveCookieProfile()" [disabled]="cookiesWorking">
               <span *ngIf="cookiesWorking" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>

@@ -429,6 +429,11 @@ class DownloadQueue:
         if cookie_path:
             ytdl_options['cookiefile'] = cookie_path
             dl.cookiefile = cookie_path
+            try:
+                size = os.path.getsize(cookie_path)
+            except OSError:
+                size = -1
+            log.info('yt-dlp download %s will use cookie file %s (size=%s)', dl.id, cookie_path, size)
         download = Download(dldirectory, self.config.TEMP_DIR, output, output_chapter, dl.quality, dl.format, ytdl_options, dl)
         if auto_start is True:
             self.queue.put(download)

@@ -1133,12 +1133,19 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     });
   }
 
-  private loadCookieProfiles(selectDefault = false): void {
+  private loadCookieProfiles(selectDefault = false, focusProfileId?: string | null): void {
     this.cookieProfilesLoading = true;
     this.cookieProfilesError = '';
     this.downloads.listYtdlpCookieProfiles().subscribe(profiles => {
       this.cookieProfiles = profiles;
       this.cookieProfilesLoading = false;
+      if (focusProfileId) {
+        const focused = profiles.find(profile => profile.id === focusProfileId);
+        if (focused) {
+          this.resetCookieForm(focused);
+          return;
+        }
+      }
       if (selectDefault) {
         const preferred = profiles.find(profile => profile.default) || profiles[0];
         if (preferred) {
@@ -1177,11 +1184,13 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   startNewCookieProfile(): void {
     this.resetCookieForm(null);
     this.cookieMessage = '';
+    this.cookieError = '';
   }
 
   editCookieProfile(profile: YtdlpCookieProfile): void {
     this.resetCookieForm(profile);
     this.cookieMessage = '';
+    this.cookieError = '';
   }
 
   private parseCsvList(input: string): string[] {
@@ -1189,10 +1198,6 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       .split(',')
       .map(value => value.trim())
       .filter(value => value.length > 0);
-  }
-
-  private getDefaultCookieProfile(): YtdlpCookieProfile | undefined {
-    return this.cookieProfiles.find(profile => profile.default);
   }
 
   async handleCookieSmartAction(): Promise<void> {
@@ -1214,6 +1219,19 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     } else {
       this.cookieError = 'Unable to read cookies from clipboard. Paste them manually instead.';
     }
+  }
+
+  prefillYoutubeProfile(): void {
+    this.cookieForm = {
+      id: null,
+      name: 'YouTube',
+      hosts: this.defaultYoutubeHosts.join(', '),
+      tags: 'youtube',
+      cookies: '',
+      default: !this.cookieProfiles.some(profile => profile.default),
+    };
+    this.cookieMessage = '';
+    this.cookieError = '';
   }
 
   saveCookieProfile(): void {
@@ -1262,10 +1280,17 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       if (payload.cookies) {
         this.cookieStatus = this.normalizeCookieStatus(payload.cookies);
       }
-      this.cookieMessage = form.id ? 'Cookie profile updated.' : 'Cookie profile created.';
-      this.resetCookieForm(null);
+      const wasUpdate = !!form.id;
+      const savedProfile = payload.profile || null;
+      this.cookieMessage = wasUpdate ? 'Cookie profile updated.' : 'Cookie profile created.';
+      if (savedProfile) {
+        this.resetCookieForm(savedProfile);
+      } else {
+        this.resetCookieForm(null);
+      }
       this.refreshCookiesStatus();
-      this.loadCookieProfiles(true);
+      const focusId = savedProfile?.id ?? form.id ?? null;
+      this.loadCookieProfiles(!focusId, focusId);
     }, error => {
       this.cookiesWorking = false;
       console.error('Failed to save cookie profile', error);
@@ -1339,7 +1364,7 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       }
       this.cookieMessage = 'Default profile updated.';
       this.refreshCookiesStatus();
-      this.loadCookieProfiles(true);
+      this.loadCookieProfiles(true, profile.id);
     }, error => {
       this.cookiesWorking = false;
       console.error('Failed to set default cookie profile', error);

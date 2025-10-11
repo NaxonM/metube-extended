@@ -710,6 +710,7 @@ async def add(request):
             if candidate_path:
                 cookie_profile_id = requested_cookie_profile
                 cookie_path = candidate_path
+                log.info('yt-dlp cookie profile explicitly selected: id=%s path=%s', cookie_profile_id, cookie_path)
 
     if custom_name_prefix is None:
         custom_name_prefix = ''
@@ -802,8 +803,11 @@ async def add(request):
                 if candidate_path:
                     cookie_profile_id = matched_profile.get('id')
                     cookie_path = candidate_path
+                    log.info('yt-dlp cookie profile auto-matched: id=%s hosts=%s path=%s', cookie_profile_id, matched_profile.get('hosts'), candidate_path)
         if cookie_path is None:
             cookie_path = legacy_cookie_path
+            if cookie_path:
+                log.info('yt-dlp falling back to legacy cookie file: %s', cookie_path)
         status = await queue.add(
             url,
             quality,
@@ -818,6 +822,7 @@ async def add(request):
         )
         if cookie_profile_id:
             ytdlp_cookie_store.touch_profile(cookie_profile_id)
+            log.info('yt-dlp cookie profile %s marked as recently used', cookie_profile_id)
 
     if status.get('status') == 'unsupported':
         proxy_config = await proxy_settings.get()
