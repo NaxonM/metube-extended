@@ -2,7 +2,7 @@
 #
 # This script deploys or uninstalls the MeTubeEX system.
 # It's designed to be run via curl:
-# curl -sSL https://raw.githubusercontent.com/NaxonM/metube-extended/master/install.sh | bash
+# curl -sSL https://raw.githubusercontent.com/NaxonM/metube-extended/master/install-prebuilt.sh | bash
 #
 set -e
 
@@ -17,7 +17,7 @@ ENV_FILE=".env"
 detect_branch_from_invocation() {
     local url="${BASH_SOURCE[0]}"
 
-    if [ "$url" = "install.sh" ] || [ "$url" = "$0" ]; then
+    if [ "$(basename "$url")" = "$(basename "$0")" ]; then
         if [ -n "$SOURCE_BRANCH" ]; then
             echo "$SOURCE_BRANCH"
             return

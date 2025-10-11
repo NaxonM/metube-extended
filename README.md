@@ -20,13 +20,14 @@ Everything the upstream project offered—robust yt-dlp integration, playlist su
 
 ### Option 1: One-liner install (recommended)
 
-```bash
-METUBE_PULL_IMAGES=1 bash <(curl -sSL https://raw.githubusercontent.com/NaxonM/metube-extended/master/install.sh)
-```
+| Flow | Command |
+|------|---------|
+| **Use prebuilt images (recommended)** | `bash <(curl -fsSL https://raw.githubusercontent.com/NaxonM/metube-extended/master/install-prebuilt.sh)` |
+| **Build locally** | `bash <(curl -fsSL https://raw.githubusercontent.com/NaxonM/metube-extended/master/install-local.sh)` |
 
-- `METUBE_PULL_IMAGES=1` skips local Docker builds and pulls the latest CI-published image (requires Docker Hub / GHCR access from the host).
-- Omit the variable to compile everything locally the traditional way.
-- Run the script again anytime to update; pass `uninstall` to remove the deployment.
+- The prebuilt path pulls the latest CI image. To pin a tag, set `METUBE_IMAGE=ghcr.io/naxonm/metube-extended:vYYYY.MM.DD` before running the script.
+- The local build path compiles Angular and the Docker image on the host—useful for air-gapped or customized setups.
+- Both installers accept the same arguments as the core installer (e.g. `uninstall`).
 
 ### Option 2: Docker Compose from source
 
@@ -36,7 +37,7 @@ cd metube-extended
 docker compose up -d --build
 ```
 
-Stop the stack with `docker compose down`; follow the on-screen hints during `install.sh` runs for log and shutdown shortcuts.
+Stop the stack with `docker compose down`; follow the on-screen hints during installer runs for log and shutdown shortcuts.
 
 ### Option 3: Build locally
 
@@ -51,12 +52,22 @@ pip install -r requirements.txt
 python app/main.py
 ```
 
+### Uninstall
+
+Run either installer with the `uninstall` argument to tear everything down:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/NaxonM/metube-extended/master/install-prebuilt.sh) uninstall
+# or locally
+./install-prebuilt.sh uninstall
+```
+
 ## Prebuilt images & release artifacts
 
 - **Docker images:** Every push to `master` (touching core build files) publishes fresh images to Docker Hub (`${DOCKERHUB_REPOSITORY}`) and GHCR (`ghcr.io/naxonm/metube-extended`). Pin a specific tag during install with:
 
   ```bash
-  METUBE_PULL_IMAGES=1 METUBE_IMAGE=ghcr.io/naxonm/metube-extended:v2025.10.11 ./install.sh
+  METUBE_PULL_IMAGES=1 METUBE_IMAGE=ghcr.io/naxonm/metube-extended:v2025.10.11 ./installer-core.sh
   ```
 
 - **UI bundles:** Tagged releases include a prebuilt Angular bundle. Fetch it without running `npm` locally using the helper script:
@@ -70,7 +81,7 @@ python app/main.py
 
 ## Configuration
 
-All configuration knobs from upstream MeTube carry over. Set environment variables via `docker compose`, your orchestrator of choice, or the `.env` file consumed by `install.sh`.
+All configuration knobs from upstream MeTube carry over. Set environment variables via `docker compose`, your orchestrator of choice, or the `.env` file consumed by the installer.
 
 ### Download behaviour
 
