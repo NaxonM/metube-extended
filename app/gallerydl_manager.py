@@ -70,6 +70,44 @@ def _extract_host(value: Optional[str]) -> Optional[str]:
     return host or None
 
 
+def _candidate_executables(preferred: Optional[str]) -> Tuple[str, ...]:
+    candidates: List[str] = []
+
+    def add(path: Optional[str]) -> None:
+        if not path:
+            return
+        if path not in candidates:
+            candidates.append(path)
+
+    add(preferred)
+    if preferred and not os.path.isabs(preferred):
+        resolved = shutil.which(preferred)
+        add(resolved)
+
+    env_exec = os.environ.get("GALLERY_DL_EXEC")
+    if env_exec:
+        add(env_exec)
+        if not os.path.isabs(env_exec):
+            resolved = shutil.which(env_exec)
+            add(resolved)
+
+    for default in ("/usr/local/bin/gallery-dl", "/usr/bin/gallery-dl", "gallery-dl"):
+        add(default)
+        if not os.path.isabs(default):
+            resolved = shutil.which(default)
+            add(resolved)
+
+    return tuple(path for path in candidates if path)
+
+
+def _resolve_domains(executable_path: Optional[str]) -> Tuple[str, ...]:
+    for candidate in _candidate_executables(executable_path):
+        domains = _list_gallerydl_domains_cli(candidate)
+        if domains:
+            return domains
+    return tuple()
+
+
 def is_gallerydl_supported(url: str, executable_path: Optional[str] = None) -> bool:
     module = _ensure_gallerydl_module()
     if module:
@@ -84,8 +122,7 @@ def is_gallerydl_supported(url: str, executable_path: Optional[str] = None) -> b
     if not host:
         return False
 
-    exec_path = executable_path or os.environ.get("GALLERY_DL_EXEC") or shutil.which("gallery-dl") or "gallery-dl"
-    domains = _list_gallerydl_domains_cli(exec_path)
+    domains = _resolve_domains(executable_path)
     if not domains:
         return False
     return any(host == domain or host.endswith(f".{domain}") for domain in domains)
@@ -106,8 +143,7 @@ def list_gallerydl_sites(executable_path: Optional[str] = None) -> List[str]:
         except Exception:  # pragma: no cover - defensive
             log.debug("Falling back to CLI for gallery-dl site list", exc_info=True)
 
-    exec_path = executable_path or os.environ.get("GALLERY_DL_EXEC") or shutil.which("gallery-dl") or "gallery-dl"
-    hosts.update(_list_gallerydl_domains_cli(exec_path))
+    hosts.update(_resolve_domains(executable_path))
     return sorted(hosts)
 
 
@@ -121,6 +157,8 @@ def _list_gallerydl_extractors_cli(executable_path: str) -> Tuple[Dict[str, Opti
             text=True,
             check=True,
         )
+    except FileNotFoundError:
+        return tuple()
     except Exception as exc:
         log.warning("Failed to enumerate gallery-dl extractors via %s: %s", executable_path, exc)
         return tuple()
