@@ -42,7 +42,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         unzip \
         xz-utils \
         git \
-    && curl -fsSL https://astral.sh/uv/install.sh | sh -s -- --prefix /usr/local \
+    && curl -fsSL https://astral.sh/uv/install.sh | sh -s -- --python /usr/bin/python3 \
     && curl -fsSL "https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-x86_64-unknown-linux-gnu.zip" -o /tmp/deno.zip \
     && unzip /tmp/deno.zip -d /usr/local/bin \
     && chmod +x /usr/local/bin/deno \
