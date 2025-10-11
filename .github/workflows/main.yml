@@ -15,7 +15,7 @@ jobs:
         run: |
           echo "date=$(date +'%Y.%m.%d')" >> "$GITHUB_OUTPUT"
           repo_lower=$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
-          repo_lower=${repo_lower//"/}
+          repo_lower=$(echo "$repo_lower" | tr -d '"')
           echo "repo_lower=${repo_lower}" >> "$GITHUB_OUTPUT"
       -
         name: Checkout
