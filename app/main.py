@@ -9,7 +9,7 @@ import time
 import functools
 from contextlib import suppress
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from aiohttp import web
 from aiohttp.client_exceptions import ClientConnectionResetError
 from aiohttp.log import access_logger
@@ -29,6 +29,7 @@ from ytdl import DownloadQueueNotifier, DownloadQueue
 from proxy_downloads import ProxyDownloadManager, ProxySettingsStore
 from gallerydl_manager import GalleryDlManager, is_gallerydl_supported, list_gallerydl_sites
 from gallerydl_credentials import CredentialStore, CookieStore
+from ytdlp_cookies import CookieProfileStore
 import importlib.util
 
 
@@ -234,6 +235,7 @@ ensure_default_admin()
 gallerydl_state_dir = os.path.join(config.STATE_DIR, 'gallerydl')
 credential_store = CredentialStore(gallerydl_state_dir, config.SECRET_KEY)
 gallery_cookie_store = CookieStore(gallerydl_state_dir)
+ytdlp_cookie_stores: Dict[str, CookieProfileStore] = {}
 
 class ObjectSerializer(json.JSONEncoder):
     def default(self, obj):
@@ -342,6 +344,7 @@ sio = socketio.AsyncServer(cors_allowed_origins='*', cors_credentials=True)
 sio.attach(app, socketio_path=config.URL_PREFIX + 'socket.io')
 routes = web.RouteTableDef()
 MAX_STREAM_CHUNK = 4 * 1024 * 1024  # 4MB chunks for ranged streaming
+DEFAULT_YTDLP_HOSTS = ['youtube.com', 'youtu.be', 'music.youtube.com']
 
 
 class UserNotifier(DownloadQueueNotifier):
@@ -554,6 +557,42 @@ def ensure_cookie_directory(user_id: str) -> str:
     return path
 
 
+def _parse_string_list(value: Any) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        items = [segment.strip() for segment in value.split(',')]
+    elif isinstance(value, list):
+        items = []
+        for item in value:
+            if isinstance(item, str):
+                candidate = item.strip()
+                if candidate:
+                    items.append(candidate)
+    else:
+        return []
+    return [item for item in items if item]
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return False
+
+
+def get_ytdlp_cookie_store(user_id: str) -> CookieProfileStore:
+    directory = os.path.join(ensure_cookie_directory(user_id), 'ytdlp')
+    store = ytdlp_cookie_stores.get(directory)
+    if store is None:
+        store = CookieProfileStore(directory)
+        ytdlp_cookie_stores[directory] = store
+    return store
+
+
 def get_session_identity(session) -> str:
     identity = getattr(session, 'identity', None)
     if identity:
@@ -644,11 +683,33 @@ async def add(request):
 
     session, user_id, queue = await get_user_context(request)
     proxy_queue: Optional[ProxyDownloadManager] = None
-    cookie_path = session.get('cookie_file')
-    if cookie_path:
+
+    legacy_cookie_path = session.get('cookie_file')
+    if legacy_cookie_path:
         user_cookie_dir = ensure_cookie_directory(user_id)
-        if not cookie_path.startswith(user_cookie_dir) or not os.path.exists(cookie_path):
-            cookie_path = None
+        if not legacy_cookie_path.startswith(user_cookie_dir) or not os.path.exists(legacy_cookie_path):
+            legacy_cookie_path = None
+
+    raw_cookie_tags = post.get('cookie_tags')
+    cookie_tags: List[str] = []
+    if isinstance(raw_cookie_tags, list):
+        for tag in raw_cookie_tags:
+            if isinstance(tag, str):
+                cleaned = tag.strip().lower()
+                if cleaned:
+                    cookie_tags.append(cleaned)
+
+    requested_cookie_profile = post.get('cookie_profile_id')
+    cookie_profile_id: Optional[str] = None
+    cookie_path: Optional[str] = None
+    ytdlp_cookie_store = get_ytdlp_cookie_store(user_id)
+    if isinstance(requested_cookie_profile, str):
+        entry = ytdlp_cookie_store.get_profile(requested_cookie_profile)
+        if entry:
+            candidate_path = ytdlp_cookie_store.resolve_profile_path(requested_cookie_profile)
+            if candidate_path:
+                cookie_profile_id = requested_cookie_profile
+                cookie_path = candidate_path
 
     if custom_name_prefix is None:
         custom_name_prefix = ''
@@ -734,6 +795,15 @@ async def add(request):
             auto_start,
         )
     else:
+        if cookie_path is None:
+            matched_profile = ytdlp_cookie_store.auto_match_profile(url, cookie_tags)
+            if matched_profile:
+                candidate_path = ytdlp_cookie_store.resolve_profile_path(matched_profile.get('id'))
+                if candidate_path:
+                    cookie_profile_id = matched_profile.get('id')
+                    cookie_path = candidate_path
+        if cookie_path is None:
+            cookie_path = legacy_cookie_path
         status = await queue.add(
             url,
             quality,
@@ -744,7 +814,10 @@ async def add(request):
             playlist_item_limit,
             auto_start,
             cookie_path=cookie_path,
+            cookie_profile_id=cookie_profile_id,
         )
+        if cookie_profile_id:
+            ytdlp_cookie_store.touch_profile(cookie_profile_id)
 
     if status.get('status') == 'unsupported':
         proxy_config = await proxy_settings.get()
@@ -1213,14 +1286,49 @@ async def get_cookies(request):
     user_id = session.get('user_id')
     if not user_id:
         raise web.HTTPUnauthorized()
-    cookie_path = session.get('cookie_file')
-    if cookie_path:
+    store = get_ytdlp_cookie_store(user_id)
+    profiles = store.list_profiles()
+
+    legacy_cookie_path = session.get('cookie_file')
+    if legacy_cookie_path:
         user_dir = ensure_cookie_directory(user_id)
-        if not cookie_path.startswith(user_dir) or not os.path.exists(cookie_path):
-            cookie_path = None
+        if not legacy_cookie_path.startswith(user_dir) or not os.path.exists(legacy_cookie_path):
+            legacy_cookie_path = None
             session.pop('cookie_file', None)
-    state = cookie_status_store.sync_presence(user_id, bool(cookie_path))
+
+    if not profiles and legacy_cookie_path:
+        try:
+            with open(legacy_cookie_path, 'r', encoding='utf-8') as fh:
+                legacy_content = fh.read()
+            entry = store.save_profile(
+                name='Imported YouTube cookies',
+                cookies=legacy_content,
+                hosts=DEFAULT_YTDLP_HOSTS,
+                default=True,
+            )
+            session['cookie_file'] = store.resolve_profile_path(entry['id'])
+            profiles = store.list_profiles()
+        except (OSError, ValueError, KeyError) as exc:
+            log.warning('Failed to migrate legacy cookie file: %s', exc)
+
+    has_cookies = bool(profiles)
+    state = cookie_status_store.sync_presence(user_id, has_cookies)
+    state['profile_count'] = len(profiles)
+    default_profile = next((profile for profile in profiles if profile.get('default')), None)
+    if default_profile:
+        state['default_profile_id'] = default_profile.get('id')
     return web.json_response(state)
+
+
+@routes.get(config.URL_PREFIX + 'ytdlp/cookies')
+async def ytdlp_list_cookies(request):
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        raise web.HTTPUnauthorized()
+    store = get_ytdlp_cookie_store(user_id)
+    profiles = store.list_profiles()
+    return web.json_response({'status': 'ok', 'profiles': profiles})
 
 
 @routes.post(config.URL_PREFIX + 'cookies')
@@ -1231,36 +1339,71 @@ async def set_cookies(request):
         log.error("Failed to decode cookies payload")
         raise web.HTTPBadRequest()
 
-    cookie_text = post.get('cookies')
-    if not cookie_text or not isinstance(cookie_text, str):
-        log.error("Bad request: missing 'cookies' payload")
-        raise web.HTTPBadRequest()
-
-    if len(cookie_text) > 1024 * 1024:
-        log.warning("Cookie payload too large")
-        raise web.HTTPRequestEntityTooLarge()
-
     session = await get_session(request)
     user_id = session.get('user_id')
     if not user_id:
         raise web.HTTPUnauthorized()
-    cookie_path = get_cookie_path_for_session(session)
+    store = get_ytdlp_cookie_store(user_id)
+    profile_id = post.get('profile_id') if isinstance(post.get('profile_id'), str) else None
+
+    cookie_payload = post.get('cookies')
+    if profile_id and cookie_payload is None:
+        cookie_text = None
+    else:
+        if not cookie_payload or not isinstance(cookie_payload, str):
+            log.error("Bad request: missing 'cookies' payload")
+            raise web.HTTPBadRequest()
+        if len(cookie_payload) > 1024 * 1024:
+            log.warning("Cookie payload too large")
+            raise web.HTTPRequestEntityTooLarge()
+        cookie_text = cookie_payload
+
+    if profile_id is None and cookie_text is None:
+        raise web.HTTPBadRequest(text='Cookie data is required when creating a new profile')
+
+    name = (post.get('name') or '').strip() or 'YouTube cookies'
+    hosts = _parse_string_list(post.get('hosts')) or DEFAULT_YTDLP_HOSTS
+    tags = _parse_string_list(post.get('tags'))
+    default_flag = _coerce_bool(post.get('default'))
+
+    if not tags and any(host in {'youtube.com', 'youtu.be'} for host in hosts):
+        tags = ['youtube']
 
     try:
-        with open(cookie_path, 'w', encoding='utf-8') as fh:
-            fh.write(cookie_text.rstrip('\n') + '\n')
-        try:
-            os.chmod(cookie_path, 0o600)
-        except PermissionError:
-            log.warning(f"Unable to set permissions on cookie file {cookie_path}")
+        record = store.save_profile(
+            name=name,
+            cookies=cookie_text,
+            tags=tags,
+            hosts=hosts,
+            default=default_flag or not store.list_profiles(),
+            profile_id=profile_id,
+        )
+    except ValueError as exc:
+        raise web.HTTPBadRequest(text=str(exc))
+    except KeyError:
+        raise web.HTTPNotFound(text='Cookie profile not found')
     except OSError as exc:
-        log.error(f"Failed to write cookie file: {exc!r}")
+        log.error(f"Failed to persist cookie profile: {exc!r}")
         raise web.HTTPInternalServerError(text='Failed to persist cookies')
 
-    session['cookie_file'] = cookie_path
     state = cookie_status_store.mark_unknown(user_id)
+    profiles = store.list_profiles()
+    state['profile_count'] = len(profiles)
+    default_profile = next((profile for profile in profiles if profile.get('default')), None)
+    if default_profile:
+        state['default_profile_id'] = default_profile.get('id')
 
-    return web.json_response({'status': 'ok', 'cookies': state})
+    selected_profile = default_profile or next((profile for profile in profiles if profile.get('id') == record['id']), None)
+    if selected_profile:
+        path_for_session = store.resolve_profile_path(selected_profile['id'])
+        if path_for_session:
+            session['cookie_file'] = path_for_session
+        else:
+            session.pop('cookie_file', None)
+    else:
+        session.pop('cookie_file', None)
+
+    return web.json_response({'status': 'ok', 'cookies': state, 'profile': record})
 
 
 @routes.delete(config.URL_PREFIX + 'cookies')
@@ -1269,17 +1412,37 @@ async def clear_cookies(request):
     user_id = session.get('user_id')
     if not user_id:
         raise web.HTTPUnauthorized()
-    cookie_path = session.get('cookie_file')
+    profile_id = request.rel_url.query.get('profile_id')
+    store = get_ytdlp_cookie_store(user_id)
 
-    if cookie_path and os.path.exists(cookie_path):
-        try:
-            os.remove(cookie_path)
-        except OSError as exc:
-            log.error(f"Failed to delete cookie file {cookie_path}: {exc!r}")
-            raise web.HTTPInternalServerError(text='Failed to remove cookies')
+    try:
+        if profile_id:
+            store.delete_profile(profile_id)
+        else:
+            for profile in list(store.list_profiles()):
+                with suppress(KeyError):
+                    store.delete_profile(profile['id'])
+    except KeyError:
+        raise web.HTTPNotFound(text='Cookie profile not found')
+    except OSError as exc:
+        log.error(f"Failed to delete cookie profile: {exc!r}")
+        raise web.HTTPInternalServerError(text='Failed to remove cookies')
 
-    session.pop('cookie_file', None)
-    state = cookie_status_store.clear(user_id)
+    remaining = store.list_profiles()
+    state = cookie_status_store.sync_presence(user_id, bool(remaining)) if remaining else cookie_status_store.clear(user_id)
+    state['profile_count'] = len(remaining)
+    default_profile = next((profile for profile in remaining if profile.get('default')), None)
+    if default_profile:
+        state['default_profile_id'] = default_profile.get('id')
+
+    if default_profile:
+        path_for_session = store.resolve_profile_path(default_profile['id'])
+        if path_for_session:
+            session['cookie_file'] = path_for_session
+        else:
+            session.pop('cookie_file', None)
+    else:
+        session.pop('cookie_file', None)
 
     return web.json_response({'status': 'ok', 'cookies': state})
 

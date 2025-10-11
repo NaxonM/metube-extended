@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, of, Subject } from 'rxjs';
-import { catchError, tap } from 'rxjs/operators';
+import { catchError, map, tap } from 'rxjs/operators';
 import { MeTubeSocket } from './metube-socket';
 
 export interface GalleryDlPrompt {
@@ -175,6 +175,26 @@ export interface GalleryDlCookiePayload {
   content: string;
 }
 
+export interface YtdlpCookieProfile {
+  id: string;
+  name: string;
+  tags: string[];
+  hosts: string[];
+  default: boolean;
+  created_at: number;
+  updated_at: number;
+  last_used_at?: number | null;
+}
+
+export interface SaveCookieProfilePayload {
+  cookies?: string | null;
+  name?: string;
+  hosts?: string[];
+  tags?: string[];
+  default?: boolean;
+  profile_id?: string;
+}
+
 export interface Download {
   id: string;
   title: string;
@@ -208,6 +228,8 @@ export interface CookieStatusResponse {
   state: 'missing' | 'unknown' | 'valid' | 'invalid';
   message?: string;
   checked_at?: number;
+  profile_count?: number;
+  default_profile_id?: string;
 }
 
 export interface ManagedUser extends CurrentUser {
@@ -513,14 +535,37 @@ export class DownloadsService {
     );
   }
 
-  public setCookies(cookies: string) {
-    return this.http.post<Status>('cookies', {cookies: cookies}).pipe(
+  public saveCookieProfile(payload: SaveCookieProfilePayload) {
+    const body: any = {};
+    if (payload.cookies !== undefined) {
+      body.cookies = payload.cookies;
+    }
+    if (payload.name !== undefined) {
+      body.name = payload.name;
+    }
+    if (payload.hosts !== undefined) {
+      body.hosts = payload.hosts;
+    }
+    if (payload.tags !== undefined) {
+      body.tags = payload.tags;
+    }
+    if (payload.default !== undefined) {
+      body.default = payload.default;
+    }
+    if (payload.profile_id !== undefined) {
+      body.profile_id = payload.profile_id;
+    }
+    return this.http.post<Status & {cookies?: CookieStatusResponse; profile?: YtdlpCookieProfile}>('cookies', body).pipe(
       catchError(this.handleHTTPError)
     );
   }
 
-  public clearCookies() {
-    return this.http.delete<Status>('cookies').pipe(
+  public clearCookies(profileId?: string) {
+    const options: any = { observe: 'body' as const };
+    if (profileId) {
+      options.params = { profile_id: profileId };
+    }
+    return this.http.delete<Status & {cookies?: CookieStatusResponse}>('cookies', options).pipe(
       catchError(this.handleHTTPError)
     );
   }
@@ -528,6 +573,13 @@ export class DownloadsService {
   public getCookiesStatus() {
     return this.http.get<CookieStatusResponse>('cookies').pipe(
       catchError(() => of({has_cookies: false, state: 'missing'} as CookieStatusResponse))
+    );
+  }
+
+  public listYtdlpCookieProfiles() {
+    return this.http.get<{status?: string; profiles?: YtdlpCookieProfile[]}>('ytdlp/cookies').pipe(
+      map(response => response?.profiles ?? []),
+      catchError(() => of([] as YtdlpCookieProfile[]))
     );
   }
 
