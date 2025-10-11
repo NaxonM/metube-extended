@@ -37,6 +37,7 @@ def _load_hq_module():
     if not spec or not spec.loader:
         raise ImportError('Unable to load hq-dl module')
     module = importlib.util.module_from_spec(spec)
+    sys.modules['hq_dl'] = module
     spec.loader.exec_module(module)
     return module
 
