@@ -13,6 +13,9 @@ RUN npm run build -- --configuration production
 
 FROM python:3.13-alpine
 
+ARG GALLERY_DL_VERSION=1.30.9
+ARG GALLERY_DL_SHA256=48b168243dcbfbe6e8ddac15714a2f209ec833ad8f88cc3c4ef95ff16936b448
+
 WORKDIR /app
 
 COPY pyproject.toml uv.lock docker-entrypoint.sh ./
@@ -25,6 +28,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     apk add --update ffmpeg aria2 coreutils shadow su-exec curl tini deno && \
     apk add --update --virtual .build-deps gcc g++ musl-dev linux-headers uv && \
     UV_PROJECT_ENVIRONMENT=/usr/local uv sync --frozen --no-dev --compile-bytecode && \
+    curl -L "https://github.com/mikf/gallery-dl/releases/download/v${GALLERY_DL_VERSION}/gallery-dl.bin" -o /usr/local/bin/gallery-dl && \
+    echo "${GALLERY_DL_SHA256}  /usr/local/bin/gallery-dl" | sha256sum -c - && \
+    chmod +x /usr/local/bin/gallery-dl && \
     apk del .build-deps && \
     rm -rf /var/cache/apk/* && \
     mkdir /.cache && chmod 777 /.cache

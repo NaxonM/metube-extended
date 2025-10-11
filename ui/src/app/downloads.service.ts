@@ -4,10 +4,18 @@ import { Observable, of, Subject } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
 import { MeTubeSocket } from './metube-socket';
 
+export interface GalleryDlPrompt {
+  url: string;
+  title?: string;
+  auto_start: boolean;
+  options: string[];
+}
+
 export interface Status {
   status: string;
   msg?: string;
   proxy?: ProxySuggestion;
+  gallerydl?: GalleryDlPrompt;
 }
 
 export interface ProxySuggestion {
@@ -76,6 +84,17 @@ export interface SystemStats {
 
 export type ProxySettingsResponse = ProxySettings & Partial<Status>;
 export type SystemStatsResponse = SystemStats & Partial<Status>;
+
+export interface GalleryDlAddRequest {
+  url: string;
+  title?: string;
+  auto_start: boolean;
+  options: string[];
+}
+
+export interface SupportedSitesResponse extends Partial<Status> {
+  providers?: Record<string, string[]>;
+}
 
 export interface Download {
   id: string;
@@ -233,6 +252,18 @@ export class DownloadsService {
   public proxyAdd(request: ProxyAddRequest) {
     return this.http.post<ProxyAddResponse>('proxy/add', request).pipe(
       catchError((error: HttpErrorResponse) => this.handleTypedError<ProxyAddResponse>(error))
+    );
+  }
+
+  public gallerydlAdd(request: GalleryDlAddRequest) {
+    return this.http.post<Status>('gallerydl/add', request).pipe(
+      catchError(this.handleHTTPError)
+    );
+  }
+
+  public getSupportedSites() {
+    return this.http.get<SupportedSitesResponse>('supported-sites').pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<SupportedSitesResponse>(error))
     );
   }
 

@@ -1,11 +1,11 @@
 import { Component, ViewChild, ElementRef, AfterViewInit, OnInit, OnDestroy } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { faTrashAlt, faCheckCircle, faTimesCircle, IconDefinition } from '@fortawesome/free-regular-svg-icons';
-import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt, faPen, faCookieBite, faUserShield, faUserPlus, faUserSlash, faKey, faRightFromBracket, faPlay, faWindowMinimize, faWindowRestore, faArrowsLeftRight, faChevronDown, faChevronUp, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons';
+import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt, faPen, faCookieBite, faUserShield, faUserPlus, faUserSlash, faKey, faRightFromBracket, faPlay, faWindowMinimize, faWindowRestore, faArrowsLeftRight, faChevronDown, faChevronUp, faTriangleExclamation, faCircleInfo } from '@fortawesome/free-solid-svg-icons';
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { CookieService } from 'ngx-cookie-service';
 
-import { Download, DownloadsService, Status, CurrentUser, ManagedUser, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, ProxySettings, SystemStats, CookieStatusResponse } from './downloads.service';
+import { Download, DownloadsService, Status, CurrentUser, ManagedUser, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, ProxySettings, SystemStats, CookieStatusResponse, GalleryDlPrompt, SupportedSitesResponse } from './downloads.service';
 import { MasterCheckboxComponent } from './master-checkbox.component';
 import { Formats, Format, Quality } from './formats';
 import { Theme, Themes } from './theme';
@@ -101,6 +101,17 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   proxyOverrideMb: number | null = null;
   proxyConfirmInProgress = false;
 
+  galleryPromptOpen = false;
+  galleryPromptData: GalleryDlPrompt | null = null;
+  galleryPromptMessage = '';
+  galleryConfirmInProgress = false;
+
+  supportedSitesModalOpen = false;
+  supportedSitesLoading = false;
+  supportedSitesError = '';
+  supportedSites: { provider: string; sites: string[] }[] = [];
+  supportedSitesFilter = '';
+
   // Download metrics
   activeDownloads = 0;
   queuedDownloads = 0;
@@ -150,6 +161,7 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   faWindowMinimize = faWindowMinimize;
   faWindowRestore = faWindowRestore;
   faArrowsLeftRight = faArrowsLeftRight;
+  faCircleInfo = faCircleInfo;
 
   constructor(public downloads: DownloadsService, private cookieService: CookieService, private http: HttpClient) {
     this.format = cookieService.get('metube_format') || 'any';
@@ -359,6 +371,10 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     this.addInProgress = true;
     this.downloads.add(url, quality, format, folder, customNamePrefix, playlistStrictMode, playlistItemLimit, autoStart).subscribe((status: Status) => {
       this.addInProgress = false;
+      if (status.status === 'gallerydl' && status.gallerydl) {
+        this.showGalleryPrompt(status.gallerydl);
+        return;
+      }
       if (status.status === 'unsupported') {
         this.showProxyPrompt(status);
         return;
@@ -498,6 +514,92 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       this.proxyConfirmInProgress = false;
       this.proxyProbeError = (error?.error && typeof error.error === 'string') ? error.error : 'Unable to start the proxy download.';
     });
+  }
+
+  private showGalleryPrompt(data: GalleryDlPrompt) {
+    this.galleryPromptData = {...data};
+    this.galleryPromptMessage = '';
+    this.galleryConfirmInProgress = false;
+    this.galleryPromptOpen = true;
+  }
+
+  closeGalleryPrompt() {
+    this.galleryPromptOpen = false;
+    this.galleryPromptData = null;
+    this.galleryPromptMessage = '';
+    this.galleryConfirmInProgress = false;
+  }
+
+  confirmGalleryDownload() {
+    if (!this.galleryPromptData || this.galleryConfirmInProgress) {
+      return;
+    }
+
+    const payload = {
+      url: this.galleryPromptData.url,
+      title: this.galleryPromptData.title || this.extractFileName(this.galleryPromptData.url),
+      auto_start: this.galleryPromptData.auto_start !== false,
+      options: this.galleryPromptData.options || []
+    };
+
+    this.galleryConfirmInProgress = true;
+    this.downloads.gallerydlAdd(payload).subscribe((result: Status) => {
+      this.galleryConfirmInProgress = false;
+      if (result.status === 'error') {
+        this.galleryPromptMessage = result.msg || 'Unable to start the gallery download.';
+        return;
+      }
+      this.closeGalleryPrompt();
+      this.addUrl = '';
+    }, (error) => {
+      this.galleryConfirmInProgress = false;
+      const msg = (error?.error && typeof error.error === 'string') ? error.error : '';
+      this.galleryPromptMessage = msg || 'Unable to start the gallery download.';
+    });
+  }
+
+  openSupportedSitesModal() {
+    this.supportedSitesModalOpen = true;
+    this.supportedSitesLoading = true;
+    this.supportedSitesError = '';
+    this.supportedSitesFilter = '';
+    this.supportedSites = [];
+
+    this.downloads.getSupportedSites().subscribe((response: SupportedSitesResponse) => {
+      this.supportedSitesLoading = false;
+      if (response.status === 'error') {
+        this.supportedSitesError = response.msg || 'Unable to load supported sites.';
+        return;
+      }
+      const providers = response.providers || {};
+      this.supportedSites = Object.entries(providers).map(([provider, sites]) => ({
+        provider,
+        sites: (sites || []).slice().sort((a, b) => a.localeCompare(b))
+      })).sort((a, b) => a.provider.localeCompare(b.provider));
+    }, (error) => {
+      this.supportedSitesLoading = false;
+      const msg = (error?.error && typeof error.error === 'string') ? error.error : '';
+      this.supportedSitesError = msg || 'Unable to load supported sites.';
+    });
+  }
+
+  closeSupportedSitesModal() {
+    this.supportedSitesModalOpen = false;
+  }
+
+  filteredSupportedSites(sites: string[]): string[] {
+    if (!this.supportedSitesFilter) {
+      return sites;
+    }
+    const needle = this.supportedSitesFilter.toLowerCase();
+    return sites.filter(site => site.toLowerCase().includes(needle));
+  }
+
+  get supportedSitesFilteredEmpty(): boolean {
+    if (!this.supportedSitesFilter) {
+      return false;
+    }
+    return this.supportedSites.every(provider => this.filteredSupportedSites(provider.sites).length === 0);
   }
 
   get proxyDownloadDisabled(): boolean {

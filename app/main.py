@@ -6,6 +6,7 @@ import sys
 import asyncio
 import secrets
 import time
+import functools
 from contextlib import suppress
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -26,6 +27,7 @@ from watchfiles import DefaultFilter, Change, awatch
 
 from ytdl import DownloadQueueNotifier, DownloadQueue
 from proxy_downloads import ProxyDownloadManager, ProxySettingsStore
+from gallerydl_manager import GalleryDlManager, is_gallerydl_supported
 from hq-dl import (
     HQPornerError,
     HQPornerUnsupportedError,
@@ -38,6 +40,18 @@ from users import UserStore
 from aiohttp_session import get_session
 
 log = logging.getLogger('main')
+
+
+@functools.lru_cache(maxsize=1)
+def list_ytdlp_sites():
+    try:
+        from yt_dlp.extractor import gen_extractors
+
+        names = {getattr(extractor, 'IE_NAME', '') for extractor in gen_extractors()}
+        return sorted(name for name in names if name)
+    except Exception as exc:  # pragma: no cover
+        log.warning('Failed to enumerate yt-dlp extractors: %s', exc)
+        return []
 
 class Config:
     _DEFAULTS = {
@@ -78,6 +92,7 @@ class Config:
         'LOGIN_RATELIMIT': '10/minute',
         'PROXY_DOWNLOAD_LIMIT_ENABLED': 'false',
         'PROXY_DOWNLOAD_LIMIT_MB': '0',
+        'GALLERY_DL_EXEC': 'gallery-dl',
     }
 
     _BOOLEAN = ('DOWNLOAD_DIRS_INDEXABLE', 'CUSTOM_DIRS', 'CREATE_CUSTOM_DIRS', 'DELETE_FILE_ON_TRASHCAN', 'DEFAULT_OPTION_PLAYLIST_STRICT_MODE', 'HTTPS', 'ENABLE_ACCESSLOG', 'PROXY_DOWNLOAD_LIMIT_ENABLED')
@@ -318,6 +333,7 @@ class DownloadManager:
         self.sio = sio_server
         self._queues: Dict[str, DownloadQueue] = {}
         self._proxy_queues: Dict[str, ProxyDownloadManager] = {}
+        self._gallery_queues: Dict[str, GalleryDlManager] = {}
         self._notifiers: Dict[str, UserNotifier] = {}
         self.proxy_settings = proxy_settings
         self.cookie_status_store = cookie_status_store
@@ -354,6 +370,14 @@ class DownloadManager:
             proxy_queue = ProxyDownloadManager(self.config, notifier, queue, self._state_dir_for(user_id), user_id, self.proxy_settings)
             self._proxy_queues[user_id] = proxy_queue
 
+            gallery_queue = GalleryDlManager(
+                self.config,
+                notifier,
+                self._state_dir_for(user_id),
+                executable_path=getattr(self.config, 'GALLERY_DL_EXEC', 'gallery-dl'),
+            )
+            self._gallery_queues[user_id] = gallery_queue
+
             return queue
 
     async def get_proxy_queue(self, user_id: str) -> ProxyDownloadManager:
@@ -361,12 +385,22 @@ class DownloadManager:
             await self.get_queue(user_id)
         return self._proxy_queues[user_id]
 
+    async def get_gallery_queue(self, user_id: str) -> GalleryDlManager:
+        if user_id not in self._gallery_queues:
+            await self.get_queue(user_id)
+        return self._gallery_queues[user_id]
+
     async def get_combined_state(self, user_id: str):
         queue = await self.get_queue(user_id)
         proxy_queue = await self.get_proxy_queue(user_id)
+        gallery_queue = await self.get_gallery_queue(user_id)
         primary_queue, primary_done = queue.get()
         proxy_queue_items, proxy_done_items = proxy_queue.get()
-        return primary_queue + proxy_queue_items, primary_done + proxy_done_items
+        gallery_queue_items, gallery_done_items = gallery_queue.get()
+        return (
+            primary_queue + proxy_queue_items + gallery_queue_items,
+            primary_done + proxy_done_items + gallery_done_items,
+        )
 
 
 download_manager = DownloadManager(config, sio, proxy_settings, cookie_status_store)
@@ -560,7 +594,19 @@ async def add(request):
 
     playlist_item_limit = int(playlist_item_limit)
 
-    if is_hqporner_url(url):
+    gallery_queue = await download_manager.get_gallery_queue(user_id)
+
+    if is_gallerydl_supported(url):
+        status = {
+            'status': 'gallerydl',
+            'gallerydl': {
+                'url': url,
+                'title': post.get('title') or '',
+                'auto_start': auto_start,
+                'options': post.get('gallerydl_options') or [],
+            }
+        }
+    elif is_hqporner_url(url):
         proxy_queue = await download_manager.get_proxy_queue(user_id)
         status = await add_hqporner_download(
             proxy_queue,
@@ -614,22 +660,29 @@ async def delete(request):
         raise web.HTTPBadRequest()
     _session, user_id, queue = await get_user_context(request)
     proxy_queue = await download_manager.get_proxy_queue(user_id)
+    gallery_queue = await download_manager.get_gallery_queue(user_id)
 
     if where == 'queue':
-        primary = await queue.cancel(ids)
-        secondary = await proxy_queue.cancel(ids)
-        status = primary if primary.get('status') == 'error' else secondary if secondary.get('status') == 'error' else {'status': 'ok'}
+        results = [
+            await queue.cancel(ids),
+            await proxy_queue.cancel(ids),
+            await gallery_queue.cancel(ids),
+        ]
+        status = next((res for res in results if res.get('status') == 'error'), {'status': 'ok'})
     else:
         primary = await queue.clear(ids)
         secondary = await proxy_queue.clear(ids)
-        deleted = (primary.get('deleted') or []) + (secondary.get('deleted') or [])
-        missing = (primary.get('missing') or []) + (secondary.get('missing') or [])
+        gallery = await gallery_queue.clear(ids)
+        deleted = (primary.get('deleted') or []) + (secondary.get('deleted') or []) + (gallery.get('deleted') or [])
+        missing = (primary.get('missing') or []) + (secondary.get('missing') or []) + (gallery.get('missing') or [])
         status = {'status': 'ok', 'deleted': deleted, 'missing': missing}
         errors = {}
         if primary.get('status') == 'error':
             errors.update(primary.get('errors') or {})
         if secondary.get('status') == 'error':
             errors.update(secondary.get('errors') or {})
+        if gallery.get('status') == 'error':
+            errors.update(gallery.get('errors') or {})
         if errors:
             status.update({'status': 'error', 'errors': errors, 'msg': 'Some files could not be removed from disk.'})
     log.info(f"Download delete request processed for ids: {ids}, where: {where}")
@@ -642,9 +695,13 @@ async def start(request):
     log.info(f"Received request to start pending downloads for ids: {ids}")
     _session, user_id, queue = await get_user_context(request)
     proxy_queue = await download_manager.get_proxy_queue(user_id)
-    primary = await queue.start_pending(ids)
-    secondary = await proxy_queue.start_jobs(ids)
-    status = primary if primary.get('status') == 'error' else secondary
+    gallery_queue = await download_manager.get_gallery_queue(user_id)
+    results = [
+        await queue.start_pending(ids),
+        await proxy_queue.start_jobs(ids),
+        await gallery_queue.start_jobs(ids),
+    ]
+    status = next((res for res in results if res.get('status') == 'error'), {'status': 'ok'})
     return web.Response(text=serializer.encode(status))
 
 @routes.post(config.URL_PREFIX + 'rename')
@@ -660,6 +717,9 @@ async def rename(request):
     if status.get('status') == 'error' and 'Download not found' in (status.get('msg') or ''):
         proxy_queue = await download_manager.get_proxy_queue(user_id)
         status = await proxy_queue.rename(id, new_name)
+        if status.get('status') == 'error' and 'Download not found' in (status.get('msg') or ''):
+            gallery_queue = await download_manager.get_gallery_queue(user_id)
+            status = await gallery_queue.rename(id, new_name)
     log.info(f"Rename request processed for id: {id}")
     return web.Response(text=serializer.encode(status))
 
@@ -715,6 +775,41 @@ async def proxy_add(request):
         auto_start=auto_start
     )
     return web.json_response(result)
+
+
+@routes.post(config.URL_PREFIX + 'gallerydl/add')
+async def gallerydl_add(request):
+    try:
+        post = await request.json()
+    except json.JSONDecodeError:
+        raise web.HTTPBadRequest(text='Invalid JSON payload')
+
+    url = post.get('url')
+    if not url:
+        raise web.HTTPBadRequest(text='Missing url parameter')
+
+    title = post.get('title') or ''
+    auto_start = bool(post.get('auto_start', True))
+    options = post.get('options') or []
+    if not isinstance(options, list):
+        raise web.HTTPBadRequest(text='options must be an array')
+
+    _session, user_id, _ = await get_user_context(request)
+    gallery_queue = await download_manager.get_gallery_queue(user_id)
+    result = await gallery_queue.add_job(url=url, title=title, auto_start=auto_start, options=options)
+    return web.Response(text=serializer.encode(result))
+
+
+@routes.get(config.URL_PREFIX + 'supported-sites')
+async def supported_sites(request):
+    _session, user_id, _ = await get_user_context(request)
+    providers = {
+        'ytdlp': list_ytdlp_sites(),
+        'gallerydl': list_gallerydl_sites(),
+        'hqporner': ['hqporner'],
+        'proxy': ['direct-link'],
+    }
+    return web.json_response({'status': 'ok', 'providers': providers})
 
 
 @routes.get(config.URL_PREFIX + 'cookies')
