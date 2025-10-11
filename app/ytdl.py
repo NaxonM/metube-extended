@@ -379,8 +379,8 @@ class DownloadQueue:
                 self.done.put(download)
                 asyncio.create_task(self.notifier.completed(download.info))
 
-    def __extract_info(self, url, playlist_strict_mode):
-        return yt_dlp.YoutubeDL(params={
+    def __extract_info(self, url, playlist_strict_mode, cookie_path=None):
+        params = {
             'quiet': True,
             'no_color': True,
             'extract_flat': True,
@@ -388,8 +388,13 @@ class DownloadQueue:
             'noplaylist': playlist_strict_mode,
             'paths': {"home": self.config.DOWNLOAD_DIR, "temp": self.config.TEMP_DIR},
             **self.config.YTDL_OPTIONS,
-            **({'impersonate': yt_dlp.networking.impersonate.ImpersonateTarget.from_str(self.config.YTDL_OPTIONS['impersonate'])} if 'impersonate' in self.config.YTDL_OPTIONS else {}),
-        }).extract_info(url, download=False)
+        }
+        if 'impersonate' in self.config.YTDL_OPTIONS:
+            params['impersonate'] = yt_dlp.networking.impersonate.ImpersonateTarget.from_str(self.config.YTDL_OPTIONS['impersonate'])
+        if cookie_path:
+            params['cookiefile'] = cookie_path
+            log.info('yt-dlp metadata extraction using cookie file %s', cookie_path)
+        return yt_dlp.YoutubeDL(params=params).extract_info(url, download=False)
 
     def __calc_download_path(self, quality, format, folder):
         base_directory = self.config.DOWNLOAD_DIR if (quality != 'audio' and format not in AUDIO_FORMATS) else self.config.AUDIO_DOWNLOAD_DIR
@@ -502,7 +507,7 @@ class DownloadQueue:
         else:
             already.add(url)
         try:
-            entry = await asyncio.get_running_loop().run_in_executor(None, self.__extract_info, url, playlist_strict_mode)
+            entry = await asyncio.get_running_loop().run_in_executor(None, self.__extract_info, url, playlist_strict_mode, cookie_path)
         except yt_dlp.utils.YoutubeDLError as exc:
             msg = str(exc)
             lowered = msg.lower()
