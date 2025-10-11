@@ -45,7 +45,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
-            VERSION=${{ steps.date.outputs.date }}
+            VERSION=${{ steps.meta.outputs.date }}
           tags: |
             ${{ secrets.DOCKERHUB_REPOSITORY }}:latest
             ${{ secrets.DOCKERHUB_REPOSITORY }}:${{ steps.meta.outputs.date }}
