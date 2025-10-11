@@ -14,7 +14,7 @@ jobs:
         id: meta
         run: |
           echo "date=$(date +'%Y.%m.%d')" >> "$GITHUB_OUTPUT"
-          echo "repo_lower=$(echo '${GITHUB_REPOSITORY}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          echo "repo_lower=$(echo \"${GITHUB_REPOSITORY}\" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
       -
         name: Checkout
         uses: actions/checkout@v4
