@@ -67,6 +67,36 @@ def list_ytdlp_sites():
         log.warning('Failed to enumerate yt-dlp extractors: %s', exc)
         return []
 
+
+@functools.lru_cache(maxsize=1)
+def _get_ytdlp_extractors():
+    from yt_dlp.extractor import gen_extractors
+
+    try:
+        return tuple(gen_extractors())
+    except Exception as exc:  # pragma: no cover
+        log.warning('Failed to cache yt-dlp extractors: %s', exc)
+        return tuple()
+
+
+def is_ytdlp_supported(url: str) -> bool:
+    if not url:
+        return False
+
+    try:
+        for extractor in _get_ytdlp_extractors():
+            try:
+                if extractor.suitable(url):
+                    working = getattr(extractor, 'working', None)
+                    if callable(working) and not working():
+                        continue
+                    return True
+            except Exception:  # pragma: no cover - individual extractor failures shouldn't break detection
+                continue
+    except Exception as exc:  # pragma: no cover
+        log.debug('Failed to evaluate yt-dlp support for %s: %s', url, exc)
+    return False
+
 class Config:
     _DEFAULTS = {
         'DOWNLOAD_DIR': '.',
@@ -633,28 +663,66 @@ async def add(request):
 
     gallery_queue = await download_manager.get_gallery_queue(user_id)
 
-    if is_gallerydl_supported(url, getattr(config, 'GALLERY_DL_EXEC', 'gallery-dl')):
-        status = {
-            'status': 'gallerydl',
-            'gallerydl': {
-                'url': url,
-                'title': post.get('title') or '',
-                'auto_start': auto_start,
-                'options': post.get('gallerydl_options') or [],
-                'credential_id': None,
-                'cookie_name': None,
-                'proxy': None,
-                'retries': None,
-                'sleep_request': None,
-                'sleep_429': None,
-                'write_metadata': False,
-                'write_info_json': False,
-                'write_tags': False,
-                'download_archive': False,
-                'archive_id': None,
-            }
+    gallery_options = post.get('gallerydl_options') or []
+    preferred_backend_value = post.get('preferred_backend')
+    preferred_backend = preferred_backend_value.strip().lower() if isinstance(preferred_backend_value, str) else None
+    if preferred_backend not in {'gallerydl', 'ytdlp'}:
+        preferred_backend = None
+
+    gallery_supported = is_gallerydl_supported(url, getattr(config, 'GALLERY_DL_EXEC', 'gallery-dl'))
+    ytdlp_supported = is_ytdlp_supported(url)
+
+    def build_gallery_prompt() -> Dict[str, Any]:
+        return {
+            'url': url,
+            'title': post.get('title') or '',
+            'auto_start': auto_start,
+            'options': gallery_options,
+            'credential_id': None,
+            'cookie_name': None,
+            'proxy': None,
+            'retries': None,
+            'sleep_request': None,
+            'sleep_429': None,
+            'write_metadata': False,
+            'write_info_json': False,
+            'write_tags': False,
+            'download_archive': False,
+            'archive_id': None,
         }
-    elif is_hqporner_url(url):
+
+    if preferred_backend == 'gallerydl':
+        if gallery_supported:
+            status = {'status': 'gallerydl', 'gallerydl': build_gallery_prompt()}
+        else:
+            status = {'status': 'error', 'msg': 'Gallery-dl is not available for this URL.'}
+        return web.Response(text=serializer.encode(status))
+
+    if preferred_backend != 'ytdlp':
+        if gallery_supported and ytdlp_supported:
+            status = {
+                'status': 'choose-backend',
+                'backend_choice': {
+                    'url': url,
+                    'title': post.get('title') or '',
+                    'gallerydl': build_gallery_prompt(),
+                    'ytdlp': {
+                        'quality': quality,
+                        'format': format,
+                        'folder': folder or '',
+                        'custom_name_prefix': custom_name_prefix or '',
+                        'playlist_strict_mode': playlist_strict_mode,
+                        'playlist_item_limit': playlist_item_limit,
+                        'auto_start': auto_start,
+                    },
+                },
+            }
+            return web.Response(text=serializer.encode(status))
+        if gallery_supported:
+            status = {'status': 'gallerydl', 'gallerydl': build_gallery_prompt()}
+            return web.Response(text=serializer.encode(status))
+
+    if is_hqporner_url(url):
         proxy_queue = await download_manager.get_proxy_queue(user_id)
         status = await add_hqporner_download(
             proxy_queue,

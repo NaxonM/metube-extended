@@ -774,6 +774,36 @@
     </div>
   </div>
 
+<div class="modal fade backend-choice-modal" tabindex="-1" role="dialog" [ngClass]="{'show': backendChoiceModalOpen}" [ngStyle]="{'display': backendChoiceModalOpen ? 'block' : 'none'}">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content" *ngIf="backendChoiceData as choice">
+      <div class="modal-header">
+        <h5 class="modal-title">Choose download backend</h5>
+        <button type="button" class="btn-close" aria-label="Close" (click)="closeBackendChoiceModal(true)" [disabled]="backendChoiceSubmitting"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-3">
+          The site
+          <strong>{{ choice.url }}</strong>
+          is supported by both yt-dlp and gallery-dl. Select which backend you want to use for this download.
+        </p>
+        <div class="d-grid gap-2">
+          <button type="button" class="btn btn-primary" (click)="chooseBackendOption('ytdlp')" [disabled]="backendChoiceSubmitting">
+            <span *ngIf="backendChoiceSubmitting" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            Use yt-dlp (quick start)
+          </button>
+          <button type="button" class="btn btn-outline-primary" (click)="chooseBackendOption('gallerydl')" [disabled]="backendChoiceSubmitting">
+            Configure gallery-dl options
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeBackendChoiceModal(true)" [disabled]="backendChoiceSubmitting">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
   <div class="modal fade supported-sites-modal" tabindex="-1" role="dialog" [ngClass]="{'show': supportedSitesModalOpen}" [ngStyle]="{'display': supportedSitesModalOpen ? 'block' : 'none'}">
     <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
       <div class="modal-content">

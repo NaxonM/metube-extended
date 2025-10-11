@@ -5,13 +5,24 @@ import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAl
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { CookieService } from 'ngx-cookie-service';
 
-import { Download, DownloadsService, Status, CurrentUser, ManagedUser, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, ProxySettings, SystemStats, CookieStatusResponse, GalleryDlPrompt, SupportedSitesResponse, GalleryDlCredentialSummary, GalleryDlCredentialDetail, GalleryDlCookieFile } from './downloads.service';
+import { Download, DownloadsService, Status, CurrentUser, ManagedUser, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, ProxySettings, SystemStats, CookieStatusResponse, GalleryDlPrompt, SupportedSitesResponse, GalleryDlCredentialSummary, GalleryDlCredentialDetail, GalleryDlCookieFile, BackendChoice } from './downloads.service';
 import { MasterCheckboxComponent } from './master-checkbox.component';
 import { Formats, Format, Quality } from './formats';
 import { Theme, Themes } from './theme';
 import {KeyValue} from "@angular/common";
 
 type AdminSection = 'proxy' | 'system' | 'users';
+
+type PendingAddRequest = {
+  url: string;
+  quality: string;
+  format: string;
+  folder: string;
+  customNamePrefix: string;
+  playlistStrictMode: boolean;
+  playlistItemLimit: number;
+  autoStart: boolean;
+};
 
 @Component({
     selector: 'app-root',
@@ -151,6 +162,11 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   galleryCookieLoading = false;
   galleryCookieSaving = false;
   galleryCookieMessage = '';
+
+  backendChoiceModalOpen = false;
+  backendChoiceData: BackendChoice | null = null;
+  backendChoiceSubmitting = false;
+  pendingAddRequest: PendingAddRequest | null = null;
 
   // Download metrics
   activeDownloads = 0;
@@ -409,20 +425,46 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
 
     console.debug('Downloading:', { url, quality, format, folder, customNamePrefix, playlistStrictMode, playlistItemLimit, autoStart });
     this.addInProgress = true;
-    this.downloads.add(url, quality, format, folder, customNamePrefix, playlistStrictMode, playlistItemLimit, autoStart).subscribe((status: Status) => {
-      this.addInProgress = false;
-      if (status.status === 'gallerydl' && status.gallerydl) {
-        this.showGalleryPrompt(status.gallerydl);
-        return;
-      }
-      if (status.status === 'unsupported') {
-        this.showProxyPrompt(status);
-        return;
-      }
-      if (status.status === 'error') {
-        alert(`Error adding URL: ${status.msg}`);
-      } else {
-        this.addUrl = '';
+    this.pendingAddRequest = {
+      url,
+      quality,
+      format,
+      folder,
+      customNamePrefix,
+      playlistStrictMode,
+      playlistItemLimit,
+      autoStart
+    };
+    this.downloads.add(url, quality, format, folder, customNamePrefix, playlistStrictMode, playlistItemLimit, autoStart).subscribe({
+      next: (status: Status) => {
+        this.addInProgress = false;
+        if (status.status === 'choose-backend' && status.backend_choice) {
+          this.openBackendChoiceModal(status.backend_choice);
+          return;
+        }
+        if (status.status === 'gallerydl' && status.gallerydl) {
+          this.pendingAddRequest = null;
+          this.showGalleryPrompt(status.gallerydl);
+          return;
+        }
+        if (status.status === 'unsupported') {
+          this.pendingAddRequest = null;
+          this.showProxyPrompt(status);
+          return;
+        }
+        if (status.status === 'error') {
+          this.pendingAddRequest = null;
+          alert(`Error adding URL: ${status.msg}`);
+        } else {
+          this.pendingAddRequest = null;
+          this.addUrl = '';
+        }
+      },
+      error: (error) => {
+        this.addInProgress = false;
+        this.pendingAddRequest = null;
+        const message = error?.error && typeof error.error === 'string' ? error.error : 'Unable to add download.';
+        alert(message);
       }
     });
   }
@@ -638,6 +680,112 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       this.galleryConfirmInProgress = false;
       const msg = (error?.error && typeof error.error === 'string') ? error.error : '';
       this.galleryPromptMessage = msg || 'Unable to start the gallery download.';
+    });
+  }
+
+  openBackendChoiceModal(choice: BackendChoice) {
+    this.backendChoiceData = choice;
+    this.backendChoiceModalOpen = true;
+    this.backendChoiceSubmitting = false;
+  }
+
+  closeBackendChoiceModal(resetPending = false) {
+    this.backendChoiceModalOpen = false;
+    this.backendChoiceData = null;
+    this.backendChoiceSubmitting = false;
+    if (resetPending) {
+      this.pendingAddRequest = null;
+    }
+  }
+
+  chooseBackendOption(backend: 'ytdlp' | 'gallerydl') {
+    if (!this.backendChoiceData) {
+      return;
+    }
+    if (backend === 'gallerydl') {
+      const prompt = this.backendChoiceData.gallerydl;
+      this.closeBackendChoiceModal();
+      this.pendingAddRequest = null;
+      this.showGalleryPrompt(prompt);
+      return;
+    }
+    this.resubmitAddWithBackend(backend);
+  }
+
+  private resubmitAddWithBackend(backend: 'ytdlp' | 'gallerydl'): void {
+    const request = this.pendingAddRequest ?? {
+      url: this.addUrl?.trim() || '',
+      quality: this.quality,
+      format: this.format,
+      folder: this.folder,
+      customNamePrefix: this.customNamePrefix,
+      playlistStrictMode: this.playlistStrictMode,
+      playlistItemLimit: this.playlistItemLimit,
+      autoStart: this.autoStart
+    };
+
+    if (!request.url) {
+      this.closeBackendChoiceModal(true);
+      alert('Unable to determine the original URL for this request. Please try again.');
+      return;
+    }
+
+    this.addInProgress = true;
+    this.backendChoiceSubmitting = true;
+
+    this.downloads.add(
+      request.url,
+      request.quality,
+      request.format,
+      request.folder,
+      request.customNamePrefix,
+      request.playlistStrictMode,
+      request.playlistItemLimit,
+      request.autoStart,
+      backend
+    ).subscribe({
+      next: (status: Status) => {
+        this.addInProgress = false;
+        this.backendChoiceSubmitting = false;
+        this.backendChoiceModalOpen = false;
+        this.backendChoiceData = null;
+
+        if (status.status === 'choose-backend' && status.backend_choice) {
+          this.openBackendChoiceModal(status.backend_choice);
+          return;
+        }
+
+        if (status.status === 'gallerydl' && status.gallerydl) {
+          this.pendingAddRequest = null;
+          this.showGalleryPrompt(status.gallerydl);
+          return;
+        }
+
+        if (status.status === 'unsupported') {
+          this.pendingAddRequest = null;
+          this.showProxyPrompt(status);
+          return;
+        }
+
+        if (status.status === 'error') {
+          this.pendingAddRequest = null;
+          alert(`Error adding URL: ${status.msg}`);
+        } else {
+          this.pendingAddRequest = null;
+          if (status.status === 'ok') {
+            this.addUrl = '';
+          }
+        }
+      },
+      error: (error) => {
+        this.addInProgress = false;
+        this.backendChoiceSubmitting = false;
+        this.backendChoiceModalOpen = false;
+        this.backendChoiceData = null;
+        this.pendingAddRequest = null;
+        const message = error?.error && typeof error.error === 'string' ? error.error : 'Unable to add download.';
+        alert(message);
+      }
     });
   }
 
@@ -1936,23 +2084,40 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       }
       const url = urls[index];
       this.batchImportStatus = `Importing URL ${index + 1} of ${urls.length}: ${url}`;
-      // Now pass the selected quality, format, folder, etc. to the add() method
-      this.downloads.add(url, this.quality, this.format, this.folder, this.customNamePrefix,
-        this.playlistStrictMode, this.playlistItemLimit, this.autoStart)
-        .subscribe({
-          next: (status: Status) => {
-            if (status.status === 'error') {
-              alert(`Error adding URL ${url}: ${status.msg}`);
+      const attemptAdd = (backend?: 'ytdlp' | 'gallerydl') => {
+        this.downloads.add(url, this.quality, this.format, this.folder, this.customNamePrefix,
+          this.playlistStrictMode, this.playlistItemLimit, this.autoStart, backend)
+          .subscribe({
+            next: (status: Status) => {
+              if (status.status === 'choose-backend' && !backend) {
+                attemptAdd('ytdlp');
+                return;
+              }
+              if (status.status === 'gallerydl' && status.gallerydl) {
+                alert(`Gallery-dl configuration is required for ${url}. Skipping this URL in batch mode.`);
+                index++;
+                setTimeout(processNext, delayBetween);
+                return;
+              }
+              if (status.status === 'unsupported') {
+                alert(`URL ${url} is not supported.`);
+              } else if (status.status === 'error') {
+                alert(`Error adding URL ${url}: ${status.msg}`);
+              }
+              if (status.status === 'ok') {
+                this.batchImportStatus = `Queued URL ${index + 1} of ${urls.length}: ${url}`;
+              }
+              index++;
+              setTimeout(processNext, delayBetween);
+            },
+            error: (err) => {
+              console.error(`Error importing URL ${url}:`, err);
+              index++;
+              setTimeout(processNext, delayBetween);
             }
-            index++;
-            setTimeout(processNext, delayBetween);
-          },
-          error: (err) => {
-            console.error(`Error importing URL ${url}:`, err);
-            index++;
-            setTimeout(processNext, delayBetween);
-          }
-        });
+          });
+      };
+      attemptAdd();
     };
     processNext();
   }

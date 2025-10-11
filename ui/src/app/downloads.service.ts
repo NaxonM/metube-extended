@@ -27,6 +27,24 @@ export interface Status {
   msg?: string;
   proxy?: ProxySuggestion;
   gallerydl?: GalleryDlPrompt;
+  backend_choice?: BackendChoice;
+}
+
+export interface BackendChoice {
+  url: string;
+  title?: string;
+  gallerydl: GalleryDlPrompt;
+  ytdlp: YtdlpChoice;
+}
+
+export interface YtdlpChoice {
+  quality: string;
+  format: string;
+  folder: string;
+  custom_name_prefix: string;
+  playlist_strict_mode: boolean;
+  playlist_item_limit: number;
+  auto_start: boolean;
 }
 
 export interface ProxySuggestion {
@@ -298,8 +316,21 @@ export class DownloadsService {
     return of({status: 'error', msg: msg})
   }
 
-  public add(url: string, quality: string, format: string, folder: string, customNamePrefix: string, playlistStrictMode: boolean, playlistItemLimit: number, autoStart: boolean) {
-    return this.http.post<Status>('add', {url: url, quality: quality, format: format, folder: folder, custom_name_prefix: customNamePrefix, playlist_strict_mode: playlistStrictMode, playlist_item_limit: playlistItemLimit, auto_start: autoStart}).pipe(
+  public add(url: string, quality: string, format: string, folder: string, customNamePrefix: string, playlistStrictMode: boolean, playlistItemLimit: number, autoStart: boolean, preferredBackend?: 'ytdlp' | 'gallerydl') {
+    const payload: any = {
+      url: url,
+      quality: quality,
+      format: format,
+      folder: folder,
+      custom_name_prefix: customNamePrefix,
+      playlist_strict_mode: playlistStrictMode,
+      playlist_item_limit: playlistItemLimit,
+      auto_start: autoStart
+    };
+    if (preferredBackend) {
+      payload.preferred_backend = preferredBackend;
+    }
+    return this.http.post<Status>('add', payload).pipe(
       catchError(this.handleHTTPError)
     );
   }
