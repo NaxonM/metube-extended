@@ -27,7 +27,7 @@ from watchfiles import DefaultFilter, Change, awatch
 
 from ytdl import DownloadQueueNotifier, DownloadQueue
 from proxy_downloads import ProxyDownloadManager, ProxySettingsStore
-from gallerydl_manager import GalleryDlManager, is_gallerydl_supported
+from gallerydl_manager import GalleryDlManager, is_gallerydl_supported, list_gallerydl_sites
 import importlib.util
 
 
