@@ -27,4 +27,9 @@ echo "[metube] Launching installer from ${SCRIPT_URL} (local build)" >&2
 
 export METUBE_PULL_IMAGES=${METUBE_PULL_IMAGES:-0}
 
-curl -fsSL "$SCRIPT_URL" | bash -s -- "$@"
+tmp_script="$(mktemp)"
+trap 'rm -f "$tmp_script"' EXIT
+
+curl -fsSL "$SCRIPT_URL" -o "$tmp_script"
+
+bash "$tmp_script" "$@"
