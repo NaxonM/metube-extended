@@ -28,12 +28,24 @@ from watchfiles import DefaultFilter, Change, awatch
 from ytdl import DownloadQueueNotifier, DownloadQueue
 from proxy_downloads import ProxyDownloadManager, ProxySettingsStore
 from gallerydl_manager import GalleryDlManager, is_gallerydl_supported
-from hq-dl import (
-    HQPornerError,
-    HQPornerUnsupportedError,
-    is_hqporner_url,
-    resolve_hqporner_video,
-)
+import importlib.util
+
+
+def _load_hq_module():
+    module_path = Path(__file__).resolve().parent / 'hq-dl.py'
+    spec = importlib.util.spec_from_file_location('hq_dl', module_path)
+    if not spec or not spec.loader:
+        raise ImportError('Unable to load hq-dl module')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_hq = _load_hq_module()
+HQPornerError = _hq.HQPornerError
+HQPornerUnsupportedError = _hq.HQPornerUnsupportedError
+is_hqporner_url = _hq.is_hqporner_url
+resolve_hqporner_video = _hq.resolve_hqporner_video
 from yt_dlp.version import __version__ as yt_dlp_version
 from auth import setup_auth
 from users import UserStore
