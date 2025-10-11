@@ -449,11 +449,13 @@ class GalleryDlManager:
             )
             job.process = process
 
+            stdout_chunks: List[str] = []
             assert process.stdout is not None
             async for raw_line in process.stdout:
                 line = raw_line.decode(errors="ignore").strip()
                 if not line:
                     continue
+                stdout_chunks.append(line)
                 job.info.msg = line
                 await self.notifier.updated(job.info)
             returncode = await process.wait()
@@ -467,8 +469,16 @@ class GalleryDlManager:
                 return
 
             if returncode != 0:
+                log.error(
+                    "gallery-dl job %s failed with exit code %s\nCommand: %s\nOutput:\n%s",
+                    storage_key,
+                    returncode,
+                    cmd,
+                    "\n".join(stdout_chunks),
+                )
                 job.info.status = "error"
                 job.info.msg = f"gallery-dl exited with code {returncode}"
+                job.info.log = "\n".join(stdout_chunks)
                 await self._finalize_failure(storage_key, job)
                 return
 
@@ -512,7 +522,7 @@ class GalleryDlManager:
 
         cmd.extend([
             "--ignore-config",
-            "--base-directory",
+            "--destination",
             base_directory,
         ])
         cmd.extend(job.options)
