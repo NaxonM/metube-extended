@@ -796,6 +796,17 @@
                   </div>
                 </div>
 
+              </ng-container>
+            </ng-container>
+          </ng-container>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeSupportedSitesModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 <div class="modal fade gallery-settings-modal" tabindex="-1" role="dialog" [ngClass]="{'show': gallerySettingsModalOpen}" [ngStyle]="{'display': gallerySettingsModalOpen ? 'block' : 'none'}">
   <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
     <div class="modal-content">
@@ -913,16 +924,6 @@
     </div>
   </div>
 </div>
-              </ng-container>
-            </ng-container>
-          </ng-container>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" (click)="closeSupportedSitesModal()">Close</button>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- Stream Modal -->
   <div class="modal fade stream-modal" tabindex="-1" role="dialog" [ngClass]="{'show': streamModalOpen, 'minimized': streamModalOpen && streamMinimized}" [ngStyle]="{'display': streamModalOpen ? 'block' : 'none'}">
