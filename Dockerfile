@@ -25,7 +25,7 @@ COPY pyproject.toml uv.lock docker-entrypoint.sh ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     sed -i 's/\r$//g' docker-entrypoint.sh && \
     chmod +x docker-entrypoint.sh && \
-    apk add --update ffmpeg aria2 coreutils shadow su-exec curl tini deno && \
+    apk add --update ffmpeg aria2 coreutils shadow su-exec curl tini deno gcompat libstdc++ && \
     apk add --update --virtual .build-deps gcc g++ musl-dev linux-headers uv && \
     UV_PROJECT_ENVIRONMENT=/usr/local uv sync --frozen --no-dev --compile-bytecode && \
     curl -L "https://github.com/mikf/gallery-dl/releases/download/v${GALLERY_DL_VERSION}/gallery-dl.bin" -o /usr/local/bin/gallery-dl && \
