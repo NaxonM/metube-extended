@@ -550,112 +550,97 @@
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">Manage yt-dlp cookies</h5>
-          <button type="button" class="btn-close" aria-label="Close" (click)="closeCookiesModal()" [disabled]="cookiesInProgress || ytdlpCookieSaving || ytdlpCookieLoading"></button>
+          <button type="button" class="btn-close" aria-label="Close" (click)="closeCookiesModal()" [disabled]="cookiesWorking || cookieProfilesLoading"></button>
         </div>
         <div class="modal-body">
-          <section class="mb-4">
-            <p class="mb-2">
-              Paste your YouTube cookies in Netscape format. You can export them using browser extensions like <strong>Get cookies.txt</strong>.
-            </p>
-            <textarea [(ngModel)]="cookiesText" class="form-control" rows="6" placeholder="Paste cookies here" [disabled]="cookiesInProgress"></textarea>
-            <div class="mt-2 small text-muted">
-              {{ cookieStatusSummary }}
-            </div>
-            <div class="d-flex flex-wrap gap-2 mt-3">
-              <button type="button" class="btn btn-primary" (click)="handleCookieSmartAction()" [disabled]="cookiesInProgress">
-                <span *ngIf="cookiesInProgress" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                {{ cookieSmartButtonLabel }}
-              </button>
-              <button type="button" class="btn btn-outline-danger" (click)="clearCookies()" [disabled]="cookiesInProgress">
-                Remove default cookies
-              </button>
-            </div>
-          </section>
+          <p class="mb-3">
+            Paste Netscape-format cookies to create or update profiles. Profiles are matched automatically by URL host and tags, so downloads use the right cookies without manual selection.
+          </p>
 
-          <hr class="my-4">
+          <div class="small text-muted mb-3">
+            {{ cookieStatusSummary }}
+          </div>
 
-          <section>
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="mb-0">Advanced cookie profiles</h6>
-              <button type="button" class="btn btn-sm btn-outline-secondary" (click)="startNewYtdlpCookieProfile()" [disabled]="ytdlpCookieSaving || cookiesInProgress">
-                New profile
-              </button>
-            </div>
-            <p class="text-muted small mb-3">Profiles are matched automatically by URL host and tags so downloads use the right cookies without manual selection.</p>
+          <div *ngIf="cookieMessage" class="alert alert-success py-2" role="alert">
+            {{ cookieMessage }}
+          </div>
+          <div *ngIf="cookieError" class="alert alert-warning py-2" role="alert">
+            {{ cookieError }}
+          </div>
 
-            <div *ngIf="ytdlpCookieLoading" class="text-center py-3">
-              <div class="spinner-border" role="status" aria-hidden="true"></div>
+          <div class="row g-3 align-items-end mb-3">
+            <div class="col-md-4">
+              <label for="cookieProfileName" class="form-label">Profile name</label>
+              <input id="cookieProfileName" class="form-control" type="text" [(ngModel)]="cookieForm.name" [disabled]="cookiesWorking">
             </div>
-            <div *ngIf="!ytdlpCookieLoading && ytdlpCookieError" class="alert alert-warning" role="alert">
-              {{ ytdlpCookieError }}
+            <div class="col-md-4">
+              <label for="cookieProfileHosts" class="form-label">Hosts <span class="text-muted small">(comma separated)</span></label>
+              <input id="cookieProfileHosts" class="form-control" type="text" [(ngModel)]="cookieForm.hosts" placeholder="instagram.com, .tumblr.com" [disabled]="cookiesWorking">
             </div>
-            <div *ngIf="!ytdlpCookieLoading && !ytdlpCookieError && ytdlpCookieProfiles.length === 0" class="alert alert-info" role="alert">
-              No additional cookie profiles configured yet.
+            <div class="col-md-4">
+              <label for="cookieProfileTags" class="form-label">Tags <span class="text-muted small">(optional)</span></label>
+              <input id="cookieProfileTags" class="form-control" type="text" [(ngModel)]="cookieForm.tags" placeholder="youtube, music" [disabled]="cookiesWorking">
             </div>
+          </div>
 
-            <div *ngIf="ytdlpCookieProfiles.length" class="list-group mb-4">
-              <div class="list-group-item" *ngFor="let profile of ytdlpCookieProfiles">
-                <div class="d-flex justify-content-between align-items-start">
-                  <div>
-                    <div class="fw-semibold">
-                      {{ profile.name }}
-                      <span *ngIf="profile.default" class="badge bg-primary ms-2">Default</span>
-                    </div>
-                    <div class="small text-muted">Hosts: {{ profile.hosts.join(', ') || '—' }}</div>
-                    <div class="small text-muted" *ngIf="profile.tags?.length">Tags: {{ profile.tags.join(', ') }}</div>
-                    <div class="small text-muted" *ngIf="profile.last_used_at">Last used {{ formatCookieTimestamp(profile.last_used_at) }}</div>
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="cookieProfileDefault" [(ngModel)]="cookieForm.default" [disabled]="cookiesWorking">
+            <label class="form-check-label" for="cookieProfileDefault">Set as default profile</label>
+          </div>
+
+          <div class="mb-3">
+            <label for="cookieProfileData" class="form-label">Cookie data</label>
+            <textarea id="cookieProfileData" class="form-control" rows="5" [(ngModel)]="cookieForm.cookies" placeholder="Paste cookies here. Leave blank to keep existing cookies for this profile." [disabled]="cookiesWorking"></textarea>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 mb-4">
+            <button type="button" class="btn btn-outline-secondary" (click)="handleCookieSmartAction()" [disabled]="cookiesWorking">
+              Paste cookies from clipboard
+            </button>
+            <button type="button" class="btn btn-link" (click)="startNewCookieProfile()" [disabled]="cookiesWorking">
+              Reset form
+            </button>
+            <button type="button" class="btn btn-primary ms-auto" (click)="saveCookieProfile()" [disabled]="cookiesWorking">
+              <span *ngIf="cookiesWorking" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              {{ cookieForm.id ? 'Update profile' : 'Save profile' }}
+            </button>
+          </div>
+
+          <h6 class="mb-2">Existing profiles</h6>
+
+          <div *ngIf="cookieProfilesLoading" class="text-center py-3">
+            <div class="spinner-border" role="status" aria-hidden="true"></div>
+          </div>
+          <div *ngIf="!cookieProfilesLoading && cookieProfilesError" class="alert alert-warning" role="alert">
+            {{ cookieProfilesError }}
+          </div>
+          <div *ngIf="!cookieProfilesLoading && !cookieProfilesError && cookieProfiles.length === 0" class="alert alert-info" role="alert">
+            No cookie profiles yet. Save one using the form above.
+          </div>
+
+          <div *ngIf="cookieProfiles.length" class="list-group">
+            <div class="list-group-item" *ngFor="let profile of cookieProfiles">
+              <div class="d-flex justify-content-between align-items-start">
+                <div class="me-3">
+                  <div class="fw-semibold">
+                    {{ profile.name }}
+                    <span *ngIf="profile.default" class="badge bg-primary ms-2">Default</span>
                   </div>
-                  <div class="btn-group btn-group-sm">
-                    <button type="button" class="btn btn-outline-primary" (click)="setYtdlpCookieDefault(profile)" [disabled]="profile.default || ytdlpCookieSaving || cookiesInProgress">Make default</button>
-                    <button type="button" class="btn btn-outline-secondary" (click)="editYtdlpCookieProfile(profile)" [disabled]="ytdlpCookieSaving || cookiesInProgress">Edit</button>
-                    <button type="button" class="btn btn-outline-danger" (click)="deleteYtdlpCookieProfile(profile)" [disabled]="cookiesInProgress">Delete</button>
-                  </div>
+                  <div class="small text-muted">Hosts: {{ profile.hosts.join(', ') || '—' }}</div>
+                  <div class="small text-muted" *ngIf="profile.tags?.length">Tags: {{ profile.tags.join(', ') }}</div>
+                  <div class="small text-muted" *ngIf="profile.last_used_at">Last used {{ formatCookieTimestamp(profile.last_used_at) }}</div>
+                </div>
+                <div class="btn-group btn-group-sm">
+                  <button type="button" class="btn btn-outline-secondary" (click)="editCookieProfile(profile)" [disabled]="cookiesWorking">Edit</button>
+                  <button type="button" class="btn btn-outline-primary" (click)="makeCookieProfileDefault(profile)" [disabled]="profile.default || cookiesWorking">Make default</button>
+                  <button type="button" class="btn btn-outline-danger" (click)="deleteCookieProfile(profile)" [disabled]="cookiesWorking">Delete</button>
                 </div>
               </div>
             </div>
-
-            <div class="border rounded p-3">
-              <h6 class="mb-3">{{ ytdlpCookieForm.id ? 'Edit cookie profile' : 'Add cookie profile' }}</h6>
-              <div *ngIf="ytdlpCookieMessage" class="alert alert-success py-2" role="alert">
-                {{ ytdlpCookieMessage }}
-              </div>
-              <div class="row g-3">
-                <div class="col-md-4">
-                  <label for="ytdlpProfileName" class="form-label">Profile name</label>
-                  <input id="ytdlpProfileName" class="form-control" type="text" [(ngModel)]="ytdlpCookieForm.name" [disabled]="ytdlpCookieSaving || cookiesInProgress">
-                </div>
-                <div class="col-md-4">
-                  <label for="ytdlpProfileHosts" class="form-label">Hosts</label>
-                  <input id="ytdlpProfileHosts" class="form-control" type="text" [(ngModel)]="ytdlpCookieForm.hosts" placeholder="instagram.com, .tumblr.com" [disabled]="ytdlpCookieSaving || cookiesInProgress">
-                </div>
-                <div class="col-md-4">
-                  <label for="ytdlpProfileTags" class="form-label">Tags</label>
-                  <input id="ytdlpProfileTags" class="form-control" type="text" [(ngModel)]="ytdlpCookieForm.tags" placeholder="instagram, photography" [disabled]="ytdlpCookieSaving || cookiesInProgress">
-                </div>
-              </div>
-              <div class="form-check mt-3">
-                <input class="form-check-input" type="checkbox" id="ytdlpProfileDefault" [(ngModel)]="ytdlpCookieForm.default" [disabled]="ytdlpCookieSaving || cookiesInProgress">
-                <label class="form-check-label" for="ytdlpProfileDefault">Set as default profile</label>
-              </div>
-              <div class="mt-3">
-                <label for="ytdlpProfileCookies" class="form-label">Cookie data</label>
-                <textarea id="ytdlpProfileCookies" class="form-control" rows="5" [(ngModel)]="ytdlpCookieForm.cookies" placeholder="Paste cookies here. Leave blank to keep existing." [disabled]="ytdlpCookieSaving || cookiesInProgress"></textarea>
-              </div>
-              <div class="d-flex justify-content-between align-items-center mt-3">
-                <button type="button" class="btn btn-link p-0" (click)="startNewYtdlpCookieProfile()" [disabled]="ytdlpCookieSaving || cookiesInProgress">Reset form</button>
-                <div class="d-flex gap-2">
-                  <button type="button" class="btn btn-secondary" (click)="startNewYtdlpCookieProfile()" [disabled]="ytdlpCookieSaving || cookiesInProgress">New</button>
-                  <button type="button" class="btn btn-primary" (click)="submitYtdlpCookieProfile()" [disabled]="ytdlpCookieSaving || cookiesInProgress">
-                    <span *ngIf="ytdlpCookieSaving" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                    {{ ytdlpCookieForm.id ? 'Update profile' : 'Save profile' }}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
+          </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" (click)="closeCookiesModal()" [disabled]="cookiesInProgress || ytdlpCookieSaving || ytdlpCookieLoading">Close</button>
+          <button type="button" class="btn btn-secondary" (click)="closeCookiesModal()" [disabled]="cookiesWorking || cookieProfilesLoading">Close</button>
         </div>
       </div>
     </div>

@@ -5,7 +5,7 @@ import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAl
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { CookieService } from 'ngx-cookie-service';
 
-import { Download, DownloadsService, Status, CurrentUser, ManagedUser, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, ProxySettings, SystemStats, CookieStatusResponse, GalleryDlPrompt, SupportedSitesResponse, GalleryDlCredentialSummary, GalleryDlCredentialDetail, GalleryDlCookieFile, BackendChoice, YtdlpCookieProfile } from './downloads.service';
+import { Download, DownloadsService, Status, CurrentUser, ManagedUser, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, ProxySettings, SystemStats, CookieStatusResponse, GalleryDlPrompt, SupportedSitesResponse, GalleryDlCredentialSummary, GalleryDlCredentialDetail, GalleryDlCookieFile, BackendChoice, YtdlpCookieProfile, SaveCookieProfilePayload } from './downloads.service';
 import { MasterCheckboxComponent } from './master-checkbox.component';
 import { Formats, Format, Quality } from './formats';
 import { Theme, Themes } from './theme';
@@ -56,27 +56,25 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   isAdvancedOpen = false;
 
   cookiesModalOpen = false;
-  cookiesText = '';
   cookieStatus: CookieStatusResponse = { has_cookies: false, state: 'missing' };
-  cookiesStatusMessage = '';
-  cookiesInProgress = false;
-  ytdlpCookieProfiles: YtdlpCookieProfile[] = [];
-  ytdlpCookieLoading = false;
-  ytdlpCookieError = '';
-  ytdlpCookieSaving = false;
-  ytdlpCookieMessage = '';
-  ytdlpCookieForm = {
+  cookieMessage = '';
+  cookieError = '';
+  cookiesWorking = false;
+  cookieProfiles: YtdlpCookieProfile[] = [];
+  cookieProfilesLoading = false;
+  cookieProfilesError = '';
+  cookieForm = {
     id: null as string | null,
     name: '',
     hosts: '',
     tags: '',
     cookies: '',
-    default: false
+    default: false,
   };
   readonly defaultYoutubeHosts = ['youtube.com', 'youtu.be', 'music.youtube.com'];
 
   get cookiesConfigured(): boolean {
-    return (this.cookieStatus?.has_cookies ?? false) || this.ytdlpCookieProfiles.length > 0;
+    return (this.cookieStatus?.has_cookies ?? false) || this.cookieProfiles.length > 0;
   }
 
   currentUser: CurrentUser | null = null;
@@ -1113,21 +1111,20 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
 
   openCookiesModal(): void {
     this.cookiesModalOpen = true;
-    this.cookiesText = '';
-    this.cookiesStatusMessage = '';
+    this.cookieMessage = '';
+    this.cookieError = '';
+    this.cookiesWorking = false;
+    this.resetCookieForm(null);
     this.refreshCookiesStatus();
-    this.resetYtdlpCookieForm();
-    this.loadYtdlpCookieProfiles();
+    this.loadCookieProfiles(true);
   }
 
   closeCookiesModal(): void {
     this.cookiesModalOpen = false;
-    this.cookiesInProgress = false;
-    this.cookiesText = '';
-    this.ytdlpCookieMessage = '';
-    this.ytdlpCookieError = '';
-    this.ytdlpCookieLoading = false;
-    this.ytdlpCookieSaving = false;
+    this.cookiesWorking = false;
+    this.cookieMessage = '';
+    this.cookieError = '';
+    this.cookieProfilesError = '';
   }
 
   refreshCookiesStatus(): void {
@@ -1136,39 +1133,55 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     });
   }
 
-  private loadYtdlpCookieProfiles(): void {
-    this.ytdlpCookieLoading = true;
-    this.ytdlpCookieError = '';
+  private loadCookieProfiles(selectDefault = false): void {
+    this.cookieProfilesLoading = true;
+    this.cookieProfilesError = '';
     this.downloads.listYtdlpCookieProfiles().subscribe(profiles => {
-      this.ytdlpCookieProfiles = profiles;
-      this.ytdlpCookieLoading = false;
+      this.cookieProfiles = profiles;
+      this.cookieProfilesLoading = false;
+      if (selectDefault) {
+        const preferred = profiles.find(profile => profile.default) || profiles[0];
+        if (preferred) {
+          this.resetCookieForm(preferred);
+        }
+      }
     }, error => {
       console.error('Unable to load cookie profiles', error);
-      this.ytdlpCookieLoading = false;
-      this.ytdlpCookieError = 'Unable to load cookie profiles.';
+      this.cookieProfilesLoading = false;
+      this.cookieProfilesError = 'Unable to load cookie profiles. Please try again later.';
     });
   }
 
-  private resetYtdlpCookieForm(profile?: YtdlpCookieProfile): void {
+  private resetCookieForm(profile: YtdlpCookieProfile | null): void {
     if (profile) {
-      this.ytdlpCookieForm = {
+      this.cookieForm = {
         id: profile.id,
         name: profile.name,
         hosts: (profile.hosts || []).join(', '),
         tags: (profile.tags || []).join(', '),
         cookies: '',
-        default: !!profile.default
+        default: !!profile.default,
       };
     } else {
-      this.ytdlpCookieForm = {
+      this.cookieForm = {
         id: null,
         name: '',
         hosts: '',
         tags: '',
         cookies: '',
-        default: false
+        default: this.cookieProfiles.length === 0,
       };
     }
+  }
+
+  startNewCookieProfile(): void {
+    this.resetCookieForm(null);
+    this.cookieMessage = '';
+  }
+
+  editCookieProfile(profile: YtdlpCookieProfile): void {
+    this.resetCookieForm(profile);
+    this.cookieMessage = '';
   }
 
   private parseCsvList(input: string): string[] {
@@ -1178,52 +1191,65 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       .filter(value => value.length > 0);
   }
 
-  private getDefaultYtdlpCookieProfile(): YtdlpCookieProfile | undefined {
-    return this.ytdlpCookieProfiles.find(profile => profile.default);
+  private getDefaultCookieProfile(): YtdlpCookieProfile | undefined {
+    return this.cookieProfiles.find(profile => profile.default);
   }
 
-  startNewYtdlpCookieProfile(): void {
-    this.resetYtdlpCookieForm();
-    this.ytdlpCookieMessage = '';
+  async handleCookieSmartAction(): Promise<void> {
+    if (this.cookiesWorking) {
+      return;
+    }
+
+    this.cookieError = '';
+
+    const clipboardText = await this.readClipboardText();
+    if (this.looksLikeCookies(clipboardText)) {
+      this.cookieForm.cookies = clipboardText?.trim() || '';
+      this.cookieMessage = 'Copied cookies from clipboard.';
+      return;
+    }
+
+    if (clipboardText) {
+      this.cookieError = 'Clipboard does not appear to contain Netscape-format cookies.';
+    } else {
+      this.cookieError = 'Unable to read cookies from clipboard. Paste them manually instead.';
+    }
   }
 
-  editYtdlpCookieProfile(profile: YtdlpCookieProfile): void {
-    this.resetYtdlpCookieForm(profile);
-    this.ytdlpCookieMessage = '';
-  }
-
-  submitYtdlpCookieProfile(): void {
-    const form = this.ytdlpCookieForm;
+  saveCookieProfile(): void {
+    const form = this.cookieForm;
     const name = form.name.trim();
     if (!name) {
-      alert('Please provide a name for the cookie profile.');
+      alert('Please provide a profile name.');
       return;
     }
+
     const hosts = this.parseCsvList(form.hosts);
     const tags = this.parseCsvList(form.tags).map(tag => tag.toLowerCase());
-    const trimmedCookies = form.cookies.trim();
-    let cookiesPayload: string | null | undefined = undefined;
-    if (trimmedCookies) {
-      cookiesPayload = trimmedCookies;
-    } else if (form.id) {
-      cookiesPayload = null;
-    } else {
-      alert('Cookie data is required for a new profile.');
-      return;
-    }
-
-    this.ytdlpCookieSaving = true;
-    this.ytdlpCookieMessage = '';
-
-    this.downloads.saveCookieProfile({
+    const body: SaveCookieProfilePayload = {
       profile_id: form.id ?? undefined,
       name,
       hosts,
       tags,
       default: form.default,
-      cookies: cookiesPayload,
-    }).subscribe(status => {
-      this.ytdlpCookieSaving = false;
+    };
+
+    const trimmedCookies = form.cookies.trim();
+    if (trimmedCookies) {
+      body.cookies = trimmedCookies;
+    } else if (!form.id) {
+      alert('Please paste cookie data for a new profile.');
+      return;
+    } else {
+      body.cookies = null;
+    }
+
+    this.cookiesWorking = true;
+    this.cookieMessage = '';
+    this.cookieError = '';
+
+    this.downloads.saveCookieProfile(body).subscribe(status => {
+      this.cookiesWorking = false;
       if (!status || typeof (status as any).status !== 'string') {
         console.warn('Unexpected response when saving cookie profile', status);
         return;
@@ -1236,31 +1262,60 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       if (payload.cookies) {
         this.cookieStatus = this.normalizeCookieStatus(payload.cookies);
       }
-      this.ytdlpCookieMessage = form.id ? 'Cookie profile updated.' : 'Cookie profile created.';
-      this.resetYtdlpCookieForm();
+      this.cookieMessage = form.id ? 'Cookie profile updated.' : 'Cookie profile created.';
+      this.resetCookieForm(null);
       this.refreshCookiesStatus();
-      this.loadYtdlpCookieProfiles();
+      this.loadCookieProfiles(true);
     }, error => {
-      this.ytdlpCookieSaving = false;
+      this.cookiesWorking = false;
       console.error('Failed to save cookie profile', error);
       alert('Failed to save cookie profile.');
     });
   }
 
-  deleteYtdlpCookieProfile(profile: YtdlpCookieProfile): void {
-    const confirmDelete = confirm(`Remove cookie profile "${profile.name}"?`);
-    if (!confirmDelete) {
+  deleteCookieProfile(profile: YtdlpCookieProfile): void {
+    if (!confirm(`Remove cookie profile "${profile.name}"?`)) {
       return;
     }
-    this.clearCookies(profile.id);
+
+    this.cookiesWorking = true;
+    this.cookieMessage = '';
+    this.cookieError = '';
+
+    this.downloads.clearCookies(profile.id).subscribe(status => {
+      this.cookiesWorking = false;
+      if (!status || typeof (status as any).status !== 'string') {
+        console.warn('Unexpected response when deleting cookie profile', status);
+        return;
+      }
+      const payload = status as Status & {cookies?: CookieStatusResponse};
+      if (payload.status === 'error') {
+        alert(payload.msg || 'Unable to remove cookie profile.');
+        return;
+      }
+      if (payload.cookies) {
+        this.cookieStatus = this.normalizeCookieStatus(payload.cookies);
+      }
+      this.cookieMessage = 'Cookie profile removed.';
+      this.resetCookieForm(null);
+      this.refreshCookiesStatus();
+      this.loadCookieProfiles(true);
+    }, error => {
+      this.cookiesWorking = false;
+      console.error('Failed to delete cookie profile', error);
+      alert('Failed to remove cookie profile.');
+    });
   }
 
-  setYtdlpCookieDefault(profile: YtdlpCookieProfile): void {
+  makeCookieProfileDefault(profile: YtdlpCookieProfile): void {
     if (profile.default) {
       return;
     }
-    this.ytdlpCookieSaving = true;
-    this.ytdlpCookieMessage = '';
+
+    this.cookiesWorking = true;
+    this.cookieMessage = '';
+    this.cookieError = '';
+
     this.downloads.saveCookieProfile({
       profile_id: profile.id,
       name: profile.name,
@@ -1269,76 +1324,35 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       default: true,
       cookies: null,
     }).subscribe(status => {
-      this.ytdlpCookieSaving = false;
+      this.cookiesWorking = false;
       if (!status || typeof (status as any).status !== 'string') {
         console.warn('Unexpected response when updating default profile', status);
         return;
       }
       const payload = status as Status & {cookies?: CookieStatusResponse};
       if (payload.status === 'error') {
-        alert(payload.msg || 'Unable to update default profile.');
+        alert(payload.msg || 'Unable to set default profile.');
         return;
       }
       if (payload.cookies) {
         this.cookieStatus = this.normalizeCookieStatus(payload.cookies);
       }
-      this.ytdlpCookieMessage = 'Default profile updated.';
+      this.cookieMessage = 'Default profile updated.';
       this.refreshCookiesStatus();
-      this.loadYtdlpCookieProfiles();
+      this.loadCookieProfiles(true);
     }, error => {
-      this.ytdlpCookieSaving = false;
-      console.error('Failed to update default profile', error);
+      this.cookiesWorking = false;
+      console.error('Failed to set default cookie profile', error);
       alert('Failed to set profile as default.');
     });
   }
 
-  saveCookies(): void {
-    const text = this.cookiesText?.trim();
-    if (!text) {
-      alert('Please paste your cookies in the provided text area.');
-      return;
-    }
-    this.persistCookies(text);
-  }
-
-  clearCookies(profileId?: string): void {
-    if (!this.cookiesConfigured && !profileId) {
-      return;
-    }
-
-    const target = profileId ?? this.getDefaultYtdlpCookieProfile()?.id ?? undefined;
-
-    this.cookiesInProgress = true;
-    this.cookiesStatusMessage = '';
-    this.ytdlpCookieMessage = '';
-
-    this.downloads.clearCookies(target).subscribe(status => {
-      this.cookiesInProgress = false;
-      if (!status || typeof (status as any).status !== 'string') {
-        console.warn('Unexpected response when clearing cookies', status);
-        return;
-      }
-      const payload = status as Status & {cookies?: CookieStatusResponse};
-      if (payload.status === 'error') {
-        alert(`Error clearing cookies: ${payload.msg}`);
-        return;
-      }
-      const updated = this.normalizeCookieStatus(payload.cookies ?? { has_cookies: false, state: 'missing' });
-      this.cookieStatus = updated;
-      this.cookiesStatusMessage = target ? 'Cookie profile removed.' : 'Cookies cleared.';
-      this.ytdlpCookieMessage = target ? 'Cookie profile removed.' : 'Cookies cleared.';
-      this.refreshCookiesStatus();
-      this.loadYtdlpCookieProfiles();
-    }, error => {
-      this.cookiesInProgress = false;
-      console.error('Error clearing cookies', error);
-      alert('Failed to remove cookies.');
-    });
-  }
-
   get cookieStatusSummary(): string {
-    if (this.cookiesStatusMessage) {
-      return this.cookiesStatusMessage;
+    if (this.cookieMessage) {
+      return this.cookieMessage;
+    }
+    if (this.cookieError) {
+      return this.cookieError;
     }
     const status = this.cookieStatus;
     if (!status || !status.has_cookies) {
@@ -1375,13 +1389,6 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     }
   }
 
-  get cookieSmartButtonLabel(): string {
-    if (this.cookiesInProgress) {
-      return 'Working...';
-    }
-    return this.cookiesConfigured ? 'Save YouTube cookies' : 'Paste cookies from clipboard';
-  }
-
   get cookieStatusIcon(): IconDefinition {
     const state = this.cookieStatus?.state;
     if (state === 'valid') {
@@ -1412,78 +1419,6 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     return this.isYoutubeUrl(this.addUrl);
   }
 
-  async handleCookieSmartAction(): Promise<void> {
-    if (this.cookiesInProgress) {
-      return;
-    }
-
-    this.cookiesStatusMessage = '';
-
-    const clipboardText = await this.readClipboardText();
-    if (this.looksLikeCookies(clipboardText)) {
-      this.cookiesText = clipboardText?.trim() || '';
-      this.persistCookies(this.cookiesText);
-      return;
-    }
-
-    const manual = this.cookiesText?.trim();
-    if (manual) {
-      this.persistCookies(manual);
-      return;
-    }
-
-    if (this.cookiesConfigured) {
-      const confirmClear = confirm('No cookies were detected in your clipboard. Would you like to remove the saved cookies instead?');
-      if (confirmClear) {
-        this.clearCookies();
-      } else {
-        this.cookiesStatusMessage = 'Copy your YouTube cookies to the clipboard, then click the button again.';
-      }
-    } else {
-      this.cookiesStatusMessage = 'Copy your YouTube cookies to the clipboard, then click the button to paste them automatically.';
-    }
-  }
-
-  private persistCookies(rawText: string): void {
-    const text = rawText.trim();
-    if (!text) {
-      this.cookiesStatusMessage = 'Please paste your cookies in the provided text area.';
-      return;
-    }
-
-    this.cookiesInProgress = true;
-    this.cookiesStatusMessage = '';
-    this.downloads.saveCookieProfile({
-      cookies: text,
-      name: 'YouTube cookies',
-      hosts: this.defaultYoutubeHosts,
-      tags: ['youtube'],
-      default: true
-    }).subscribe(status => {
-      this.cookiesInProgress = false;
-      if (!status || typeof (status as any).status !== 'string') {
-        console.warn('Unexpected response when saving cookies', status);
-        return;
-      }
-      const payload = status as Status & {cookies?: CookieStatusResponse; profile?: YtdlpCookieProfile};
-      if (payload.status === 'error') {
-        alert(`Error saving cookies: ${payload.msg}`);
-        return;
-      }
-      const updated = this.normalizeCookieStatus(payload.cookies ?? { has_cookies: true, state: 'unknown' });
-      this.cookieStatus = updated;
-      this.cookiesText = '';
-      this.cookiesStatusMessage = 'Cookies saved successfully.';
-      this.ytdlpCookieMessage = 'Default YouTube cookies updated.';
-      this.refreshCookiesStatus();
-      this.loadYtdlpCookieProfiles();
-    }, error => {
-      this.cookiesInProgress = false;
-      console.error('Failed to save cookies', error);
-      alert('Failed to save cookies.');
-    });
-  }
-
   private async readClipboardText(): Promise<string | null> {
     if (typeof navigator === 'undefined' || !navigator.clipboard || !navigator.clipboard.readText) {
       return null;
@@ -1492,8 +1427,8 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
       return await navigator.clipboard.readText();
     } catch (error) {
       console.warn('Unable to read clipboard:', error);
-      if (!this.cookiesStatusMessage) {
-        this.cookiesStatusMessage = 'Unable to access clipboard. Paste your cookies manually.';
+      if (!this.cookieError) {
+        this.cookieError = 'Unable to access clipboard. Paste your cookies manually.';
       }
       return null;
     }
