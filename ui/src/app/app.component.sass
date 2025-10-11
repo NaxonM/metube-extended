@@ -225,42 +225,122 @@
     padding: 2rem
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15)
 
-.advanced-layout
+.advanced-dashboard
     display: grid
-    gap: 1.75rem
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr))
+    gap: clamp(1rem, 4vw, 1.75rem)
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr))
 
-.advanced-section-title
-    font-size: 0.75rem
+.advanced-tile
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.04)
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+    border-radius: 1.25rem
+    padding: clamp(1rem, 3vw, 1.5rem)
+    display: flex
+    flex-direction: column
+    gap: 1.25rem
+    transition: border-color 0.2s ease, transform 0.2s ease, background-color 0.2s ease
+
+.advanced-tile:hover
+    border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.35)
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.06)
+    transform: translateY(-2px)
+
+.advanced-tile__header
+    display: flex
+    align-items: flex-start
+    gap: 1rem
+
+.advanced-tile__icon
+    width: 2.75rem
+    height: 2.75rem
+    border-radius: 0.85rem
+    display: grid
+    place-items: center
+    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.18)
+    color: rgba(var(--bs-primary-rgb, 13,110,253), 0.95)
+    font-size: 1.15rem
+
+.advanced-tile__title
+    margin: 0
+    font-size: 0.85rem
     text-transform: uppercase
     letter-spacing: 0.08em
-    color: rgba(var(--bs-body-color-rgb), 0.7)
-    margin-bottom: 0.75rem
+    color: rgba(var(--bs-body-color-rgb), 0.75)
 
-.advanced-switch
-    padding-left: 2.5rem
-    .form-check-input
-        margin-left: -2.5rem
+.advanced-tile__meta
+    margin: 0.15rem 0 0
+    font-size: 0.85rem
+    color: rgba(var(--bs-body-color-rgb), 0.6)
 
-.advanced-divider
-    margin: 2rem 0 1.5rem
-    border-top: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
-
-.advanced-actions
+.advanced-tile__body
     display: flex
-    flex-wrap: wrap
+    flex-direction: column
+    gap: 1rem
+
+.advanced-field
+    display: flex
+    flex-direction: column
+    gap: 0.5rem
+
+.advanced-field__label
+    font-size: 0.85rem
+    font-weight: 600
+    color: rgba(var(--bs-body-color-rgb), 0.78)
+
+.advanced-field__hint
+    font-size: 0.75rem
+    color: rgba(var(--bs-body-color-rgb), 0.55)
+
+.advanced-toggle
+    display: flex
+    flex-direction: column
+    gap: 0.35rem
+
+.advanced-toggle__control
+    display: flex
+    align-items: center
     gap: 0.75rem
 
-.advanced-action
-    display: inline-flex
+.advanced-toggle__hint
+    margin: 0
+    font-size: 0.8rem
+    color: rgba(var(--bs-body-color-rgb), 0.55)
+
+.advanced-action-bar
+    margin-top: clamp(1.5rem, 4vw, 2rem)
+    display: grid
+    gap: 0.75rem
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr))
+
+.advanced-chip
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.12)
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.04)
+    border-radius: 0.95rem
+    padding: 0.75rem 1rem
+    display: flex
     align-items: center
     justify-content: flex-start
-    gap: 0.6rem
-    flex: 1 1 200px
-    padding: 0.65rem 1rem
+    gap: 0.65rem
+    color: inherit
+    text-align: left
+    transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease
 
-.advanced-action fa-icon
+.advanced-chip:hover
+    border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.3)
+    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.14)
+    transform: translateY(-1px)
+
+.advanced-chip__icon fa-icon
+    font-size: 1rem
+
+.advanced-chip__label
+    font-weight: 600
     font-size: 0.9rem
+
+.advanced-chip:disabled
+    opacity: 0.6
+    cursor: not-allowed
+    transform: none
 
 .admin-tools-container
     margin-top: 3rem
@@ -459,10 +539,8 @@
         gap: 0.75rem
     .admin-stats-grid
         grid-template-columns: repeat(auto-fit, minmax(140px, 1fr))
-    .advanced-actions
-        flex-direction: column
-    .advanced-action
-        width: 100%
+    .advanced-action-bar
+        grid-template-columns: 1fr
 
 .add-url-component
     margin: 0.5rem auto

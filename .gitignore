@@ -25,6 +25,7 @@ node_modules
 /ui/coverage/
 .docker-cache/
 docker-cache/
+/.dev-notes/
 
 # Python
 __pycache__/

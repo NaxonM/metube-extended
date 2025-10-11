@@ -3,7 +3,14 @@ name: build
 on:
   push:
     branches:
-      - 'master'
+      - master
+    paths:
+      - 'Dockerfile'
+      - 'app/**'
+      - 'ui/**'
+      - '.github/workflows/main.yml'
+      - 'docker-compose.yml'
+      - 'install.sh'
 
 jobs:
   dockerhub-build-push:

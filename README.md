@@ -21,10 +21,12 @@ Everything the upstream project offered—robust yt-dlp integration, playlist su
 ### Option 1: One-liner install (recommended)
 
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/NaxonM/metube-extended/master/install.sh) master
+METUBE_PULL_IMAGES=1 bash <(curl -sSL https://raw.githubusercontent.com/NaxonM/metube-extended/master/install.sh)
 ```
 
-Run the script again at any time to update to the latest release. To remove the deployment, pass `uninstall`.
+- `METUBE_PULL_IMAGES=1` skips local Docker builds and pulls the latest CI-published image (requires Docker Hub / GHCR access from the host).
+- Omit the variable to compile everything locally the traditional way.
+- Run the script again anytime to update; pass `uninstall` to remove the deployment.
 
 ### Option 2: Docker Compose from source
 
@@ -48,6 +50,23 @@ python -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 python app/main.py
 ```
+
+## Prebuilt images & release artifacts
+
+- **Docker images:** Every push to `master` (touching core build files) publishes fresh images to Docker Hub (`${DOCKERHUB_REPOSITORY}`) and GHCR (`ghcr.io/naxonm/metube-extended`). Pin a specific tag during install with:
+
+  ```bash
+  METUBE_PULL_IMAGES=1 METUBE_IMAGE=ghcr.io/naxonm/metube-extended:v2025.10.11 ./install.sh
+  ```
+
+- **UI bundles:** Tagged releases include a prebuilt Angular bundle. Fetch it without running `npm` locally using the helper script:
+
+  ```bash
+  ./scripts/fetch-ui-bundle.sh                     # downloads latest bundle into ui/dist/metube
+  ./scripts/fetch-ui-bundle.sh v2025.10.11 /tmp/ui # specific tag + custom output dir
+  ```
+
+- **Release workflow:** Create a Git tag (`git tag vYYYY.MM.DD && git push origin tag`) to trigger the full release pipeline—UI zip upload, multi-arch Docker publish, and GitHub Release creation.
 
 ## Configuration
 
