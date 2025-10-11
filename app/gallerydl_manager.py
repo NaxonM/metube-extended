@@ -13,11 +13,39 @@ import uuid
 import zipfile
 from collections import OrderedDict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set, Tuple
 from urllib.parse import urlparse
 
 _extractor_cache: Dict[str, Tuple[Dict[str, Optional[str]], ...]] = {}
 _domain_cache: Dict[str, Tuple[str, ...]] = {}
+_FILE_EXTENSIONS = (
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".bmp",
+    ".svg",
+    ".webp",
+    ".avif",
+    ".heic",
+    ".heif",
+    ".mp4",
+    ".m4v",
+    ".mov",
+    ".webm",
+    ".mkv",
+    ".avi",
+    ".flv",
+    ".ogg",
+    ".mp3",
+    ".wav",
+    ".flac",
+    ".zip",
+    ".cbz",
+    ".pdf",
+    ".json",
+    ".txt",
+)
 
 from ytdl import DownloadInfo
 
@@ -305,6 +333,10 @@ class GalleryDlJob:
         self._task: Optional[asyncio.Task] = None
         self._cancel_requested = False
         self._started_at: Optional[float] = None
+        self.expected_items: Optional[int] = None
+        self.completed_items: int = 0
+        self._seen_files: Set[str] = set()
+        self._temp_dir_prefix: Optional[str] = None
 
     def cancel(self):
         self._cancel_requested = True
@@ -521,6 +553,9 @@ class GalleryDlManager:
     async def _run_job(self, storage_key: str, job: GalleryDlJob) -> None:
         job.temp_dir = tempfile.mkdtemp(prefix="gallerydl-", dir=getattr(self.config, "TEMP_DIR", None))
         base_directory = job.temp_dir
+        job._temp_dir_prefix = os.path.normpath(job.temp_dir) + os.sep
+        job._seen_files.clear()
+        job.completed_items = 0
         try:
             cmd = self._build_command(job, base_directory)
         except Exception as exc:
@@ -532,6 +567,20 @@ class GalleryDlManager:
 
         log.info("Starting gallery-dl job %s: %s", storage_key, cmd)
         try:
+            job.info.status = "preparing"
+            job.info.msg = "Analyzing gallery"
+            await self.notifier.updated(job.info)
+
+            await self._estimate_expected_items(job, base_directory, cmd)
+
+            if job._cancel_requested:
+                job.info.status = "canceled"
+                job.info.msg = "Download canceled"
+                await self.notifier.updated(job.info)
+                self.queue.pop(storage_key, None)
+                self._cleanup_temp(job)
+                return
+
             job.info.status = "downloading"
             job.info.msg = "Starting gallery-dl"
             job._started_at = time.time()
@@ -552,8 +601,8 @@ class GalleryDlManager:
                 if not line:
                     continue
                 stdout_chunks.append(line)
-                job.info.msg = line
-                self._update_progress_from_line(job, line)
+                progress_msg = self._update_progress_from_line(job, line)
+                job.info.msg = progress_msg or line
                 await self.notifier.updated(job.info)
             returncode = await process.wait()
 
@@ -630,6 +679,82 @@ class GalleryDlManager:
         cmd.append(job.url)
         return cmd
 
+    async def _estimate_expected_items(self, job: GalleryDlJob, base_directory: str, base_cmd: List[str]) -> None:
+        if job.expected_items is not None:
+            return
+
+        if job.options:
+            lowered = [opt.lower() for opt in job.options if isinstance(opt, str)]
+            if any(opt.startswith("--print") or opt in {"--dump-json", "-g", "--get-urls", "--simulate", "-s"} for opt in lowered):
+                return
+
+        estimate_cmd = list(base_cmd)
+        if not estimate_cmd:
+            return
+
+        url = estimate_cmd.pop()
+        estimate_cmd.extend(["--print", "file:{num}", url])
+
+        log.debug("Estimating gallery item count for %s using %s", job.url, estimate_cmd)
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *estimate_cmd,
+                cwd=base_directory,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+        except FileNotFoundError:
+            log.warning("Unable to estimate gallery size; gallery-dl executable missing")
+            return
+        except Exception as exc:
+            log.warning("Unable to estimate gallery size for %s: %s", job.url, exc)
+            return
+
+        assert process.stdout is not None
+        count = 0
+        highest = 0
+
+        async def _consume() -> None:
+            nonlocal count, highest
+            async for raw_line in process.stdout:  # type: ignore[attr-defined]
+                line = raw_line.decode(errors="ignore").strip()
+                if not line:
+                    continue
+                try:
+                    value = int(line.split()[0])
+                except ValueError:
+                    continue
+                count += 1
+                if value > highest:
+                    highest = value
+
+        try:
+            await asyncio.wait_for(_consume(), timeout=60.0)
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            log.warning("Timed out estimating gallery size for %s", job.url)
+            return
+        except asyncio.CancelledError:
+            process.kill()
+            raise
+
+        returncode = await process.wait()
+        if returncode != 0:
+            log.debug("gallery-dl size estimation exited with %s for %s", returncode, job.url)
+            return
+
+        total = highest or count
+        if total <= 0:
+            return
+
+        job.expected_items = total
+        job.completed_items = 0
+        job.info.percent = 0.0
+        job.info.msg = f"Found {total} items"
+        await self.notifier.updated(job.info)
+
     def _credential_arguments(self, job: GalleryDlJob) -> List[str]:
         if not job.credential_id:
             return []
@@ -703,7 +828,9 @@ class GalleryDlManager:
         except ValueError:
             return [value]
 
-    def _update_progress_from_line(self, job: GalleryDlJob, line: str) -> None:
+    def _update_progress_from_line(self, job: GalleryDlJob, line: str) -> Optional[str]:
+        progress_msg: Optional[str] = None
+
         ratio_match = re.search(r"(\d+)\s*/\s*(\d+)", line)
         if ratio_match:
             current = int(ratio_match.group(1))
@@ -711,12 +838,62 @@ class GalleryDlManager:
             if total > 0:
                 percent = min(100.0, (current / total) * 100.0)
                 job.info.percent = percent
-                return
-        percent_match = re.search(r"(\d+(?:\.\d+)?)%", line)
-        if percent_match:
-            percent = float(percent_match.group(1))
-            if percent >= 0:
-                job.info.percent = min(percent, 100.0)
+                progress_msg = f"{current}/{total} ({percent:.1f}%)"
+        else:
+            percent_match = re.search(r"(\d+(?:\.\d+)?)%", line)
+            if percent_match:
+                percent = float(percent_match.group(1))
+                if percent >= 0:
+                    job.info.percent = min(percent, 100.0)
+                    progress_msg = f"{job.info.percent:.1f}%"
+
+        path_progress = self._handle_path_progress(job, line)
+        if path_progress:
+            return path_progress
+
+        return progress_msg
+
+    def _handle_path_progress(self, job: GalleryDlJob, line: str) -> Optional[str]:
+        if not line:
+            return None
+
+        normalized = line[2:] if line.startswith("# ") else line
+        temp_dir = job.temp_dir
+        if not temp_dir:
+            return None
+
+        if normalized.startswith("./") or normalized.startswith(".\\"):
+            normalized = normalized[2:]
+        normalized_path = os.path.normpath(os.path.join(temp_dir, normalized))
+
+        prefix = job._temp_dir_prefix
+        if prefix and not normalized_path.startswith(prefix):
+            # gallery-dl may emit absolute paths already
+            abs_path = os.path.normpath(normalized)
+            if abs_path.startswith(prefix):
+                normalized_path = abs_path
+            else:
+                return None
+
+        basename = os.path.basename(normalized_path)
+        if not basename or basename in job._seen_files:
+            return None
+
+        lower_basename = basename.lower()
+        if not any(lower_basename.endswith(ext) for ext in _FILE_EXTENSIONS):
+            return None
+
+        job._seen_files.add(basename)
+        job.completed_items += 1
+
+        if job.expected_items:
+            if job.completed_items > job.expected_items:
+                job.expected_items = job.completed_items
+            job.info.percent = min(100.0, (job.completed_items / job.expected_items) * 100.0)
+            return f"{basename} ({job.completed_items}/{job.expected_items})"
+
+        job.info.percent = None
+        return f"{basename} ({job.completed_items} files)"
 
     def _resolve_executable(self) -> str:
         exec_path = self._executable_path
@@ -764,6 +941,7 @@ class GalleryDlManager:
             except Exception as exc:
                 log.debug("Failed to cleanup temp dir %s: %s", job.temp_dir, exc)
         job.temp_dir = None
+        job._temp_dir_prefix = None
 
     # ------------------------------------------------------------------
     # Persistence
