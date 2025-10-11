@@ -80,77 +80,87 @@
 <main role="main" class="container container-xl">
   <form #f="ngForm">
     <div class="container add-url-box">
-      <!-- Main URL Input with Download Button -->
-      <div class="row mb-4">
-        <div class="col">
-          <div class="input-group input-group-lg shadow-sm">
-            <input type="text" 
-                   autocomplete="off" 
-                   spellcheck="false" 
-                   class="form-control form-control-lg" 
-                   placeholder="Enter video or playlist URL" 
-                   name="addUrl" 
-                   [(ngModel)]="addUrl" 
-                   [disabled]="addInProgress || downloads.loading">
-            <button *ngIf="shouldShowCookieIndicator"
-                    type="button"
-                    class="btn btn-lg cookie-status-button"
-                    [ngClass]="cookieStatusVariantClass"
-                    (click)="openCookiesModal()"
-                    [ngbTooltip]="cookieStatusTooltip"
-                    container="body"
-                    aria-label="Manage YouTube cookies">
-              <fa-icon [icon]="cookieStatusIcon"></fa-icon>
-            </button>
-            <button class="btn btn-primary btn-lg px-4" 
-                    type="submit" 
-                    (click)="addDownload()" 
-                    [disabled]="addInProgress || downloads.loading">
-              <span class="spinner-border spinner-border-sm" role="status" id="add-spinner" *ngIf="addInProgress"></span>
-              {{ addInProgress ? "Adding..." : "Download" }}
-            </button>
+      <div class="download-console">
+        <div class="download-console__panel">
+          <div class="download-console__input-row">
+            <div class="download-console__input-wrapper" [class.is-disabled]="addInProgress || downloads.loading">
+              <fa-icon [icon]="faLink" class="download-console__input-icon"></fa-icon>
+              <input type="text"
+                     autocomplete="off"
+                     spellcheck="false"
+                     class="download-console__input"
+                     placeholder="Enter video or playlist URL"
+                     name="addUrl"
+                     [(ngModel)]="addUrl"
+                     [disabled]="addInProgress || downloads.loading">
+              <button *ngIf="addUrl?.length"
+                      type="button"
+                      class="download-console__clear"
+                      (click)="clearAddUrl()"
+                      [disabled]="addInProgress || downloads.loading"
+                      aria-label="Clear URL">
+                <fa-icon [icon]="faXmark"></fa-icon>
+              </button>
+            </div>
+            <div class="download-console__actions">
+              <button *ngIf="shouldShowCookieIndicator"
+                      type="button"
+                      class="btn btn-lg cookie-status-button download-console__cookie"
+                      [ngClass]="cookieStatusVariantClass"
+                      (click)="openCookiesModal()"
+                      [ngbTooltip]="cookieStatusTooltip"
+                      container="body"
+                      aria-label="Manage YouTube cookies">
+                <fa-icon [icon]="cookieStatusIcon"></fa-icon>
+              </button>
+              <button class="btn btn-primary btn-lg download-console__submit"
+                      type="submit"
+                      (click)="addDownload()"
+                      [disabled]="addInProgress || downloads.loading">
+                <span class="spinner-border spinner-border-sm" role="status" id="add-spinner" *ngIf="addInProgress"></span>
+                <fa-icon [icon]="faDownload" class="download-console__submit-icon"></fa-icon>
+                <span>{{ addInProgress ? 'Adding...' : 'Download' }}</span>
+              </button>
+            </div>
+          </div>
+          <div class="download-console__options">
+            <div class="download-console__option">
+              <span class="download-console__label">Quality</span>
+              <select class="form-select form-select-lg"
+                      name="quality"
+                      [(ngModel)]="quality"
+                      (change)="qualityChanged()"
+                      [disabled]="addInProgress || downloads.loading">
+                <option *ngFor="let q of qualities" [ngValue]="q.id">{{ q.text }}</option>
+              </select>
+            </div>
+            <div class="download-console__option">
+              <span class="download-console__label">Format</span>
+              <select class="form-select form-select-lg"
+                      name="format"
+                      [(ngModel)]="format"
+                      (change)="formatChanged()"
+                      [disabled]="addInProgress || downloads.loading">
+                <option *ngFor="let f of formats" [ngValue]="f.id">{{ f.text }}</option>
+              </select>
+            </div>
+            <div class="download-console__option download-console__option--compact">
+              <span class="download-console__label">Options</span>
+              <button type="button"
+                      class="download-console__advanced-trigger"
+                      (click)="toggleAdvanced()"
+                      [attr.aria-expanded]="isAdvancedOpen"
+                      aria-controls="advancedOptions">
+                <span class="download-console__advanced-icon">
+                  <fa-icon [icon]="faSliders"></fa-icon>
+                </span>
+                <span>{{ isAdvancedOpen ? 'Hide advanced options' : 'Advanced options' }}</span>
+                <fa-icon [icon]="isAdvancedOpen ? faChevronUp : faChevronDown" class="download-console__advanced-chevron"></fa-icon>
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-
-      <!-- Options Row -->
-      <div class="row mb-3 g-3">
-        <div class="col-md-4">
-          <div class="input-group">
-            <span class="input-group-text">Quality</span>
-            <select class="form-select" 
-                    name="quality" 
-                    [(ngModel)]="quality" 
-                    (change)="qualityChanged()" 
-                    [disabled]="addInProgress || downloads.loading">
-              <option *ngFor="let q of qualities" [ngValue]="q.id">{{ q.text }}</option>
-            </select>
-          </div>
-        </div>
-        <div class="col-md-4">
-          <div class="input-group">
-            <span class="input-group-text">Format</span>
-            <select class="form-select" 
-                    name="format" 
-                    [(ngModel)]="format" 
-                    (change)="formatChanged()" 
-                    [disabled]="addInProgress || downloads.loading">
-              <option *ngFor="let f of formats" [ngValue]="f.id">{{ f.text }}</option>
-            </select>
-          </div>
-        </div>
-        <div class="col-md-4">
-          <button type="button" 
-                  class="btn btn-outline-secondary w-100 h-100" 
-                  (click)="toggleAdvanced()">
-            Advanced Options
-          </button>
-        </div>
-      </div>
-
-      <!-- Advanced Options Panel -->
-      <div class="row">
-        <div class="col-12">
+        <div class="download-console__advanced-panel">
           <div class="collapse show" id="advancedOptions" [ngbCollapse]="!isAdvancedOpen">
             <div class="card card-body advanced-card">
               <div class="advanced-layout">
