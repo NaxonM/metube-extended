@@ -419,7 +419,7 @@ detected_branch="$(detect_branch_from_invocation)"
 if [ -n "$detected_branch" ]; then
     REPO_BRANCH="$detected_branch"
 else
-    REPO_BRANCH="main"
+    REPO_BRANCH="master"
 fi
 
 case "$1" in
@@ -427,7 +427,7 @@ case "$1" in
         uninstall_system
         ;;
     install|"")
-        # Use detected branch (or default 'main') for 'install' or no argument
+        # Use detected branch (or default 'master') for 'install' or no argument
         install_system
         ;;
     *)
