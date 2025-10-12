@@ -1072,6 +1072,47 @@
   </div>
 </div>
 
+  <!-- Rename Modal -->
+  <div class="modal fade rename-modal" tabindex="-1" role="dialog" [ngClass]="{'show': renameModalOpen}" [ngStyle]="{'display': renameModalOpen ? 'block' : 'none'}">
+    <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
+      <div class="modal-content modal-modern">
+        <form (submit)="submitRename($event)">
+          <div class="modal-header">
+            <h5 class="modal-title">Rename file</h5>
+            <button type="button" class="btn-close" aria-label="Close" (click)="closeRenameModal()" [disabled]="renameSaving"></button>
+          </div>
+          <div class="modal-body">
+            <div class="rename-modal__context" *ngIf="renameTargetTitle">
+              <span class="rename-modal__label">Current title</span>
+              <div class="rename-modal__value" [title]="renameTargetTitle">{{ renameTargetTitle }}</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="renameInputField">New filename</label>
+              <input id="renameInputField"
+                     #renameInput
+                     name="renameInputField"
+                     type="text"
+                     class="form-control"
+                     autocomplete="off"
+                     [(ngModel)]="renameFormValue"
+                     [disabled]="renameSaving">
+            </div>
+            <div *ngIf="renameError" class="rename-modal__error">
+              {{ renameError }}
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" (click)="closeRenameModal()" [disabled]="renameSaving">Cancel</button>
+            <button type="submit" class="btn btn-primary" [disabled]="renameSaving || !(renameFormValue?.trim())">
+              <span *ngIf="renameSaving" class="spinner-border spinner-border-sm me-2" role="status"></span>
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- Stream Modal -->
   <div class="modal fade stream-modal" tabindex="-1" role="dialog" [ngClass]="{'show': streamModalOpen, 'minimized': streamModalOpen && streamMinimized}" [ngStyle]="{'display': streamModalOpen ? 'block' : 'none'}">
     <div class="modal-dialog" role="document" [ngClass]="{

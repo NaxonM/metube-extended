@@ -181,6 +181,14 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   backendChoiceSubmitting = false;
   pendingAddRequest: PendingAddRequest | null = null;
 
+  renameModalOpen = false;
+  renameFormValue = '';
+  renameSaving = false;
+  renameError = '';
+  renameTargetTitle = '';
+  private renameTargetKey: string | null = null;
+  private renameOriginalName = '';
+
   // Download metrics
   activeDownloads = 0;
   queuedDownloads = 0;
@@ -199,6 +207,7 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   @ViewChild('doneDownloadSelected') doneDownloadSelected: ElementRef;
   @ViewChild('streamVideo') streamVideo?: ElementRef<HTMLVideoElement>;
   @ViewChild('streamAudio') streamAudio?: ElementRef<HTMLAudioElement>;
+  @ViewChild('renameInput') renameInput?: ElementRef<HTMLInputElement>;
 
   faTrashAlt = faTrashAlt;
   faCheckCircle = faCheckCircle;
@@ -531,17 +540,64 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   renameDownload(key: string, download: Download) {
-    const currentName = download.filename;
-    const newName = prompt('Enter new filename', currentName);
-    if (!newName || newName === currentName) {
+    this.renameTargetKey = key;
+    this.renameOriginalName = download.filename || '';
+    this.renameFormValue = download.filename || download.title || '';
+    this.renameTargetTitle = download.title || download.filename || '';
+    this.renameError = '';
+    this.renameSaving = false;
+    this.renameModalOpen = true;
+
+    setTimeout(() => {
+      const input = this.renameInput?.nativeElement;
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    }, 10);
+  }
+
+  submitRename(event?: Event) {
+    event?.preventDefault();
+    if (!this.renameTargetKey) {
+      this.closeRenameModal();
       return;
     }
 
-    this.downloads.rename(key, newName).subscribe((status: Status) => {
-      if (status.status === 'error') {
-        alert(`Error renaming file: ${status.msg}`);
+    const trimmed = (this.renameFormValue || '').trim();
+    if (!trimmed || trimmed === this.renameOriginalName) {
+      this.closeRenameModal();
+      return;
+    }
+
+    this.renameSaving = true;
+    this.renameError = '';
+
+    this.downloads.rename(this.renameTargetKey, trimmed).subscribe({
+      next: (status: Status) => {
+        if (status.status === 'error') {
+          this.renameError = status.msg || 'Unable to rename file.';
+          this.renameSaving = false;
+          return;
+        }
+
+        this.closeRenameModal();
+      },
+      error: () => {
+        this.renameError = 'Unable to rename file.';
+        this.renameSaving = false;
       }
     });
+  }
+
+  closeRenameModal() {
+    this.renameModalOpen = false;
+    this.renameSaving = false;
+    this.renameError = '';
+    this.renameFormValue = '';
+    this.renameTargetTitle = '';
+    this.renameTargetKey = null;
+    this.renameOriginalName = '';
   }
 
   private showProxyPrompt(status: Status) {
