@@ -1,7 +1,7 @@
 import { Component, ViewChild, ElementRef, AfterViewInit, OnInit, OnDestroy } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { faTrashAlt, faCheckCircle, faTimesCircle, IconDefinition } from '@fortawesome/free-regular-svg-icons';
-import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt, faPen, faCookieBite, faUserShield, faUserPlus, faUserSlash, faKey, faRightFromBracket, faPlay, faWindowMinimize, faWindowRestore, faArrowsLeftRight, faChevronDown, faChevronUp, faTriangleExclamation, faCircleInfo, faSliders, faLink, faXmark, faLayerGroup } from '@fortawesome/free-solid-svg-icons';
+import { faRedoAlt, faSun, faMoon, faCircleHalfStroke, faCheck, faExternalLinkAlt, faDownload, faFileImport, faFileExport, faCopy, faClock, faTachometerAlt, faPen, faCookieBite, faUserShield, faUserPlus, faUserSlash, faKey, faRightFromBracket, faPlay, faWindowMinimize, faWindowRestore, faArrowsLeftRight, faChevronDown, faChevronUp, faTriangleExclamation, faCircleInfo, faSliders, faLink, faXmark, faLayerGroup, faTableColumns, faGrip } from '@fortawesome/free-solid-svg-icons';
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { CookieService } from 'ngx-cookie-service';
 
@@ -148,6 +148,7 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   supportedSitesLoading = false;
   supportedSitesError = '';
   supportedSites: { provider: string; sites: string[] }[] = [];
+  activeSupportedProviderIndex = 0;
   supportedSitesFilter = '';
 
   galleryCredentials: GalleryDlCredentialSummary[] = [];
@@ -240,6 +241,8 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   faWindowRestore = faWindowRestore;
   faArrowsLeftRight = faArrowsLeftRight;
   faCircleInfo = faCircleInfo;
+  faTableColumns = faTableColumns;
+  faGrip = faGrip;
   faSliders = faSliders;
   faLink = faLink;
   faXmark = faXmark;
@@ -977,6 +980,7 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     this.supportedSitesError = '';
     this.supportedSitesFilter = '';
     this.supportedSites = [];
+    this.activeSupportedProviderIndex = 0;
 
     this.downloads.getSupportedSites().subscribe((response: SupportedSitesResponse) => {
       this.supportedSitesLoading = false;
@@ -1008,11 +1012,38 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     return sites.filter(site => site.toLowerCase().includes(needle));
   }
 
+  setActiveSupportedProvider(index: number) {
+    this.activeSupportedProviderIndex = index;
+  }
+
+  get activeSupportedProvider() {
+    return this.supportedSites[this.activeSupportedProviderIndex] || null;
+  }
+
+  get activeSupportedSites(): string[] {
+    const provider = this.activeSupportedProvider;
+    if (!provider) {
+      return [];
+    }
+    return this.filteredSupportedSites(provider.sites);
+  }
+
+  get supportedProviderMatches(): { provider: string; count: number; index: number }[] {
+    const matches: { provider: string; count: number; index: number }[] = [];
+    this.supportedSites.forEach((item, index) => {
+      const count = this.filteredSupportedSites(item.sites).length;
+      if (count > 0) {
+        matches.push({ provider: item.provider, count, index });
+      }
+    });
+    return matches;
+  }
+
   get supportedSitesFilteredEmpty(): boolean {
     if (!this.supportedSitesFilter) {
       return false;
     }
-    return this.supportedSites.every(provider => this.filteredSupportedSites(provider.sites).length === 0);
+    return this.supportedProviderMatches.length === 0;
   }
 
   get proxyDownloadDisabled(): boolean {

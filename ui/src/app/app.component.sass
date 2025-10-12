@@ -6,6 +6,14 @@
         transform: rotate(0deg)
     100%
         transform: rotate(360deg)
+
+@keyframes download-panel-wave
+    0%
+        transform: rotate(0deg) scale(1)
+    50%
+        transform: rotate(180deg) scale(1.05)
+    100%
+        transform: rotate(360deg) scale(1)
 .supported-sites-modal .modal-body
     display: flex
     flex-direction: column
@@ -15,12 +23,80 @@
     display: flex
     flex-wrap: wrap
     gap: 0.75rem
+    align-items: stretch
+
+.supported-sites-modal__controls .input-group
+    flex: 1 1 280px
+
+.supported-sites-modal__tabs
+    display: flex
+    flex-wrap: wrap
+    gap: 0.5rem
     align-items: center
+
+.supported-sites-modal__tab
+    display: inline-flex
+    align-items: center
+    gap: 0.5rem
+    border-radius: 999px
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.15)
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.05)
+    padding: 0.5rem 0.85rem
+    color: inherit
+    font-size: 0.85rem
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease
+
+.supported-sites-modal__tab:hover
+    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.15)
+    border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.3)
+
+.supported-sites-modal__tab.is-active
+    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.22)
+    border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.38)
+    transform: translateY(-1px)
+
+.supported-sites-modal__tab-label
+    font-weight: 600
+
+.supported-sites-modal__tab-count
+    font-size: 0.75rem
+    font-weight: 500
+    color: rgba(var(--bs-body-color-rgb), 0.65)
+
+.supported-sites-modal__content
+    display: flex
+    flex-direction: column
+    gap: 1rem
+
+.supported-sites-modal__header
+    display: flex
+    justify-content: space-between
+    align-items: center
+
+.supported-sites-modal__title
+    display: inline-flex
+    align-items: center
+    gap: 0.6rem
+    font-weight: 600
+
+.supported-sites-modal__title fa-icon
+    color: rgba(var(--bs-primary-rgb, 13,110,253), 0.9)
+
+.supported-sites-modal__meta
+    font-size: 0.82rem
+    color: rgba(var(--bs-body-color-rgb), 0.65)
+
+.supported-sites-modal__empty
+    border: 1px dashed rgba(var(--bs-body-color-rgb, 255,255,255), 0.12)
+    border-radius: 0.9rem
+    padding: 1.25rem
+    text-align: center
 
 .supported-sites-modal__grid
     display: grid
-    gap: 1rem
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))
+    gap: 0.75rem
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr))
+
 
 .supported-sites-modal__card
     padding: 1rem
@@ -30,15 +106,6 @@
     display: flex
     flex-direction: column
     gap: 0.75rem
-
-.supported-sites-modal__card-title
-    display: flex
-    align-items: center
-    justify-content: space-between
-    font-size: 0.8rem
-    text-transform: uppercase
-    letter-spacing: 0.08em
-    color: rgba(var(--bs-body-color-rgb), 0.65)
 
 .supported-sites-modal__taglist
     display: flex
@@ -52,6 +119,14 @@
     color: rgba(var(--bs-body-color-rgb), 0.82)
     font-size: 0.78rem
     line-height: 1
+
+[data-bs-theme="light"] .supported-sites-modal__tab
+    border-color: rgba(15, 23, 42, 0.12)
+    background: rgba(15, 23, 42, 0.03)
+
+[data-bs-theme="light"] .supported-sites-modal__tab.is-active
+    background: rgba(37, 99, 235, 0.16)
+    border-color: rgba(37, 99, 235, 0.28)
 
 [data-bs-theme="light"] .supported-sites-modal__card
     border-color: rgba(15, 23, 42, 0.1)
@@ -164,6 +239,47 @@
 .nav-theme .dropdown-menu
     min-width: 10rem
 
+@media (max-width: 991.98px)
+    .navbar-inner
+        flex-direction: column
+        align-items: stretch
+        gap: 1rem
+    .nav-branding
+        width: 100%
+        justify-content: space-between
+        align-items: flex-start
+    .nav-actions
+        width: 100%
+        flex-direction: column
+        align-items: stretch
+        gap: 0.75rem
+        margin-top: 0.5rem
+    .nav-session
+        text-align: left
+    .nav-logout
+        align-self: flex-start
+    .nav-theme
+        align-self: flex-start
+
+@media (max-width: 575.98px)
+    .nav-branding
+        flex-direction: column
+        align-items: flex-start
+        gap: 0.65rem
+    .nav-stats
+        width: 100%
+        gap: 0.4rem
+    .nav-actions
+        gap: 0.6rem
+    .nav-logout
+        width: 100%
+        justify-content: center
+    .nav-theme
+        width: 100%
+    .nav-theme .nav-link
+        width: 100%
+        justify-content: center
+
 .page-shell
     padding-bottom: clamp(3rem, 8vw, 4.5rem)
 
@@ -249,7 +365,7 @@
 
 .download-console__panel
     position: relative
-    background: radial-gradient(circle at top left, rgba(var(--bs-primary-rgb, 13,110,253), 0.2), transparent 55%), linear-gradient(135deg, rgba(var(--bs-primary-rgb, 13,110,253), 0.12), rgba(var(--bs-body-color-rgb, 255,255,255), 0.03))
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.12), rgba(15, 23, 42, 0.2))
     border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.12)
     border-radius: 1.5rem
     padding: clamp(1.5rem, 4vw, 2.5rem)
@@ -259,11 +375,11 @@
 .download-console__panel::before
     content: ''
     position: absolute
-    inset: -60%
-    background: conic-gradient(from 180deg, rgba(76, 196, 255, 0.28), rgba(129, 140, 248, 0.25), rgba(76, 196, 255, 0.28))
-    filter: blur(120px)
-    opacity: 0.55
-    animation: download-panel-glow 18s linear infinite
+    inset: -40%
+    background: radial-gradient(circle, rgba(96, 165, 250, 0.25), transparent 55%)
+    filter: blur(90px)
+    opacity: 0.65
+    animation: download-panel-wave 14s linear infinite
 
 .download-console__panel::after
     content: ''
@@ -276,6 +392,14 @@
 .download-console__panel > *
     position: relative
     z-index: 1
+
+[data-bs-theme="light"] .download-console__panel
+    background: linear-gradient(135deg, rgba(165, 216, 255, 0.35), rgba(248, 250, 252, 0.92))
+    border-color: rgba(96, 165, 250, 0.28)
+    box-shadow: 0 28px 60px -30px rgba(59, 130, 246, 0.28)
+
+[data-bs-theme="light"] .download-console__panel::after
+    background: rgba(248, 250, 252, 0.82)
     backdrop-filter: blur(12px)
 
 .download-console__input-row
@@ -633,6 +757,10 @@
 .admin-section--wide
     grid-column: 1 / -1
 
+.admin-section--accent
+    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.12)
+    border: 1px solid rgba(var(--bs-primary-rgb, 13,110,253), 0.25)
+
 .admin-panel-header
     display: flex
     align-items: center
@@ -679,6 +807,11 @@
     font-weight: 600
     border-radius: 0.75rem
     transition: background-color 0.2s ease
+
+.admin-user-shell
+    border: 1px solid rgba(var(--bs-primary-rgb, 13,110,253), 0.18)
+    background: linear-gradient(135deg, rgba(var(--bs-primary-rgb, 13,110,253), 0.12), rgba(var(--bs-body-color-rgb, 255,255,255), 0.02))
+    box-shadow: 0 24px 48px -26px rgba(15, 23, 42, 0.4)
 
 .admin-card--collapsible .admin-section-toggle
     border-radius: 0.75rem 0.75rem 0 0
@@ -728,6 +861,171 @@
     width: 100%
     padding-bottom: 1rem
     border-bottom: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+
+.admin-user-hub
+    display: flex
+    flex-direction: column
+    gap: 1.5rem
+
+.admin-user-hub__header
+    display: flex
+    flex-wrap: wrap
+    gap: 1rem
+    justify-content: space-between
+    align-items: center
+
+.admin-user-hub__summary
+    display: flex
+    flex-direction: column
+    gap: 0.35rem
+
+.admin-user-hub__title
+    margin: 0
+    font-size: 1.1rem
+    font-weight: 600
+
+.admin-user-hub__subtitle
+    margin: 0
+    color: rgba(var(--bs-body-color-rgb), 0.6)
+    font-size: 0.9rem
+
+.admin-user-hub__loading
+    display: flex
+    align-items: center
+    gap: 0.5rem
+    padding: 0.75rem
+    border-radius: 0.75rem
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.05)
+
+.admin-user-hub__grid
+    display: grid
+    gap: 1rem
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr))
+
+.admin-user-card
+    border-radius: 1rem
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.12)
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.03)
+    display: flex
+    flex-direction: column
+    gap: 1rem
+    padding: 1.25rem
+    min-height: 180px
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease
+
+.admin-user-card:hover
+    transform: translateY(-3px)
+    border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.4)
+    box-shadow: 0 18px 36px -24px rgba(15, 23, 42, 0.55)
+
+.admin-user-card__header
+    display: flex
+    justify-content: space-between
+    align-items: flex-start
+    gap: 1rem
+
+.admin-user-card__identity
+    display: flex
+    align-items: center
+    gap: 0.85rem
+
+.admin-user-card__avatar
+    width: 44px
+    height: 44px
+    border-radius: 14px
+    display: grid
+    place-items: center
+    font-weight: 600
+    font-size: 1rem
+    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.18)
+    color: rgba(var(--bs-body-color-rgb), 0.9)
+
+.admin-user-card__avatar.is-admin
+    background: rgba(var(--bs-warning-rgb, 255,193,7), 0.25)
+    color: rgba(var(--bs-warning-rgb, 255,193,7), 0.95)
+
+.admin-user-card__name
+    font-weight: 600
+    display: inline-flex
+    align-items: center
+    gap: 0.5rem
+
+.admin-user-card__tag
+    border-radius: 999px
+    background: rgba(var(--bs-success-rgb, 25,135,84), 0.18)
+    color: rgba(var(--bs-success-rgb, 25,135,84), 0.95)
+    font-size: 0.7rem
+    padding: 0.25rem 0.5rem
+
+.admin-user-card__meta
+    display: inline-flex
+    gap: 0.4rem
+    flex-wrap: wrap
+    margin-top: 0.25rem
+
+.admin-user-card__menu
+    display: inline-flex
+    gap: 0.35rem
+
+.btn.btn-icon
+    width: 2rem
+    height: 2rem
+    border-radius: 0.65rem
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.16)
+    display: inline-flex
+    align-items: center
+    justify-content: center
+    color: inherit
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.04)
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease
+
+.btn.btn-icon:hover
+    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.18)
+    border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.35)
+    transform: translateY(-1px)
+
+.btn.btn-icon.btn-danger:hover
+    background: rgba(var(--bs-danger-rgb, 220,53,69), 0.18)
+    border-color: rgba(var(--bs-danger-rgb, 220,53,69), 0.32)
+
+.admin-user-card__body
+    display: flex
+    gap: 1rem
+
+.admin-user-card__stat
+    display: flex
+    flex-direction: column
+    gap: 0.25rem
+
+.admin-user-card__stat-label
+    font-size: 0.75rem
+    text-transform: uppercase
+    letter-spacing: 0.08em
+    color: rgba(var(--bs-body-color-rgb), 0.6)
+
+.admin-user-card__stat-value
+    font-weight: 500
+
+.admin-user-card--empty
+    justify-content: center
+    align-items: center
+    text-align: center
+
+.admin-user-hub__footer
+    display: flex
+    justify-content: flex-end
+
+[data-bs-theme="light"] .admin-user-card
+    background: rgba(15, 23, 42, 0.03)
+    border-color: rgba(15, 23, 42, 0.12)
+
+[data-bs-theme="light"] .btn.btn-icon
+    border-color: rgba(15, 23, 42, 0.12)
+    background: rgba(15, 23, 42, 0.04)
+
+[data-bs-theme="light"] .btn.btn-icon:hover
+    background: rgba(37, 99, 235, 0.1)
+    border-color: rgba(37, 99, 235, 0.18)
 
 .admin-card-header
     font-size: 0.9rem
@@ -1002,86 +1300,184 @@ button.add-url
     width: 12rem
     text-align: right
 
-.dashboard-download
+.download-list
+    display: grid
+    gap: 0.85rem
+
+.download-list__toolbar
+    display: flex
+    justify-content: space-between
+    align-items: center
+    flex-wrap: wrap
+    gap: 0.75rem
+    margin-bottom: 0.75rem
+
+.download-list__bulk
+    display: inline-flex
+    align-items: center
+    gap: 0.45rem
+    font-size: 0.85rem
+    color: rgba(var(--bs-body-color-rgb), 0.75)
+
+.download-list__meta
+    font-size: 0.8rem
+    color: rgba(var(--bs-body-color-rgb), 0.6)
+
+.download-card
+    display: grid
+    grid-template-columns: auto 1fr auto
+    align-items: center
+    gap: 0.85rem
+    padding: 1rem
+    border-radius: 1rem
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.1)
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.03)
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease
+
+.download-card:hover
+    border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.28)
+    box-shadow: 0 16px 32px -20px rgba(15, 23, 42, 0.45)
+    transform: translateY(-2px)
+
+.download-card.is-disabled
+    opacity: 0.55
+    pointer-events: none
+
+.download-card__select
+    display: flex
+    align-items: center
+    justify-content: center
+
+.download-card__body
+    display: flex
+    flex-direction: column
+    gap: 0.6rem
+
+.download-card__title
+    display: flex
+    align-items: flex-start
+    gap: 0.65rem
+
+.download-card__icon
+    width: 40px
+    height: 40px
+    border-radius: 12px
+    display: grid
+    place-items: center
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+    color: rgba(var(--bs-body-color-rgb), 0.85)
+
+.download-card__icon--queue
+    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.18)
+    color: rgba(var(--bs-primary-rgb, 13,110,253), 0.95)
+
+.download-card__icon--success
+    background: rgba(var(--bs-success-rgb, 25,135,84), 0.18)
+    color: rgba(var(--bs-success-rgb, 25,135,84), 0.95)
+
+.download-card__icon--error
+    background: rgba(var(--bs-danger-rgb, 220,53,69), 0.2)
+    color: rgba(var(--bs-danger-rgb, 220,53,69), 0.95)
+
+.download-card__info
     display: flex
     flex-direction: column
     gap: 0.35rem
+    min-width: 0
 
-.dashboard-download__title
-    font-weight: 600
-    font-size: 0.9rem
-    line-height: 1.35
-    text-decoration: none
-
-.dashboard-download__title:focus-visible
-    outline: 2px solid rgba(var(--bs-primary-rgb, 13,110,253), 0.6)
-    outline-offset: 2px
-
-.dashboard-row-actions
+.download-card__meta-group
     display: flex
-    align-items: center
-    justify-content: flex-end
-    gap: 0.3rem
+    flex-wrap: wrap
+    gap: 0.4rem
 
-.dashboard-row-actions__btn
+.download-card__name
+    font-weight: 600
+    font-size: 0.92rem
+    color: inherit
+    text-decoration: none
+    display: -webkit-box
+    -webkit-line-clamp: 2
+    -webkit-box-orient: vertical
+    overflow: hidden
+
+.download-card__name:hover
+    text-decoration: underline
+
+.download-card__meta
+    font-size: 0.8rem
+    color: rgba(var(--bs-body-color-rgb), 0.65)
+
+.download-card__meta--error
+    color: rgba(var(--bs-danger-rgb, 220,53,69), 0.9)
+
+.download-card__progress
+    width: 100%
+    border-radius: 999px
+
+.download-card__actions
+    display: inline-flex
+    align-items: center
+    gap: 0.35rem
+
+.download-card__btn
     display: inline-flex
     align-items: center
     justify-content: center
-    width: 2rem
-    height: 2rem
+    width: 2.1rem
+    height: 2.1rem
     border-radius: 0.65rem
-    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.1)
-    background: transparent
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.12)
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.05)
     color: inherit
-    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease
     text-decoration: none
-    padding: 0
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease
 
-.dashboard-row-actions__btn fa-icon
-    font-size: 0.85rem
-
-.dashboard-row-actions__btn:hover
-    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.14)
-    border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.28)
+.download-card__btn:hover
+    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.18)
+    border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.3)
     transform: translateY(-1px)
 
-.dashboard-row-actions__btn:focus-visible
-    outline: 2px solid rgba(var(--bs-primary-rgb, 13,110,253), 0.6)
-    outline-offset: 2px
+.download-card__btn--danger
+    color: rgba(var(--bs-danger-rgb, 220,53,69), 0.92)
+    border-color: rgba(var(--bs-danger-rgb, 220,53,69), 0.18)
 
-.dashboard-result
-    display: flex
-    align-items: flex-start
-    gap: 0.6rem
+.download-card__btn--danger:hover
+    background: rgba(var(--bs-danger-rgb, 220,53,69), 0.18)
+    border-color: rgba(var(--bs-danger-rgb, 220,53,69), 0.3)
 
-.dashboard-result__status
-    width: 2rem
-    display: grid
-    place-items: center
-    font-size: 1rem
+@media (max-width: 991.98px)
+    .download-card
+        grid-template-columns: 1fr
+        gap: 0.75rem
+    .download-card__select
+        order: 1
+        justify-content: flex-start
+        align-self: flex-start
+    .download-card__actions
+        order: 2
+        width: 100%
+        justify-content: flex-start
+        flex-wrap: wrap
+    .download-card__btn
+        flex: 0 0 auto
+    .download-list__toolbar
+        align-items: flex-start
+        flex-direction: column
 
-.dashboard-result__body
-    display: flex
-    flex-direction: column
-    gap: 0.15rem
+[data-bs-theme="light"] .download-card
+    background: rgba(248, 250, 252, 0.85)
+    border-color: rgba(96, 165, 250, 0.25)
 
-.dashboard-result__title
-    font-weight: 600
-    font-size: 0.88rem
-    line-height: 1.4
-    color: inherit
-    text-decoration: none
-    transition: color 0.2s ease
+[data-bs-theme="light"] .download-card__btn
+    border-color: rgba(15, 23, 42, 0.12)
+    background: rgba(15, 23, 42, 0.04)
 
-a.dashboard-result__title
-    cursor: pointer
+[data-bs-theme="light"] .download-card__btn:hover
+    background: rgba(59, 130, 246, 0.12)
+    border-color: rgba(59, 130, 246, 0.24)
 
-.dashboard-result__title:hover
-    color: rgba(var(--bs-primary-rgb, 13,110,253), 0.95)
-
-.dashboard-result__meta
-    font-size: 0.78rem
-    color: rgba(var(--bs-body-color-rgb), 0.6)
+.download-empty
+    display: none
 
 .dashboard-empty
     border-radius: 1rem
@@ -1125,11 +1521,53 @@ a.dashboard-result__title
     width: 100%
     max-width: 280px
 
+.cookie-form__grid
+    display: grid
+    gap: 1rem
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))
+    margin-bottom: 1.25rem
+
+.cookie-form__field
+    display: flex
+    flex-direction: column
+    gap: 0.35rem
+
+.cookie-form__toggle
+    margin-bottom: 1.25rem
+
+.cookie-form__textarea
+    display: flex
+    flex-direction: column
+    gap: 0.5rem
+    margin-bottom: 1.25rem
+
+.cookie-form__actions
+    display: flex
+    flex-wrap: wrap
+    gap: 0.6rem
+    align-items: center
+    margin-bottom: 1.5rem
+
+.cookie-form__actions .btn
+    flex: 0 0 auto
+
+.cookie-form__actions .ms-auto
+    margin-left: auto
+
+@media (max-width: 767.98px)
+    .cookie-form__actions
+        flex-direction: column
+        align-items: stretch
+    .cookie-form__actions .btn
+        width: 100%
+    .cookie-form__actions .ms-auto
+        margin-left: 0
+
 .modal-modern
     position: relative
-    background: rgba(15, 23, 42, 0.9)
+    background: rgba(15, 23, 42, 0.78)
     border-radius: 1rem
-    border: 1px solid rgba(148, 163, 184, 0.2)
+    border: 1px solid rgba(148, 163, 184, 0.24)
     box-shadow: 0 28px 60px -32px rgba(6, 11, 23, 0.75)
     color: inherit
     backdrop-filter: blur(26px) saturate(140%)
@@ -1140,7 +1578,7 @@ a.dashboard-result__title
     content: ''
     position: absolute
     inset: 0
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(148, 163, 184, 0.04))
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(148, 163, 184, 0.05))
     pointer-events: none
 
 .modal-modern > *
@@ -1158,9 +1596,19 @@ a.dashboard-result__title
     font-weight: 600
 
 .modal-modern .modal-body
-    padding: clamp(1.25rem, 4vw, 1.8rem) clamp(1.25rem, 4vw, 1.75rem)
-    background: rgba(15, 23, 42, 0.78)
+    padding: clamp(1rem, 4vw, 1.5rem) clamp(1rem, 4vw, 1.5rem)
+    background: rgba(15, 23, 42, 0.64)
     border-radius: 0 0 1rem 1rem
+    max-height: min(70vh, 640px)
+    overflow-y: auto
+    scrollbar-width: thin
+
+.modal-modern .modal-body::-webkit-scrollbar
+    width: 6px
+
+.modal-modern .modal-body::-webkit-scrollbar-thumb
+    background: rgba(148, 163, 184, 0.35)
+    border-radius: 999px
 
 .modal-modern .modal-footer
     padding: clamp(1.1rem, 4vw, 1.6rem) clamp(1.25rem, 4vw, 1.75rem)
@@ -1170,7 +1618,19 @@ a.dashboard-result__title
     gap: 0.75rem
 
 .modal-modern .btn-close
-    filter: invert(70%)
+    width: 2.1rem
+    height: 2.1rem
+    border-radius: 999px
+    border: 1px solid rgba(248, 250, 252, 0.28)
+    background-color: rgba(248, 250, 252, 0.08)
+    filter: invert(85%)
+    opacity: 1
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease
+
+.modal-modern .btn-close:hover
+    background-color: rgba(248, 250, 252, 0.16)
+    border-color: rgba(248, 250, 252, 0.35)
+    transform: translateY(-1px)
 
 .rename-modal .modal-dialog
     max-width: 420px
@@ -1226,7 +1686,7 @@ a.dashboard-result__title
   margin-bottom: 1rem
 
 .modal.fade.show
-  background-color: rgba(5, 8, 15, 0.65)
+  background-color: rgba(5, 8, 15, 0.52)
 
 .modal-header
   border-bottom: 1px solid #eee

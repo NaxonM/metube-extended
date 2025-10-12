@@ -455,7 +455,7 @@
         </section>
 
         <section class="admin-section admin-section--wide">
-          <div class="admin-card admin-card--collapsible" [class.is-open]="isAdminSectionOpen('users')">
+          <div class="admin-card admin-card--collapsible admin-user-shell" [class.is-open]="isAdminSectionOpen('users')">
             <button type="button"
                     class="admin-section-toggle"
                     (click)="toggleAdminSection('users')"
@@ -473,71 +473,78 @@
             <div id="adminSectionUsers"
                  class="admin-section-body"
                  [ngbCollapse]="!isAdminSectionOpen('users')">
-              <div class="admin-section-content">
-                <div class="admin-user-actions d-flex justify-content-between align-items-center flex-wrap gap-2">
-                  <span class="small text-muted">View current users, adjust privileges, and reset credentials.</span>
-                  <button type="button" class="btn btn-primary btn-sm" (click)="promptCreateUser()">
-                    <fa-icon [icon]="faUserPlus" class="me-1"></fa-icon>
-                    Add user
+              <div class="admin-section-content admin-user-hub">
+                <div class="admin-user-hub__header">
+                  <div class="admin-user-hub__summary">
+                    <h3 class="admin-user-hub__title">Team overview</h3>
+                    <p class="admin-user-hub__subtitle">{{ adminUsers.length }} user{{ adminUsers.length === 1 ? '' : 's' }} • {{ activeAdminCount() }} admin{{ activeAdminCount() === 1 ? '' : 's' }}</p>
+                  </div>
+                  <button type="button" class="btn btn-primary" (click)="promptCreateUser()">
+                    <fa-icon [icon]="faUserPlus" class="me-2"></fa-icon>
+                    Invite user
                   </button>
                 </div>
 
-                <div class="table-responsive small">
-                  <table class="table table-sm align-middle mb-0">
-                    <thead class="table-dark">
-                      <tr>
-                        <th scope="col">User</th>
-                        <th scope="col" class="text-center">Role</th>
-                        <th scope="col" class="text-center">Status</th>
-                        <th scope="col">Last login</th>
-                        <th scope="col" class="text-end">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr *ngIf="adminLoading">
-                        <td colspan="5" class="text-center py-3">
-                          <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                          Loading users...
-                        </td>
-                      </tr>
-                      <tr *ngFor="let user of adminUsers">
-                        <td>
-                          <div class="d-flex align-items-center gap-2">
-                            <fa-icon *ngIf="user.role === 'admin'" [icon]="faUserShield" class="text-warning"></fa-icon>
-                            <span [ngClass]="{'fw-semibold': user.role === 'admin'}">{{ user.username }}</span>
-                            <span class="badge bg-secondary" *ngIf="isSelf(user)">You</span>
-                          </div>
-                        </td>
-                        <td class="text-center">
-                          <span class="badge" [ngClass]="user.role === 'admin' ? 'bg-warning text-dark' : 'bg-info text-dark'">{{ user.role }}</span>
-                        </td>
-                        <td class="text-center">
-                          <span class="badge" [ngClass]="user.disabled ? 'bg-danger' : 'bg-success'">{{ user.disabled ? 'Disabled' : 'Active' }}</span>
-                        </td>
-                        <td>{{ formatTimestamp(user.last_login_at) }}</td>
-                        <td class="text-end">
-                          <div class="btn-group btn-group-sm" role="group">
-                            <button type="button" class="btn btn-outline-secondary" [disabled]="(user.role === 'admin' && activeAdminCount() <= 1)" (click)="toggleUserRole(user)" ngbTooltip="Toggle role">
-                              <fa-icon [icon]="faPen"></fa-icon>
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary" [disabled]="user.role === 'admin' && activeAdminCount() <= 1" (click)="toggleUserDisabled(user)" ngbTooltip="Toggle active state">
-                              <fa-icon [icon]="faUserSlash"></fa-icon>
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary" (click)="resetUserPassword(user)" ngbTooltip="Reset password">
-                              <fa-icon [icon]="faKey"></fa-icon>
-                            </button>
-                            <button type="button" class="btn btn-outline-danger" [disabled]="isSelf(user) || (user.role === 'admin' && activeAdminCount() <= 1)" (click)="deleteUser(user)" ngbTooltip="Delete user">
-                              <fa-icon [icon]="faTrashAlt"></fa-icon>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      <tr *ngIf="!adminLoading && adminUsers.length === 0">
-                        <td colspan="5" class="text-center text-muted py-3">No users available.</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                <div *ngIf="adminLoading" class="admin-user-hub__loading">
+                  <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                  Loading users...
                 </div>
+
+                <div class="admin-user-hub__grid" *ngIf="!adminLoading">
+                  <article class="admin-user-card" *ngFor="let user of adminUsers">
+                    <header class="admin-user-card__header">
+                      <div class="admin-user-card__identity">
+                        <div class="admin-user-card__avatar" [class.is-admin]="user.role === 'admin'">
+                          <fa-icon [icon]="faUserShield" *ngIf="user.role === 'admin'"></fa-icon>
+                          <span *ngIf="user.role !== 'admin'">{{ user.username[0] | uppercase }}</span>
+                        </div>
+                        <div>
+                          <div class="admin-user-card__name">
+                            {{ user.username }}
+                            <span class="admin-user-card__tag" *ngIf="isSelf(user)">You</span>
+                          </div>
+                          <div class="admin-user-card__meta">
+                            <span class="badge" [class.bg-warning-subtle]="user.role === 'admin'" [class.text-warning-emphasis]="user.role === 'admin'" [class.bg-info-subtle]="user.role !== 'admin'" [class.text-info-emphasis]="user.role !== 'admin'">{{ user.role }}</span>
+                            <span class="badge" [class.bg-success-subtle]="!user.disabled" [class.text-success-emphasis]="!user.disabled" [class.bg-secondary-subtle]="user.disabled" [class.text-secondary-emphasis]="user.disabled">{{ user.disabled ? 'Inactive' : 'Active' }}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="admin-user-card__menu">
+                        <button type="button" class="btn btn-icon" (click)="promptUpdateUser(user)" ngbTooltip="Rename user">
+                          <fa-icon [icon]="faPen"></fa-icon>
+                        </button>
+                        <button type="button" class="btn btn-icon" [disabled]="user.role === 'admin' && activeAdminCount() <= 1" (click)="toggleUserDisabled(user)" ngbTooltip="Toggle active state">
+                          <fa-icon [icon]="faUserSlash"></fa-icon>
+                        </button>
+                        <button type="button" class="btn btn-icon" (click)="resetUserPassword(user)" ngbTooltip="Reset password">
+                          <fa-icon [icon]="faKey"></fa-icon>
+                        </button>
+                        <button type="button" class="btn btn-icon btn-danger" [disabled]="isSelf(user) || (user.role === 'admin' && activeAdminCount() <= 1)" (click)="deleteUser(user)" ngbTooltip="Delete user">
+                          <fa-icon [icon]="faTrashAlt"></fa-icon>
+                        </button>
+                      </div>
+                    </header>
+                    <div class="admin-user-card__body">
+                      <div class="admin-user-card__stat">
+                        <span class="admin-user-card__stat-label">Last login</span>
+                        <span class="admin-user-card__stat-value" *ngIf="user.last_login_at; else neverLogin">{{ user.last_login_at * 1000 | date:'medium' }}</span>
+                        <ng-template #neverLogin>
+                          <span class="admin-user-card__stat-value text-muted">Never</span>
+                        </ng-template>
+                      </div>
+                    </div>
+                  </article>
+                  <div class="admin-user-card admin-user-card--empty" *ngIf="adminUsers.length === 0">
+                    <p class="mb-0 text-muted">No users available. Invite your first collaborator to get started.</p>
+                  </div>
+                </div>
+
+                <footer class="admin-user-hub__footer">
+                  <button type="button" class="btn btn-outline-secondary btn-sm" (click)="promptCreateUser()">
+                    <fa-icon [icon]="faUserPlus" class="me-2"></fa-icon>
+                    Invite another user
+                  </button>
+                </footer>
               </div>
             </div>
           </div>
@@ -596,32 +603,34 @@
             {{ cookieError }}
           </div>
 
-          <div class="row g-3 align-items-end mb-3">
-            <div class="col-md-4">
+          <div class="cookie-form__grid">
+            <div class="cookie-form__field">
               <label for="cookieProfileName" class="form-label">Profile name</label>
               <input id="cookieProfileName" class="form-control" type="text" [(ngModel)]="cookieForm.name" [disabled]="cookiesWorking">
             </div>
-            <div class="col-md-4">
+            <div class="cookie-form__field">
               <label for="cookieProfileHosts" class="form-label">Hosts <span class="text-muted small">(comma separated)</span></label>
               <input id="cookieProfileHosts" class="form-control" type="text" [(ngModel)]="cookieForm.hosts" placeholder="instagram.com, .tumblr.com" [disabled]="cookiesWorking">
             </div>
-            <div class="col-md-4">
+            <div class="cookie-form__field">
               <label for="cookieProfileTags" class="form-label">Tags <span class="text-muted small">(optional)</span></label>
               <input id="cookieProfileTags" class="form-control" type="text" [(ngModel)]="cookieForm.tags" placeholder="youtube, music" [disabled]="cookiesWorking">
             </div>
           </div>
 
-          <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" id="cookieProfileDefault" [(ngModel)]="cookieForm.default" [disabled]="cookiesWorking">
-            <label class="form-check-label" for="cookieProfileDefault">Set as default profile</label>
+          <div class="cookie-form__toggle">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="cookieProfileDefault" [(ngModel)]="cookieForm.default" [disabled]="cookiesWorking">
+              <label class="form-check-label" for="cookieProfileDefault">Set as default profile</label>
+            </div>
           </div>
 
-          <div class="mb-3">
+          <div class="cookie-form__textarea">
             <label for="cookieProfileData" class="form-label">Cookie data</label>
             <textarea id="cookieProfileData" class="form-control" rows="5" [(ngModel)]="cookieForm.cookies" placeholder="Paste cookies here. Leave blank to keep existing cookies for this profile." [disabled]="cookiesWorking"></textarea>
           </div>
 
-          <div class="d-flex flex-wrap gap-2 mb-4">
+          <div class="cookie-form__actions">
             <button type="button" class="btn btn-outline-secondary" (click)="handleCookieSmartAction()" [disabled]="cookiesWorking">
               Paste cookies from clipboard
             </button>
@@ -928,26 +937,43 @@
 
           <ng-container *ngIf="!supportedSitesLoading && !supportedSitesError">
             <div class="supported-sites-modal__controls">
-              <input type="search" class="form-control" placeholder="Filter sites" [(ngModel)]="supportedSitesFilter">
-              <span class="text-muted small" *ngIf="supportedSitesFilteredEmpty">No sites match your filter.</span>
+              <div class="input-group">
+                <span class="input-group-text"><fa-icon [icon]="faTableColumns"></fa-icon></span>
+                <input type="search" class="form-control" placeholder="Filter sites" [(ngModel)]="supportedSitesFilter">
+              </div>
+              <div class="supported-sites-modal__tabs" *ngIf="supportedProviderMatches.length > 0; else noMatches">
+                <button type="button"
+                        class="supported-sites-modal__tab"
+                        *ngFor="let provider of supportedProviderMatches"
+                        [class.is-active]="provider.index === activeSupportedProviderIndex"
+                        (click)="setActiveSupportedProvider(provider.index)">
+                  <span class="supported-sites-modal__tab-label">{{ provider.provider }}</span>
+                  <span class="supported-sites-modal__tab-count">{{ provider.count }}</span>
+                </button>
+              </div>
+              <ng-template #noMatches>
+                <span class="text-muted small">No providers match your filter.</span>
+              </ng-template>
             </div>
 
             <div *ngIf="supportedSites.length === 0" class="text-muted">No provider data available.</div>
 
-            <div class="supported-sites-modal__grid" *ngIf="supportedSites.length > 0">
-              <ng-container *ngFor="let provider of supportedSites">
-                <ng-container *ngIf="filteredSupportedSites(provider.sites) as providerSites">
-                  <div *ngIf="providerSites.length > 0" class="supported-sites-modal__card">
-                    <div class="supported-sites-modal__card-title">
-                      <span>{{ provider.provider }}</span>
-                      <span class="small text-muted">{{ providerSites.length }}</span>
-                    </div>
-                    <div class="supported-sites-modal__taglist">
-                      <span class="supported-sites-modal__tag" *ngFor="let site of providerSites">{{ site }}</span>
-                    </div>
-                  </div>
-                </ng-container>
-              </ng-container>
+            <div class="supported-sites-modal__content" *ngIf="supportedSites.length > 0 && activeSupportedProvider">
+              <header class="supported-sites-modal__header">
+                <div class="supported-sites-modal__title">
+                  <fa-icon [icon]="faGrip"></fa-icon>
+                  <span>{{ activeSupportedProvider.provider }}</span>
+                </div>
+                <div class="supported-sites-modal__meta">
+                  {{ activeSupportedSites.length }} site{{ activeSupportedSites.length === 1 ? '' : 's' }}
+                </div>
+              </header>
+              <div class="supported-sites-modal__empty" *ngIf="activeSupportedSites.length === 0">
+                <p class="text-muted mb-0">No sites match this filter for {{ activeSupportedProvider.provider }}.</p>
+              </div>
+              <div class="supported-sites-modal__grid" *ngIf="activeSupportedSites.length > 0">
+                <span class="supported-sites-modal__tag" *ngFor="let site of activeSupportedSites">{{ site }}</span>
+              </div>
             </div>
           </ng-container>
         </div>
@@ -1206,66 +1232,70 @@
     </header>
     <div class="dashboard-section__body">
       <ng-container *ngIf="downloads.queue.size > 0; else queueEmptyState">
-        <div class="dashboard-table">
-          <div class="table-responsive">
-            <table class="table dashboard-table__inner align-middle">
-              <thead>
-                <tr>
-                  <th scope="col" class="dashboard-table__select">
-                    <app-master-checkbox #queueMasterCheckbox [id]="'queue'" [list]="downloads.queue" (changed)="queueSelectionChanged($event)"></app-master-checkbox>
-                  </th>
-                  <th scope="col">Video</th>
-                  <th scope="col" class="dashboard-table__metric">Speed</th>
-                  <th scope="col" class="dashboard-table__metric">ETA</th>
-                  <th scope="col" class="dashboard-table__actions"></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let download of downloads.queue | keyvalue: asIsOrder; trackBy: identifyDownloadRow" [class.disabled]="download.value.deleting">
-                  <td>
-                    <app-slave-checkbox [id]="download.key" [master]="queueMasterCheckbox" [checkable]="download.value"></app-slave-checkbox>
-                  </td>
-                  <td title="{{ download.value.filename }}">
-                    <div class="dashboard-download">
-                      <div class="dashboard-download__title text-truncate">{{ download.value.title }}</div>
-                      <ngb-progressbar height="1.25rem"
-                                       [showValue]="download.value.status != 'preparing'"
-                                       [striped]="download.value.status == 'preparing'"
-                                       [animated]="download.value.status == 'preparing'"
-                                       type="success"
-                                       [value]="download.value.status == 'preparing' ? 100 : download.value.percent | number:'1.0-0'"
-                                       class="download-progressbar"></ngb-progressbar>
-                    </div>
-                  </td>
-                  <td class="dashboard-table__metric">{{ download.value.speed | speed }}</td>
-                  <td class="dashboard-table__metric">{{ download.value.eta | eta }}</td>
-                  <td>
-                    <div class="dashboard-row-actions">
-                      <button *ngIf="download.value.status === 'pending'"
-                              type="button"
-                              class="dashboard-row-actions__btn"
-                              (click)="downloadItemByKey(download.key)"
-                              ngbTooltip="Start download">
-                        <fa-icon [icon]="faDownload"></fa-icon>
-                      </button>
-                      <button type="button"
-                              class="dashboard-row-actions__btn"
-                              (click)="delDownload('queue', download.key)"
-                              ngbTooltip="Remove from queue">
-                        <fa-icon [icon]="faTrashAlt"></fa-icon>
-                      </button>
-                      <a [href]="download.value.original_url || download.value.url"
-                         target="_blank"
-                         class="dashboard-row-actions__btn"
-                         ngbTooltip="Open source URL">
-                        <fa-icon [icon]="faExternalLinkAlt"></fa-icon>
-                      </a>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+        <div class="download-list__toolbar">
+          <div class="download-list__bulk">
+            <app-master-checkbox
+              #queueMasterCheckbox
+              [id]="'queue'"
+              [list]="downloads.queue"
+              (changed)="queueSelectionChanged($event)"></app-master-checkbox>
+            <span>Select all</span>
           </div>
+          <div class="download-list__meta">
+            {{ downloads.queue.size }} item{{ downloads.queue.size === 1 ? '' : 's' }} in progress
+          </div>
+        </div>
+        <div class="download-list">
+          <article class="download-card"
+                   *ngFor="let download of downloads.queue | keyvalue: asIsOrder; trackBy: identifyDownloadRow"
+                   [class.is-disabled]="download.value.deleting">
+            <div class="download-card__select">
+              <app-slave-checkbox [id]="download.key" [master]="queueMasterCheckbox" [checkable]="download.value"></app-slave-checkbox>
+            </div>
+            <div class="download-card__body">
+              <div class="download-card__title">
+                <span class="download-card__icon download-card__icon--queue">
+                  <fa-icon [icon]="faDownload"></fa-icon>
+                </span>
+                <div class="download-card__info">
+                  <span class="download-card__name">{{ download.value.title }}</span>
+                  <div class="download-card__meta-group">
+                    <span class="download-card__meta" *ngIf="download.value.progress">{{ download.value.progress }}</span>
+                    <span class="download-card__meta" *ngIf="download.value.speed !== undefined && download.value.speed !== null">{{ download.value.speed | speed }}</span>
+                    <span class="download-card__meta" *ngIf="download.value.eta !== undefined && download.value.eta !== null">{{ download.value.eta | eta }}</span>
+                  </div>
+                </div>
+              </div>
+              <ngb-progressbar height="1.1rem"
+                               [showValue]="download.value.status != 'preparing'"
+                               [striped]="download.value.status == 'preparing'"
+                               [animated]="download.value.status == 'preparing'"
+                               type="success"
+                               [value]="download.value.status == 'preparing' ? 100 : download.value.percent | number:'1.0-0'"
+                               class="download-card__progress"></ngb-progressbar>
+            </div>
+            <div class="download-card__actions">
+              <button *ngIf="download.value.status === 'pending'"
+                      type="button"
+                      class="download-card__btn"
+                      (click)="downloadItemByKey(download.key)"
+                      ngbTooltip="Start download">
+                <fa-icon [icon]="faDownload"></fa-icon>
+              </button>
+              <button type="button"
+                      class="download-card__btn"
+                      (click)="delDownload('queue', download.key)"
+                      ngbTooltip="Remove from queue">
+                <fa-icon [icon]="faTrashAlt"></fa-icon>
+              </button>
+              <a [href]="download.value.original_url || download.value.url"
+                 target="_blank"
+                 class="download-card__btn"
+                 ngbTooltip="Open source URL">
+                <fa-icon [icon]="faExternalLinkAlt"></fa-icon>
+              </a>
+            </div>
+          </article>
         </div>
       </ng-container>
       <ng-template #queueEmptyState>
@@ -1338,100 +1368,94 @@
     </header>
     <div class="dashboard-section__body">
       <ng-container *ngIf="downloads.done.size > 0; else completedEmptyState">
-        <div class="dashboard-table">
-          <div class="table-responsive">
-            <table class="table dashboard-table__inner align-middle">
-              <thead>
-                <tr>
-                  <th scope="col" class="dashboard-table__select">
-                    <app-master-checkbox #doneMasterCheckbox [id]="'done'" [list]="downloads.done" (changed)="doneSelectionChanged($event)"></app-master-checkbox>
-                  </th>
-                  <th scope="col">Video</th>
-                  <th scope="col" class="dashboard-table__metric">File Size</th>
-                  <th scope="col" class="dashboard-table__actions"></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let download of downloads.done | keyvalue: asIsOrder; trackBy: identifyDownloadRow" [class.disabled]="download.value.deleting">
-                  <td>
-                    <app-slave-checkbox [id]="download.key" [master]="doneMasterCheckbox" [checkable]="download.value"></app-slave-checkbox>
-                  </td>
-                  <td>
-                    <div class="dashboard-result">
-                      <span class="dashboard-result__status">
-                        <fa-icon *ngIf="download.value.status == 'finished'" [icon]="faCheckCircle" class="text-success"></fa-icon>
-                        <fa-icon *ngIf="download.value.status == 'error'" [icon]="faTimesCircle" class="text-danger"></fa-icon>
-                      </span>
-                      <div class="dashboard-result__body">
-                        <a *ngIf="!!download.value.filename; else noDownloadLink"
-                           [href]="buildDownloadLink(download.value)"
-                           target="_blank"
-                           class="dashboard-result__title"
-                           [ngbTooltip]="buildDownloadTooltip(download.value) || null">
-                          {{ download.value.title }}
-                        </a>
-                        <ng-template #noDownloadLink>
-                          <div class="dashboard-result__title"
-                               [ngbTooltip]="buildDownloadTooltip(download.value) || null">
-                            {{download.value.title}}
-                          </div>
-                          <div class="dashboard-result__meta" *ngIf="download.value.msg">{{download.value.msg}}</div>
-                          <div class="dashboard-result__meta" *ngIf="download.value.error">Error: {{download.value.error}}</div>
-                        </ng-template>
-                      </div>
-                    </div>
-                  </td>
-                  <td class="dashboard-table__metric">
-                    <span *ngIf="download.value.size">{{ download.value.size | fileSize }}</span>
-                  </td>
-                  <td>
-                    <div class="dashboard-row-actions">
-                      <button *ngIf="download.value.status == 'error'"
-                              type="button"
-                              class="dashboard-row-actions__btn"
-                              (click)="retryDownload(download.key, download.value)"
-                              ngbTooltip="Retry">
-                        <fa-icon [icon]="faRedoAlt"></fa-icon>
-                      </button>
-                      <button *ngIf="download.value.filename"
-                              type="button"
-                              class="dashboard-row-actions__btn"
-                              (click)="renameDownload(download.key, download.value)"
-                              ngbTooltip="Rename">
-                        <fa-icon [icon]="faPen"></fa-icon>
-                      </button>
-                      <button *ngIf="download.value.filename && download.value.status == 'finished'"
-                              type="button"
-                              class="dashboard-row-actions__btn"
-                              (click)="openStream(download.key, download.value)"
-                              ngbTooltip="Stream">
-                        <fa-icon [icon]="faPlay"></fa-icon>
-                      </button>
-                      <a *ngIf="download.value.filename"
-                         [href]="buildDownloadLink(download.value)"
-                         download
-                         class="dashboard-row-actions__btn"
-                         ngbTooltip="Download file">
-                        <fa-icon [icon]="faDownload"></fa-icon>
-                      </a>
-                      <a [href]="download.value.original_url || download.value.url"
-                         target="_blank"
-                         class="dashboard-row-actions__btn"
-                         ngbTooltip="Open source URL">
-                        <fa-icon [icon]="faExternalLinkAlt"></fa-icon>
-                      </a>
-                      <button type="button"
-                              class="dashboard-row-actions__btn"
-                              (click)="delDownload('done', download.key)"
-                              ngbTooltip="Remove entry">
-                        <fa-icon [icon]="faTrashAlt"></fa-icon>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+        <div class="download-list__toolbar">
+          <div class="download-list__bulk">
+            <app-master-checkbox
+              #doneMasterCheckbox
+              [id]="'done'"
+              [list]="downloads.done"
+              (changed)="doneSelectionChanged($event)"></app-master-checkbox>
+            <span>Select all</span>
           </div>
+          <div class="download-list__meta">
+            {{ downloads.done.size }} total
+          </div>
+        </div>
+        <div class="download-list">
+          <article class="download-card"
+                   *ngFor="let download of downloads.done | keyvalue: asIsOrder; trackBy: identifyDownloadRow"
+                   [class.is-disabled]="download.value.deleting">
+            <div class="download-card__select">
+              <app-slave-checkbox [id]="download.key" [master]="doneMasterCheckbox" [checkable]="download.value"></app-slave-checkbox>
+            </div>
+            <div class="download-card__body">
+              <div class="download-card__title">
+                <span class="download-card__icon" [class.download-card__icon--success]="download.value.status === 'finished'" [class.download-card__icon--error]="download.value.status === 'error'">
+                  <fa-icon *ngIf="download.value.status == 'finished'" [icon]="faCheckCircle"></fa-icon>
+                  <fa-icon *ngIf="download.value.status == 'error'" [icon]="faTimesCircle"></fa-icon>
+                </span>
+                <div class="download-card__info">
+                  <a *ngIf="download.value.filename; else completedNoLink"
+                     [href]="buildDownloadLink(download.value)"
+                     target="_blank"
+                     class="download-card__name"
+                     [ngbTooltip]="buildDownloadTooltip(download.value) || null">
+                    {{ download.value.title }}
+                  </a>
+                  <ng-template #completedNoLink>
+                    <span class="download-card__name" [ngbTooltip]="buildDownloadTooltip(download.value) || null">{{ download.value.title }}</span>
+                  </ng-template>
+                  <div class="download-card__meta-group">
+                    <span class="download-card__meta" *ngIf="download.value.size !== undefined && download.value.size !== null">{{ download.value.size | fileSize }}</span>
+                    <span class="download-card__meta" *ngIf="download.value.msg && download.value.status !== 'error'">{{ download.value.msg }}</span>
+                    <span class="download-card__meta download-card__meta--error" *ngIf="download.value.status == 'error' && download.value.error">Error: {{ download.value.error }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="download-card__actions">
+              <button *ngIf="download.value.status == 'error'"
+                      type="button"
+                      class="download-card__btn"
+                      (click)="retryDownload(download.key, download.value)"
+                      ngbTooltip="Retry">
+                <fa-icon [icon]="faRedoAlt"></fa-icon>
+              </button>
+              <button *ngIf="download.value.filename"
+                      type="button"
+                      class="download-card__btn"
+                      (click)="renameDownload(download.key, download.value)"
+                      ngbTooltip="Rename">
+                <fa-icon [icon]="faPen"></fa-icon>
+              </button>
+              <button *ngIf="download.value.filename && download.value.status == 'finished'"
+                      type="button"
+                      class="download-card__btn"
+                      (click)="openStream(download.key, download.value)"
+                      ngbTooltip="Stream">
+                <fa-icon [icon]="faPlay"></fa-icon>
+              </button>
+              <a *ngIf="download.value.filename"
+                 [href]="buildDownloadLink(download.value)"
+                 download
+                 class="download-card__btn"
+                 ngbTooltip="Download file">
+                <fa-icon [icon]="faDownload"></fa-icon>
+              </a>
+              <a [href]="download.value.original_url || download.value.url"
+                 target="_blank"
+                 class="download-card__btn"
+                 ngbTooltip="Open source URL">
+                <fa-icon [icon]="faExternalLinkAlt"></fa-icon>
+              </a>
+              <button type="button"
+                      class="download-card__btn download-card__btn--danger"
+                      (click)="delDownload('done', download.key)"
+                      ngbTooltip="Remove entry">
+                <fa-icon [icon]="faTrashAlt"></fa-icon>
+              </button>
+            </div>
+          </article>
         </div>
       </ng-container>
       <ng-template #completedEmptyState>
