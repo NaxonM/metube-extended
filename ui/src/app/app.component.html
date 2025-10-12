@@ -1,65 +1,50 @@
 <nav class="navbar navbar-expand-md navbar-dark">
-  <div class="container-fluid">
-    <a class="navbar-brand d-flex align-items-center" href="#">
-      <img src="assets/icons/android-chrome-192x192.png" alt="MeTubeEX Logo" height="32" class="me-2">
-      MeTubeEX
-    </a>
-    <div class="download-metrics">
-      <div class="metric" *ngIf="activeDownloads > 0">
-        <fa-icon [icon]="faDownload" class="text-primary"></fa-icon>
-        <span>{{activeDownloads}} downloading</span>
-      </div>
-      <div class="metric" *ngIf="queuedDownloads > 0">
-        <fa-icon [icon]="faClock" class="text-warning"></fa-icon>
-        <span>{{queuedDownloads}} queued</span>
-      </div>
-      <div class="metric" *ngIf="completedDownloads > 0">
-        <fa-icon [icon]="faCheck" class="text-success"></fa-icon>
-        <span>{{completedDownloads}} completed</span>
-      </div>
-      <div class="metric" *ngIf="failedDownloads > 0">
-        <fa-icon [icon]="faTimesCircle" class="text-danger"></fa-icon>
-        <span>{{failedDownloads}} failed</span>
-      </div>
-      <div class="metric" *ngIf="(totalSpeed | speed) !== ''">
-        <fa-icon [icon]="faTachometerAlt" class="text-info"></fa-icon>
-        <span>{{totalSpeed | speed }}</span>
+  <div class="container-fluid navbar-inner">
+    <div class="nav-branding">
+      <a class="navbar-brand" href="#">
+        <img src="assets/icons/android-chrome-192x192.png" alt="MeTubeEX Logo" height="32">
+        <span>MeTubeEX</span>
+      </a>
+      <div class="nav-stats" *ngIf="activeDownloads || queuedDownloads || completedDownloads || failedDownloads || (totalSpeed | speed)">
+        <div class="nav-stat" *ngIf="activeDownloads > 0">
+          <fa-icon [icon]="faDownload"></fa-icon>
+          <span>{{activeDownloads}} downloading</span>
+        </div>
+        <div class="nav-stat" *ngIf="queuedDownloads > 0">
+          <fa-icon [icon]="faClock"></fa-icon>
+          <span>{{queuedDownloads}} queued</span>
+        </div>
+        <div class="nav-stat" *ngIf="completedDownloads > 0">
+          <fa-icon [icon]="faCheck"></fa-icon>
+          <span>{{completedDownloads}} completed</span>
+        </div>
+        <div class="nav-stat" *ngIf="failedDownloads > 0">
+          <fa-icon [icon]="faTimesCircle"></fa-icon>
+          <span>{{failedDownloads}} failed</span>
+        </div>
+        <div class="nav-stat" *ngIf="(totalSpeed | speed) !== ''">
+          <fa-icon [icon]="faTachometerAlt"></fa-icon>
+          <span>{{totalSpeed | speed }}</span>
+        </div>
       </div>
     </div>
-    <!--
-    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarsDefault" aria-controls="navbarsDefault" aria-expanded="false" aria-label="Toggle navigation">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarsDefault">
-      <ul class="navbar-nav mr-auto">
-        <li class="nav-item active">
-          <a class="nav-link" href="#">Home <span class="sr-only">(current)</span></a>
-        </li>
-      </ul>
-    </div>
-    -->
-    <div class="navbar-nav ms-auto align-items-center flex-row gap-3">
-      <div class="nav-item d-none d-md-flex flex-column text-end text-light" *ngIf="currentUser">
-        <span class="small text-secondary">Signed in as</span>
-        <span class="fw-semibold d-flex align-items-center justify-content-end gap-1">
-          <fa-icon *ngIf="currentUser?.role === 'admin'" [icon]="faUserShield" class="text-warning"></fa-icon>
+    <div class="nav-actions">
+      <div class="nav-session" *ngIf="currentUser">
+        <span class="nav-session__label">Signed in as</span>
+        <span class="nav-session__user">
+          <fa-icon *ngIf="currentUser?.role === 'admin'" [icon]="faUserShield"></fa-icon>
           {{ currentUser?.username }}
         </span>
       </div>
-      <a class="btn btn-outline-light btn-sm" href="logout" *ngIf="currentUser">
-        <fa-icon [icon]="faRightFromBracket" class="me-1"></fa-icon>
+      <a class="btn btn-outline-light btn-sm nav-logout" href="logout" *ngIf="currentUser">
+        <fa-icon [icon]="faRightFromBracket"></fa-icon>
         Logout
       </a>
-      <div class="nav-item dropdown">
-        <button class="btn btn-link nav-link py-2 px-0 px-sm-2 dropdown-toggle d-flex align-items-center"
-                id="theme-select"
-                type="button"
-                aria-expanded="false"
-                data-bs-toggle="dropdown"
-                data-bs-display="static">
+      <div class="nav-theme">
+        <button class="btn btn-link nav-link dropdown-toggle" id="theme-select" type="button" aria-expanded="false" data-bs-toggle="dropdown" data-bs-display="static">
           <fa-icon [icon]="activeTheme.icon"></fa-icon>
         </button>
-        <ul class="dropdown-menu dropdown-menu-end position-absolute" aria-labelledby="theme-select">
+        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="theme-select">
           <li *ngFor="let theme of themes">
             <button type="button" class="dropdown-item d-flex align-items-center" [ngClass]="{'active' : activeTheme == theme}" (click)="themeChanged(theme)">
               <span class="me-2 opacity-50">
@@ -74,10 +59,15 @@
         </ul>
       </div>
     </div>
+    <!--
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarsDefault" aria-controls="navbarsDefault" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    -->
   </div>
 </nav>
 
-<main role="main" class="container container-xl">
+<main role="main" class="container container-xl page-shell">
   <form #f="ngForm">
     <div class="container add-url-box">
       <div class="download-console">
