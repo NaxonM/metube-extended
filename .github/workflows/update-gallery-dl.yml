@@ -17,7 +17,7 @@ jobs:
       - name: Check for gallery-dl update
         id: check
         run: |
-          python <<'PY'
+          python - <<'PY'
 import json
 import hashlib
 import os
