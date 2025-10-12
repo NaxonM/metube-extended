@@ -1,3 +1,64 @@
+[data-bs-theme="light"] .supported-sites-modal__tag
+    background: rgba(15, 23, 42, 0.08)
+
+@keyframes download-panel-glow
+    0%
+        transform: rotate(0deg)
+    100%
+        transform: rotate(360deg)
+.supported-sites-modal .modal-body
+    display: flex
+    flex-direction: column
+    gap: 1.25rem
+
+.supported-sites-modal__controls
+    display: flex
+    flex-wrap: wrap
+    gap: 0.75rem
+    align-items: center
+
+.supported-sites-modal__grid
+    display: grid
+    gap: 1rem
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))
+
+.supported-sites-modal__card
+    padding: 1rem
+    border-radius: 0.9rem
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.12)
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.03)
+    display: flex
+    flex-direction: column
+    gap: 0.75rem
+
+.supported-sites-modal__card-title
+    display: flex
+    align-items: center
+    justify-content: space-between
+    font-size: 0.8rem
+    text-transform: uppercase
+    letter-spacing: 0.08em
+    color: rgba(var(--bs-body-color-rgb), 0.65)
+
+.supported-sites-modal__taglist
+    display: flex
+    flex-wrap: wrap
+    gap: 0.4rem
+
+.supported-sites-modal__tag
+    border-radius: 999px
+    padding: 0.35rem 0.65rem
+    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.15)
+    color: rgba(var(--bs-body-color-rgb), 0.82)
+    font-size: 0.78rem
+    line-height: 1
+
+[data-bs-theme="light"] .supported-sites-modal__card
+    border-color: rgba(15, 23, 42, 0.1)
+    background: rgba(15, 23, 42, 0.04)
+
+[data-bs-theme="light"] .supported-sites-modal__tag
+    background: rgba(15, 23, 42, 0.08)
 .navbar
     padding: clamp(0.65rem, 2vw, 0.9rem) 0
     background: rgba(10, 13, 23, 0.7)
@@ -170,6 +231,9 @@
 [data-bs-theme="light"] .modal-modern .modal-footer
     border-color: rgba(15, 23, 42, 0.08)
 
+[data-bs-theme="light"] .modal-modern .modal-body
+    background: rgba(255, 255, 255, 0.8)
+
 .button-toggle-theme:focus, .button-toggle-theme:active
     box-shadow: none
     outline: 0px
@@ -184,11 +248,34 @@
     gap: 1.5rem
 
 .download-console__panel
-    background: linear-gradient(135deg, rgba(var(--bs-primary-rgb, 13,110,253), 0.16), rgba(var(--bs-body-color-rgb, 255,255,255), 0.03))
+    position: relative
+    background: radial-gradient(circle at top left, rgba(var(--bs-primary-rgb, 13,110,253), 0.2), transparent 55%), linear-gradient(135deg, rgba(var(--bs-primary-rgb, 13,110,253), 0.12), rgba(var(--bs-body-color-rgb, 255,255,255), 0.03))
     border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.12)
     border-radius: 1.5rem
     padding: clamp(1.5rem, 4vw, 2.5rem)
     box-shadow: 0 24px 48px -26px rgba(0, 0, 0, 0.6)
+    overflow: hidden
+
+.download-console__panel::before
+    content: ''
+    position: absolute
+    inset: -60%
+    background: conic-gradient(from 180deg, rgba(76, 196, 255, 0.28), rgba(129, 140, 248, 0.25), rgba(76, 196, 255, 0.28))
+    filter: blur(120px)
+    opacity: 0.55
+    animation: download-panel-glow 18s linear infinite
+
+.download-console__panel::after
+    content: ''
+    position: absolute
+    inset: 1px
+    border-radius: calc(1.5rem - 1px)
+    background: rgba(10, 15, 28, 0.82)
+    pointer-events: none
+
+.download-console__panel > *
+    position: relative
+    z-index: 1
     backdrop-filter: blur(12px)
 
 .download-console__input-row
@@ -482,7 +569,13 @@
     margin-top: clamp(1.5rem, 4vw, 2rem)
     display: grid
     gap: 0.75rem
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr))
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr))
+    align-items: stretch
+    justify-items: stretch
+
+@media (min-width: 1200px)
+    .advanced-action-bar
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr))
 
 .advanced-chip
     border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.12)
@@ -496,6 +589,7 @@
     color: inherit
     text-align: left
     transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease
+    min-height: 3.2rem
 
 .advanced-chip:hover
     border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.3)
@@ -677,7 +771,7 @@
     .dashboard-section
         margin-top: 2rem
     .dashboard-section__header
-        padding: 1.25rem 1.25rem 0
+        padding: 1.25rem 1.25rem 1.25rem
     .dashboard-section__actions
         flex-direction: column
         align-items: stretch
@@ -768,7 +862,7 @@ button.add-url
     display: flex
     flex-direction: column
     gap: 1.1rem
-    padding: clamp(1.25rem, 4vw, 1.75rem) clamp(1.25rem, 5vw, 2rem) 0
+    padding: clamp(1.25rem, 4vw, 1.75rem) clamp(1.25rem, 5vw, 2rem) clamp(1.3rem, 4vw, 1.8rem)
 
 @media (min-width: 992px)
     .dashboard-section__header
@@ -776,6 +870,11 @@ button.add-url
         align-items: center
         justify-content: space-between
         gap: 1.5rem
+
+.dashboard-section__title > div
+    display: flex
+    flex-direction: column
+    gap: 0.3rem
 
 .dashboard-section__title
     display: flex
@@ -811,7 +910,7 @@ button.add-url
     letter-spacing: -0.01em
 
 .dashboard-section__subtitle
-    margin: 0.25rem 0 0
+    margin: 0
     font-size: 0.85rem
     color: rgba(var(--bs-body-color-rgb), 0.6)
     line-height: 1.35
@@ -968,7 +1067,7 @@ button.add-url
 
 .dashboard-result__title
     font-weight: 600
-    font-size: 0.9rem
+    font-size: 0.88rem
     line-height: 1.4
     color: inherit
     text-decoration: none
@@ -1027,14 +1126,28 @@ a.dashboard-result__title
     max-width: 280px
 
 .modal-modern
-    background: var(--bs-card-bg)
+    position: relative
+    background: rgba(15, 23, 42, 0.9)
     border-radius: 1rem
-    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.12)
-    box-shadow: 0 24px 48px -28px rgba(15, 23, 42, 0.55)
+    border: 1px solid rgba(148, 163, 184, 0.2)
+    box-shadow: 0 28px 60px -32px rgba(6, 11, 23, 0.75)
     color: inherit
+    backdrop-filter: blur(26px) saturate(140%)
+    -webkit-backdrop-filter: blur(26px) saturate(140%)
+    overflow: hidden
+
+.modal-modern::before
+    content: ''
+    position: absolute
+    inset: 0
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(148, 163, 184, 0.04))
+    pointer-events: none
+
+.modal-modern > *
+    position: relative
 
 .modal-modern .modal-header
-    border-bottom: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.1)
+    border-bottom: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.12)
     padding: clamp(1.1rem, 4vw, 1.6rem) clamp(1.25rem, 4vw, 1.75rem)
     display: flex
     align-items: center
@@ -1046,11 +1159,12 @@ a.dashboard-result__title
 
 .modal-modern .modal-body
     padding: clamp(1.25rem, 4vw, 1.8rem) clamp(1.25rem, 4vw, 1.75rem)
-    background: transparent
+    background: rgba(15, 23, 42, 0.78)
+    border-radius: 0 0 1rem 1rem
 
 .modal-modern .modal-footer
     padding: clamp(1.1rem, 4vw, 1.6rem) clamp(1.25rem, 4vw, 1.75rem)
-    border-top: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.1)
+    border-top: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.12)
     display: flex
     justify-content: flex-end
     gap: 0.75rem
@@ -1112,7 +1226,7 @@ a.dashboard-result__title
   margin-bottom: 1rem
 
 .modal.fade.show
-  background-color: rgba(0, 0, 0, 0.5)
+  background-color: rgba(5, 8, 15, 0.65)
 
 .modal-header
   border-bottom: 1px solid #eee

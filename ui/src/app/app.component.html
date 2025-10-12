@@ -256,7 +256,7 @@
                         class="advanced-chip"
                         (click)="openCookiesModal()">
                   <span class="advanced-chip__icon"><fa-icon [icon]="faCookieBite"></fa-icon></span>
-                  <span class="advanced-chip__label">Manage cookies</span>
+                  <span class="advanced-chip__label">YT-DLP cookies</span>
                 </button>
                 <button *ngIf="isAdmin" type="button"
                         class="advanced-chip"
@@ -927,24 +927,28 @@
           </div>
 
           <ng-container *ngIf="!supportedSitesLoading && !supportedSitesError">
-            <div class="mb-3">
+            <div class="supported-sites-modal__controls">
               <input type="search" class="form-control" placeholder="Filter sites" [(ngModel)]="supportedSitesFilter">
+              <span class="text-muted small" *ngIf="supportedSitesFilteredEmpty">No sites match your filter.</span>
             </div>
 
             <div *ngIf="supportedSites.length === 0" class="text-muted">No provider data available.</div>
-            <div *ngIf="supportedSitesFilteredEmpty" class="text-muted">No sites match your filter.</div>
 
-            <ng-container *ngFor="let provider of supportedSites">
-              <ng-container *ngIf="filteredSupportedSites(provider.sites) as providerSites">
-                <div *ngIf="providerSites.length > 0" class="mb-3">
-                  <h6 class="text-uppercase text-muted mb-2">{{ provider.provider }}</h6>
-                  <div class="d-flex flex-wrap gap-2">
-                    <span class="badge bg-light text-dark" *ngFor="let site of providerSites">{{ site }}</span>
+            <div class="supported-sites-modal__grid" *ngIf="supportedSites.length > 0">
+              <ng-container *ngFor="let provider of supportedSites">
+                <ng-container *ngIf="filteredSupportedSites(provider.sites) as providerSites">
+                  <div *ngIf="providerSites.length > 0" class="supported-sites-modal__card">
+                    <div class="supported-sites-modal__card-title">
+                      <span>{{ provider.provider }}</span>
+                      <span class="small text-muted">{{ providerSites.length }}</span>
+                    </div>
+                    <div class="supported-sites-modal__taglist">
+                      <span class="supported-sites-modal__tag" *ngFor="let site of providerSites">{{ site }}</span>
+                    </div>
                   </div>
-                </div>
-
+                </ng-container>
               </ng-container>
-            </ng-container>
+            </div>
           </ng-container>
         </div>
         <div class="modal-footer">
@@ -1359,11 +1363,16 @@
                         <fa-icon *ngIf="download.value.status == 'error'" [icon]="faTimesCircle" class="text-danger"></fa-icon>
                       </span>
                       <div class="dashboard-result__body">
-                        <a *ngIf="!!download.value.filename; else noDownloadLink" [href]="buildDownloadLink(download.value)" target="_blank" class="dashboard-result__title" ngbTooltip="{{download.value.msg}} | {{download.value.error}}">
+                        <a *ngIf="!!download.value.filename; else noDownloadLink"
+                           [href]="buildDownloadLink(download.value)"
+                           target="_blank"
+                           class="dashboard-result__title"
+                           [ngbTooltip]="buildDownloadTooltip(download.value) || null">
                           {{ download.value.title }}
                         </a>
                         <ng-template #noDownloadLink>
-                          <div class="dashboard-result__title" ngbTooltip="{{download.value.msg}} | {{download.value.error}}">
+                          <div class="dashboard-result__title"
+                               [ngbTooltip]="buildDownloadTooltip(download.value) || null">
                             {{download.value.title}}
                           </div>
                           <div class="dashboard-result__meta" *ngIf="download.value.msg">{{download.value.msg}}</div>

@@ -600,6 +600,17 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
     this.renameOriginalName = '';
   }
 
+  buildDownloadTooltip(download: Download): string {
+    const segments: string[] = [];
+    if (download.msg) {
+      segments.push(download.msg);
+    }
+    if (download.error) {
+      segments.push(`Error: ${download.error}`);
+    }
+    return segments.join(' • ');
+  }
+
   private showProxyPrompt(status: Status) {
     if (!status.proxy) {
       alert(status.msg || 'This URL is not supported by yt-dlp.');
