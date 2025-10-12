@@ -52,6 +52,7 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   cancelImportFlag = false;
   ytDlpOptionsUpdateTime: string | null = null;
   ytDlpVersion: string | null = null;
+  galleryDlVersion: string | null = null;
   metubeVersion: string | null = null;
   isAdvancedOpen = false;
 
@@ -2371,14 +2372,16 @@ export class AppComponent implements AfterViewInit, OnInit, OnDestroy {
   fetchVersionInfo(): void {
     const baseUrl = `${window.location.origin}${window.location.pathname.replace(/\/[^\/]*$/, '/')}`;
     const versionUrl = `${baseUrl}version`;
-    this.http.get<{ 'yt-dlp': string, version: string }>(versionUrl)
+    this.http.get<{ 'yt-dlp': string; 'gallery-dl'?: string | null; version: string }>(versionUrl)
       .subscribe({
         next: (data) => {
           this.ytDlpVersion = data['yt-dlp'];
+          this.galleryDlVersion = data['gallery-dl'] ?? null;
           this.metubeVersion = data.version;
         },
         error: () => {
           this.ytDlpVersion = null;
+          this.galleryDlVersion = null;
           this.metubeVersion = null;
         }
       });

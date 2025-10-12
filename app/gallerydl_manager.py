@@ -55,6 +55,24 @@ if TYPE_CHECKING:
 log = logging.getLogger("gallerydl")
 
 
+def detect_gallerydl_version(executable: Optional[str] = None) -> Optional[str]:
+    candidate = executable or os.environ.get("GALLERY_DL_EXEC") or "gallery-dl"
+    try:
+        completed = subprocess.run(
+            [candidate, "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        output = (completed.stdout or "").strip() or (completed.stderr or "").strip()
+        if not output:
+            return None
+        return output.splitlines()[0]
+    except Exception as exc:  # pragma: no cover - clang modules not critical for runtime
+        log.warning("Failed to detect gallery-dl version via %s: %s", candidate, exc)
+        return None
+
+
 def _sanitize_filename(value: str) -> str:
     sanitized = value.replace("\0", "").strip()
     invalid = '\\/:*?"<>|'

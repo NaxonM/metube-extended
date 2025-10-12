@@ -342,39 +342,6 @@
     cursor: not-allowed
     transform: none
 
-.admin-tools-container
-    margin-top: 3rem
-
-.admin-tools-toggle
-    display: flex
-    align-items: center
-    justify-content: space-between
-    gap: 1rem
-    padding: 1.25rem 1.5rem
-    border-radius: 1rem
-    background: var(--bs-card-bg)
-    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
-
-.admin-tools-label
-    display: flex
-    align-items: center
-    gap: 1rem
-
-.admin-tools-text
-    display: flex
-    flex-direction: column
-    gap: 0.15rem
-
-.admin-tools-title
-    font-size: 0.82rem
-    text-transform: uppercase
-    letter-spacing: 0.08em
-    font-weight: 600
-
-.admin-tools-subtitle
-    font-size: 0.85rem
-    color: rgba(var(--bs-body-color-rgb), 0.65)
-
 .admin-panel-wrapper
     margin-top: 1.5rem
 
@@ -518,13 +485,6 @@
 @media (max-width: 767.98px)
     .advanced-card
         padding: 1.5rem
-    .admin-tools-toggle
-        flex-direction: column
-        align-items: stretch
-        text-align: left
-        gap: 0.75rem
-    .admin-tools-toggle button
-        width: 100%
     .admin-panel
         padding: 1.25rem
         grid-template-columns: 1fr
@@ -541,6 +501,33 @@
         grid-template-columns: repeat(auto-fit, minmax(140px, 1fr))
     .advanced-action-bar
         grid-template-columns: 1fr
+    .dashboard-section
+        margin-top: 2rem
+    .dashboard-section__header
+        padding: 1.25rem 1.25rem 0
+    .dashboard-section__actions
+        flex-direction: column
+        align-items: stretch
+        gap: 0.65rem
+    .dashboard-action
+        width: 100%
+        justify-content: center
+    .dashboard-table__actions
+        width: auto
+    .dashboard-row-actions
+        justify-content: flex-start
+        flex-wrap: wrap
+    .app-footer__content
+        flex-direction: column
+        align-items: center
+        text-align: center
+        gap: 1rem
+    .app-footer__item
+        align-items: center
+    .app-footer__separator
+        display: none
+    .app-footer__link
+        justify-content: center
 
 .add-url-component
     margin: 0.5rem auto
@@ -560,38 +547,281 @@ button.add-url
     padding-left: 5px
     padding-right: 5px
 
-.metube-section-header
-    font-size: 1.8rem
-    font-weight: 300
-    position: relative
-    background: var(--bs-secondary-bg)
-    padding: 0.5rem 0
-    margin-top: 3.5rem
+.dashboard-banner
+    margin-top: clamp(1.75rem, 4vw, 2.5rem)
+    padding: 1rem 1.25rem
+    border-radius: 0.9rem
+    display: flex
+    align-items: center
+    gap: 1rem
+    background: linear-gradient(135deg, rgba(var(--bs-primary-rgb, 13,110,253), 0.2), rgba(var(--bs-primary-rgb, 13,110,253), 0.08))
+    border: 1px solid rgba(var(--bs-primary-rgb, 13,110,253), 0.28)
+    box-shadow: 0 18px 36px -22px rgba(0, 0, 0, 0.45)
 
-.metube-section-header:before
-    content: ""
-    position: absolute
-    top: 0
-    bottom: 0
-    left: -9999px
-    right: 0
-    border-left: 9999px solid var(--bs-secondary-bg)
-    box-shadow: 9999px 0 0 var(--bs-secondary-bg)
+.dashboard-banner__icon
+    width: 2.75rem
+    height: 2.75rem
+    border-radius: 0.9rem
+    display: grid
+    place-items: center
+    font-size: 1.2rem
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.16)
+    color: rgba(var(--bs-body-color-rgb, 255,255,255), 0.92)
 
-button:hover
+.dashboard-banner__content
+    display: flex
+    flex-direction: column
+    gap: 0.2rem
+
+.dashboard-banner__title
+    font-weight: 600
+    font-size: 0.95rem
+
+.dashboard-banner__meta
+    font-size: 0.85rem
+    color: rgba(var(--bs-body-color-rgb), 0.65)
+
+.dashboard-section
+    margin-top: clamp(2.5rem, 6vw, 3.75rem)
+    border-radius: 1.25rem
+    background: var(--bs-card-bg)
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+    box-shadow: 0 24px 48px -28px rgba(0, 0, 0, 0.5)
+    display: flex
+    flex-direction: column
+    overflow: hidden
+
+.dashboard-section__header
+    display: flex
+    flex-direction: column
+    gap: 1.5rem
+    padding: clamp(1.5rem, 4vw, 2rem) clamp(1.5rem, 5vw, 2.25rem) 0
+
+@media (min-width: 992px)
+    .dashboard-section__header
+        flex-direction: row
+        align-items: center
+        justify-content: space-between
+        gap: 2rem
+
+.dashboard-section__title
+    display: flex
+    align-items: center
+    gap: 1rem
+
+.dashboard-section__icon
+    width: 3rem
+    height: 3rem
+    border-radius: 1rem
+    display: grid
+    place-items: center
+    font-size: 1.35rem
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.06)
+    color: rgba(var(--bs-body-color-rgb, 255,255,255), 0.8)
+
+.dashboard-section__icon--accent
+    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.2)
+    color: rgba(var(--bs-primary-rgb, 13,110,253), 0.95)
+
+.dashboard-section__icon--success
+    background: rgba(var(--bs-success-rgb, 25,135,84), 0.16)
+    color: rgba(var(--bs-success-rgb, 25,135,84), 0.92)
+
+.dashboard-section__icon--warning
+    background: rgba(var(--bs-warning-rgb, 255,193,7), 0.2)
+    color: rgba(var(--bs-warning-rgb, 255,193,7), 0.92)
+
+.dashboard-section__heading
+    margin: 0
+    font-size: clamp(1.3rem, 2vw, 1.6rem)
+    font-weight: 600
+
+.dashboard-section__subtitle
+    margin: 0.35rem 0 0
+    font-size: 0.9rem
+    color: rgba(var(--bs-body-color-rgb), 0.65)
+
+.dashboard-section__actions
+    display: flex
+    flex-wrap: wrap
+    gap: 0.75rem 1rem
+
+.dashboard-action
+    display: inline-flex
+    align-items: center
+    justify-content: center
+    gap: 0.45rem
+    border-radius: 0.85rem
+    padding: 0.65rem 1rem
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.12)
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.04)
+    color: inherit
+    font-weight: 600
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease
     text-decoration: none
 
-th
-    border-top: 0
-    border-bottom-width: 3px !important
-    vertical-align: middle !important
+.dashboard-action:hover:not(:disabled)
+    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.16)
+    border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.3)
+    transform: translateY(-1px)
+
+.dashboard-action--danger:hover:not(:disabled)
+    background: rgba(var(--bs-danger-rgb, 220,53,69), 0.16)
+    border-color: rgba(var(--bs-danger-rgb, 220,53,69), 0.28)
+
+.dashboard-action:disabled
+    opacity: 0.5
+    cursor: not-allowed
+    transform: none
+
+.dashboard-section__body
+    padding: 0 clamp(1.25rem, 4vw, 2.25rem) clamp(1.5rem, 4vw, 2.25rem)
+    display: flex
+    flex-direction: column
+    gap: 1.5rem
+
+.dashboard-section--admin .dashboard-section__body
+    padding-top: clamp(0.75rem, 3vw, 1.5rem)
+
+.dashboard-table
+    border-radius: 1rem
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.02)
+    overflow: hidden
+
+.dashboard-table__inner
+    margin-bottom: 0
+    color: inherit
+
+.dashboard-table__inner thead th
+    border-bottom-width: 1px
+    border-color: rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+    text-transform: uppercase
+    font-size: 0.72rem
+    letter-spacing: 0.08em
+    font-weight: 600
+    color: rgba(var(--bs-body-color-rgb), 0.65)
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.04)
     white-space: nowrap
 
-td
-    vertical-align: middle
+.dashboard-table__inner tbody tr
+    border-color: rgba(var(--bs-body-color-rgb, 255,255,255), 0.06)
+    transition: background-color 0.2s ease
+
+.dashboard-table__inner tbody tr:hover
+    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.08)
+
+.dashboard-table__select
+    width: 3rem
+    text-align: center
+
+.dashboard-table__metric
+    text-align: right
+    white-space: nowrap
+
+.dashboard-table__actions
+    width: 12rem
+    text-align: right
+
+.dashboard-download
+    display: flex
+    flex-direction: column
+    gap: 0.5rem
+
+.dashboard-download__title
+    font-weight: 600
+    font-size: 0.95rem
+
+.dashboard-row-actions
+    display: flex
+    align-items: center
+    justify-content: flex-end
+    gap: 0.35rem
+
+.dashboard-row-actions__btn
+    display: inline-flex
+    align-items: center
+    justify-content: center
+    width: 2.25rem
+    height: 2.25rem
+    border-radius: 0.7rem
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.1)
+    background: transparent
+    color: inherit
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease
+    text-decoration: none
+    padding: 0
+
+.dashboard-row-actions__btn:hover
+    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.14)
+    border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.28)
+    transform: translateY(-1px)
+
+.dashboard-row-actions__btn:focus-visible
+    outline: 2px solid rgba(var(--bs-primary-rgb, 13,110,253), 0.6)
+    outline-offset: 2px
+
+.dashboard-result
+    display: flex
+    align-items: flex-start
+    gap: 0.75rem
+
+.dashboard-result__status
+    width: 2.25rem
+    display: grid
+    place-items: center
+    font-size: 1.1rem
+
+.dashboard-result__body
+    display: flex
+    flex-direction: column
+    gap: 0.2rem
+
+.dashboard-result__title
+    font-weight: 600
+    color: inherit
+    text-decoration: none
+    transition: color 0.2s ease
+
+.dashboard-result__title:hover
+    color: rgba(var(--bs-primary-rgb, 13,110,253), 0.95)
+
+.dashboard-result__meta
+    font-size: 0.85rem
+    color: rgba(var(--bs-body-color-rgb), 0.62)
+
+.dashboard-empty
+    border-radius: 1rem
+    border: 1px dashed rgba(var(--bs-body-color-rgb, 255,255,255), 0.14)
+    padding: clamp(2rem, 6vw, 2.75rem)
+    text-align: center
+    display: flex
+    flex-direction: column
+    align-items: center
+    gap: 0.75rem
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.02)
+
+.dashboard-empty__icon
+    width: 3rem
+    height: 3rem
+    border-radius: 1rem
+    display: grid
+    place-items: center
+    font-size: 1.35rem
+    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.18)
+    color: rgba(var(--bs-primary-rgb, 13,110,253), 0.95)
+
+.dashboard-empty__title
+    font-weight: 600
+    font-size: 1rem
+
+.dashboard-empty__meta
+    margin: 0
+    font-size: 0.9rem
+    color: rgba(var(--bs-body-color-rgb), 0.6)
 
 .disabled
-    opacity: 0.5
+    opacity: 0.55
     pointer-events: none
 
 .form-switch
@@ -599,8 +829,40 @@ td
     margin-top: 5px
 
 .download-progressbar
-    width: 12rem
-    margin-left: auto
+    width: 100%
+    max-width: 280px
+
+.modal-modern
+    background: var(--bs-card-bg)
+    border-radius: 1.1rem
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.12)
+    box-shadow: 0 24px 48px -28px rgba(0, 0, 0, 0.5)
+    color: inherit
+
+.modal-modern .modal-header
+    border-bottom: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+    padding: clamp(1.1rem, 4vw, 1.6rem) clamp(1.25rem, 4vw, 1.75rem)
+    display: flex
+    align-items: center
+    gap: 1rem
+
+.modal-modern .modal-title
+    font-size: 1.05rem
+    font-weight: 600
+
+.modal-modern .modal-body
+    padding: clamp(1.25rem, 4vw, 1.8rem) clamp(1.25rem, 4vw, 1.75rem)
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.02)
+
+.modal-modern .modal-footer
+    padding: clamp(1.1rem, 4vw, 1.6rem) clamp(1.25rem, 4vw, 1.75rem)
+    border-top: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+    display: flex
+    justify-content: flex-end
+    gap: 0.75rem
+
+.modal-modern .btn-close
+    filter: invert(70%)
 
 .batch-panel
   margin-top: 15px
@@ -672,61 +934,62 @@ td
 main
   flex-grow: 1
 
-.footer
-  width: 100%
-  padding: 10px 0
-  background: linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.1))
+.app-footer
+  margin-top: clamp(3rem, 6vw, 4.5rem)
+  padding: clamp(1.5rem, 4vw, 2.5rem) 0
+  background: linear-gradient(135deg, rgba(var(--bs-body-color-rgb, 255,255,255), 0.04), rgba(var(--bs-body-color-rgb, 255,255,255), 0.08))
+  border-top: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
 
-  .footer-content
-    display: flex
-    justify-content: center
-    align-items: center
-    gap: 20px
-    color: #fff
-    font-size: 0.9rem
+.app-footer__container
+  display: flex
+  justify-content: center
 
-    .version-item
-      display: flex
-      align-items: center
-      gap: 8px
+.app-footer__content
+  display: inline-flex
+  align-items: center
+  gap: clamp(1rem, 2vw, 1.75rem)
+  color: inherit
+  font-size: 0.9rem
 
-      .version-label
-        font-size: 0.75rem
-        text-transform: uppercase
-        letter-spacing: 0.5px
-        opacity: 0.7
+.app-footer__item
+  display: flex
+  flex-direction: column
+  align-items: flex-start
+  gap: 0.15rem
 
-      .version-value
-        font-family: monospace
-        font-size: 0.85rem
-        padding: 2px 6px
-        background: rgba(255,255,255,0.1)
-        border-radius: 4px
+.app-footer__label
+  font-size: 0.75rem
+  text-transform: uppercase
+  letter-spacing: 0.08em
+  color: rgba(var(--bs-body-color-rgb), 0.6)
 
-    .version-separator
-      width: 1px
-      height: 16px
-      background: rgba(255,255,255,0.2)
-      margin: 0 4px
+.app-footer__value
+  font-family: "JetBrains Mono", "Fira Code", monospace
+  font-size: 0.85rem
+  padding: 0.25rem 0.6rem
+  border-radius: 0.5rem
+  background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
 
-    .github-link
-      display: flex
-      align-items: center
-      gap: 6px
-      color: #fff
-      text-decoration: none
-      font-size: 0.85rem
-      padding: 2px 8px
-      border-radius: 4px
-      transition: background-color 0.2s ease
+.app-footer__separator
+  width: 1px
+  height: 2rem
+  background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.12)
 
-      &:hover
-        background: rgba(255,255,255,0.1)
-        color: #fff
-        text-decoration: none
+.app-footer__link
+  display: inline-flex
+  align-items: center
+  gap: 0.5rem
+  padding: 0.4rem 0.85rem
+  border-radius: 0.7rem
+  border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.16)
+  color: inherit
+  text-decoration: none
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease
 
-      i
-        font-size: 1rem
+.app-footer__link:hover
+  background: rgba(var(--bs-primary-rgb, 13,110,253), 0.16)
+  border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.32)
+  transform: translateY(-1px)
 
 .stream-modal
   .modal-dialog

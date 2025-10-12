@@ -27,7 +27,12 @@ from watchfiles import DefaultFilter, Change, awatch
 
 from ytdl import DownloadQueueNotifier, DownloadQueue
 from proxy_downloads import ProxyDownloadManager, ProxySettingsStore
-from gallerydl_manager import GalleryDlManager, is_gallerydl_supported, list_gallerydl_sites
+from gallerydl_manager import (
+    GalleryDlManager,
+    detect_gallerydl_version,
+    is_gallerydl_supported,
+    list_gallerydl_sites,
+)
 from gallerydl_credentials import CredentialStore, CookieStore
 from ytdlp_cookies import CookieProfileStore
 import importlib.util
@@ -196,6 +201,8 @@ class Config:
         return (True, '')
 
 config = Config()
+
+gallery_dl_version = detect_gallerydl_version(getattr(config, 'GALLERY_DL_EXEC', 'gallery-dl'))
 
 try:
     default_proxy_limit_mb = int(getattr(config, 'PROXY_DOWNLOAD_LIMIT_MB', 0))
@@ -1906,10 +1913,13 @@ def robots(request):
 
 @routes.get(config.URL_PREFIX + 'version')
 def version(request):
-    return web.json_response({
+    payload = {
         "yt-dlp": yt_dlp_version,
-        "version": os.getenv("METUBE_VERSION", "dev")
-    })
+        "version": os.getenv("METUBE_VERSION", "dev"),
+    }
+    if gallery_dl_version:
+        payload["gallery-dl"] = gallery_dl_version
+    return web.json_response(payload)
 
 if config.URL_PREFIX != '/':
     @routes.get('/')

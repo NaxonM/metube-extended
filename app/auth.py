@@ -12,167 +12,261 @@ from users import UserStore
 
 log = logging.getLogger(__name__)
 
-LOGIN_HTML = """
-<!DOCTYPE html>
-<html>
+LOGIN_HTML = """<!DOCTYPE html>
+<html lang="en">
 <head>
-    <title>Login</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MeTubeEX | Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
         :root {{
             color-scheme: dark;
-            --bg-start: #0f1724;
-            --bg-end: #141c2b;
-            --card-bg: rgba(22, 30, 44, 0.85);
+            --bg-primary: #10172a;
+            --bg-secondary: #04070f;
+            --card-bg: rgba(15, 23, 42, 0.82);
+            --card-border: rgba(148, 163, 184, 0.18);
+            --text-strong: #f8fafc;
+            --text-subtle: rgba(226, 232, 240, 0.72);
             --accent: #4cc4ff;
-            --accent-hover: #69d4ff;
-            --text-primary: #f8fafc;
-            --text-muted: #c7d2fe;
-            --danger: #f87171;
-            --border: rgba(148, 163, 184, 0.2);
+            --accent-soft: rgba(76, 196, 255, 0.14);
+            --danger: #ef4444;
         }}
         * {{ box-sizing: border-box; }}
         body {{
             margin: 0;
-            min-height: 100vh;
+            min-height: 100dvh;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: radial-gradient(circle at top, var(--bg-start) 0%, var(--bg-end) 60%, #0a101d 100%);
+            padding: clamp(16px, 5vw, 32px);
             font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-            color: var(--text-primary);
-            padding: 24px;
+            color: var(--text-strong);
+            background:
+                radial-gradient(120% 120% at 15% 0%, rgba(76, 196, 255, 0.18) 0%, transparent 55%),
+                radial-gradient(140% 140% at 85% 0%, rgba(129, 140, 248, 0.24) 0%, transparent 62%),
+                linear-gradient(160deg, var(--bg-primary) 0%, var(--bg-secondary) 65%, #060812 100%);
         }}
-        .login-wrapper {{
-            width: min(420px, 100%);
+        .auth-shell {{
+            width: min(960px, 100%);
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: clamp(24px, 5vw, 48px);
+            align-items: stretch;
+        }}
+        .auth-hero {{
+            display: none;
+            position: relative;
+            padding: clamp(32px, 6vw, 48px);
+            border-radius: clamp(18px, 4vw, 28px);
+            border: 1px solid rgba(76, 196, 255, 0.12);
+            background:
+                linear-gradient(145deg, rgba(20, 30, 53, 0.75) 0%, rgba(11, 19, 37, 0.6) 100%),
+                linear-gradient(135deg, rgba(76, 196, 255, 0.22), rgba(76, 196, 255, 0));
+            box-shadow: 0 40px 90px -45px rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(18px);
+        }}
+        .auth-hero h1 {{
+            margin: 0;
+            font-size: clamp(2rem, 4vw, 2.45rem);
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }}
+        .auth-hero p {{
+            margin: 18px 0 0;
+            color: var(--text-subtle);
+            line-height: 1.6;
+            max-width: 36ch;
+        }}
+        .auth-hero-features {{
+            margin-top: 28px;
+            display: grid;
+            gap: 12px;
+        }}
+        .auth-hero-features span {{
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            border-radius: 12px;
+            background: var(--accent-soft);
+            color: var(--text-subtle);
+        }}
+        .auth-card {{
+            width: min(440px, 100%);
+            margin: 0 auto;
             background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            box-shadow: 0 30px 60px rgba(15, 23, 42, 0.45);
-            backdrop-filter: blur(16px);
-            padding: 36px;
+            border: 1px solid var(--card-border);
+            border-radius: clamp(18px, 4vw, 26px);
+            box-shadow: 0 30px 70px -40px rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(18px);
+            padding: clamp(28px, 6vw, 44px);
+            display: grid;
+            gap: clamp(22px, 3vw, 30px);
         }}
-        .brand {{
+        .auth-brand {{
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin-bottom: 24px;
+            gap: clamp(14px, 3vw, 18px);
         }}
-        .brand-badge {{
-            width: 42px;
-            height: 42px;
-            border-radius: 12px;
-            background: linear-gradient(135deg, rgba(76,196,255,0.25), rgba(76,196,255,0.05));
+        .auth-badge {{
+            width: clamp(44px, 7vw, 52px);
+            aspect-ratio: 1;
+            border-radius: 16px;
             display: grid;
             place-items: center;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            background:
+                linear-gradient(135deg, rgba(76, 196, 255, 0.32), rgba(76, 196, 255, 0.08)),
+                linear-gradient(325deg, rgba(28, 37, 73, 0.85), rgba(13, 21, 39, 0.95));
             color: var(--accent);
-            font-weight: 600;
-            letter-spacing: 0.02em;
         }}
-        .brand h2 {{
-            font-size: 1.6rem;
-            font-weight: 600;
+        .auth-brand h2 {{
             margin: 0;
+            font-size: clamp(1.45rem, 3vw, 1.75rem);
+            font-weight: 600;
         }}
-        .brand span {{
+        .auth-brand span {{
             display: block;
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            margin-top: 4px;
+            margin-top: 6px;
+            font-size: 0.95rem;
+            color: var(--text-subtle);
         }}
-        form {{ display: grid; gap: 18px; }}
+        form {{
+            display: grid;
+            gap: clamp(18px, 3vw, 24px);
+        }}
+        .field {{
+            display: grid;
+            gap: 10px;
+        }}
         label {{
             font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 0.08em;
-            color: var(--text-muted);
+            color: var(--text-subtle);
         }}
-        input[type=text], input[type=password] {{
+        input[type=text],
+        input[type=password] {{
             width: 100%;
-            padding: 12px 14px;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            background: rgba(15, 23, 42, 0.55);
-            color: var(--text-primary);
-            font-size: 0.95rem;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            background: rgba(9, 13, 24, 0.72);
+            color: var(--text-strong);
+            font-size: 1rem;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
         }}
-        input[type=text]:focus, input[type=password]:focus {{
+        input[type=text]:focus,
+        input[type=password]:focus {{
             outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(76, 196, 255, 0.25);
+            border-color: rgba(76, 196, 255, 0.55);
+            background: rgba(13, 20, 35, 0.85);
+            box-shadow: 0 0 0 3px rgba(76, 196, 255, 0.22);
         }}
-        .actions {{
+        .auth-meta {{
             display: flex;
-            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
             justify-content: space-between;
-            gap: 16px;
-            margin-top: 8px;
+            font-size: 0.9rem;
+            color: var(--text-subtle);
         }}
-        .actions small {{
-            color: var(--text-muted);
-        }}
-        input[type=submit] {{
-            width: 100%;
-            padding: 12px;
-            border-radius: 10px;
+        .auth-submit {{
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 14px;
+            border-radius: 12px;
             border: none;
-            background: linear-gradient(135deg, rgba(76,196,255,0.85), rgba(76,196,255,0.65));
-            color: #0b1221;
             font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
+            color: #071021;
+            background: linear-gradient(135deg, rgba(76, 196, 255, 0.92), rgba(76, 196, 255, 0.72));
+            box-shadow: 0 18px 35px rgba(76, 196, 255, 0.18);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
         }}
-        input[type=submit]:hover {{
+        .auth-submit:hover {{
             transform: translateY(-1px);
-            background: linear-gradient(135deg, rgba(76,196,255,1), rgba(76,196,255,0.75));
-            box-shadow: 0 12px 24px rgba(76,196,255,0.15);
+            background: linear-gradient(135deg, rgba(76, 196, 255, 1), rgba(76, 196, 255, 0.82));
+            box-shadow: 0 22px 40px rgba(76, 196, 255, 0.26);
         }}
-        input[type=submit]:active {{
+        .auth-submit:active {{
             transform: translateY(0);
         }}
         .error {{
-            color: var(--danger);
-            background: rgba(248, 113, 113, 0.12);
-            border: 1px solid rgba(248, 113, 113, 0.35);
-            padding: 10px 12px;
-            border-radius: 10px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.32);
+            color: #fca5a5;
+            font-size: 0.95rem;
             text-align: center;
-            margin-bottom: 4px;
         }}
-        @media (max-width: 520px) {{
-            .login-wrapper {{
-                padding: 28px;
-                border-radius: 16px;
+        @media (min-width: 960px) {{
+            .auth-shell {{
+                grid-template-columns: 1.1fr 0.9fr;
+            }}
+            .auth-hero {{
+                display: block;
+            }}
+        }}
+        @media (max-width: 640px) {{
+            body {{
+                padding: 16px;
+            }}
+            .auth-card {{
+                padding: 26px;
+                border-radius: 20px;
+            }}
+            .auth-meta {{
+                flex-direction: column;
+                align-items: flex-start;
             }}
         }}
     </style>
 </head>
 <body>
-    <div class="login-wrapper">
-        <div class="brand">
-            <div class="brand-badge">MX</div>
-            <div>
-                <h2>Welcome back</h2>
-                <span>Sign in to continue to MeTubeEX</span>
+    <div class="auth-shell">
+        <section class="auth-hero">
+            <h1>Effortless downloads. Modern control.</h1>
+            <p>Send jobs to yt-dlp or gallery-dl, monitor every stage of the queue, and stay in sync with the redesigned MeTubeEX dashboard.</p>
+            <div class="auth-hero-features">
+                <span>⚡ Smart backend selection</span>
+                <span>🔐 Encrypted credentials & cookie profiles</span>
+                <span>📦 Gallery-ready archives with telemetry</span>
             </div>
-        </div>
-        <form action="" method="post">
-            {error_message}
-            <div>
-                <label for="username">Username</label>
-                <input type="text" id="username" name="username" autocomplete="username" required>
-            </div>
-            <div>
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" autocomplete="current-password" required>
-            </div>
-            <div class="actions">
-                <small>Need access? Contact your administrator.</small>
-            </div>
-            <input type="submit" value="Sign in">
-        </form>
+        </section>
+        <section class="auth-card">
+            <header class="auth-brand">
+                <div class="auth-badge">MX</div>
+                <div>
+                    <h2>Sign in to MeTubeEX</h2>
+                    <span>Enter your credentials to reach the dashboard</span>
+                </div>
+            </header>
+            <form action="" method="post">
+                {error_message}
+                <div class="field">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" autocomplete="username" required>
+                </div>
+                <div class="field">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" autocomplete="current-password" required>
+                </div>
+                <div class="auth-meta">
+                    <span>Authorized access only.</span>
+                    <span>Contact your admin if you need an account.</span>
+                </div>
+                <button class="auth-submit" type="submit">Continue</button>
+            </form>
+        </section>
     </div>
 </body>
 </html>

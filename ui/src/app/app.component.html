@@ -288,23 +288,28 @@
     </div>
   </form>
 
-  <div *ngIf="isAdmin" class="container admin-tools-container">
-    <div class="admin-tools-toggle">
-      <div class="admin-tools-label">
-        <fa-icon [icon]="faUserShield" class="text-warning"></fa-icon>
-        <div class="admin-tools-text">
-          <span class="admin-tools-title">Admin tools</span>
-          <span class="admin-tools-subtitle">Proxy settings, monitoring &amp; user management</span>
+  <section *ngIf="isAdmin" class="dashboard-section dashboard-section--admin" aria-labelledby="adminHeading">
+    <header class="dashboard-section__header">
+      <div class="dashboard-section__title">
+        <span class="dashboard-section__icon dashboard-section__icon--warning">
+          <fa-icon [icon]="faUserShield"></fa-icon>
+        </span>
+        <div>
+          <h2 id="adminHeading" class="dashboard-section__heading">Admin tools</h2>
+          <p class="dashboard-section__subtitle">Proxy settings, monitoring &amp; user management.</p>
         </div>
       </div>
-      <button type="button"
-              class="btn btn-outline-secondary btn-sm"
-              (click)="toggleAdminTools()"
-              [attr.aria-expanded]="adminToolsOpen"
-              aria-controls="adminToolsPanel">
-        {{ adminToolsOpen ? 'Hide' : 'Show' }}
-      </button>
-    </div>
+      <div class="dashboard-section__actions">
+        <button type="button"
+                class="dashboard-action"
+                (click)="toggleAdminTools()"
+                [attr.aria-expanded]="adminToolsOpen"
+                aria-controls="adminToolsPanel">
+          <fa-icon [icon]="adminToolsOpen ? faChevronUp : faChevronDown"></fa-icon>
+          <span>{{ adminToolsOpen ? 'Hide tools' : 'Show tools' }}</span>
+        </button>
+      </div>
+    </header>
 
     <div id="adminToolsPanel"
          class="collapse admin-panel-wrapper"
@@ -549,11 +554,11 @@
         </section>
       </div>
     </div>
-  </div>
+  </section>
   <!-- Batch Import Modal -->
   <div class="modal fade" tabindex="-1" role="dialog" [ngClass]="{'show': batchImportModalOpen}" [ngStyle]="{'display': batchImportModalOpen ? 'block' : 'none'}">
     <div class="modal-dialog" role="document">
-      <div class="modal-content">
+      <div class="modal-content modal-modern">
         <div class="modal-header">
           <h5 class="modal-title">Batch Import URLs</h5>
           <button type="button" class="btn-close" aria-label="Close" (click)="closeBatchImportModal()"></button>
@@ -580,7 +585,7 @@
   <!-- Cookies Modal -->
   <div class="modal fade" tabindex="-1" role="dialog" [ngClass]="{'show': cookiesModalOpen}" [ngStyle]="{'display': cookiesModalOpen ? 'block' : 'none'}">
     <div class="modal-dialog modal-lg" role="document">
-      <div class="modal-content">
+      <div class="modal-content modal-modern">
         <div class="modal-header">
           <h5 class="modal-title">Manage yt-dlp cookies</h5>
           <button type="button" class="btn-close" aria-label="Close" (click)="closeCookiesModal()" [disabled]="cookiesWorking || cookieProfilesLoading"></button>
@@ -681,10 +686,9 @@
       </div>
     </div>
   </div>
-
   <div class="modal fade proxy-modal" tabindex="-1" role="dialog" [ngClass]="{'show': proxyPromptOpen}" [ngStyle]="{'display': proxyPromptOpen ? 'block' : 'none'}">
     <div class="modal-dialog modal-dialog-centered" role="document">
-      <div class="modal-content">
+      <div class="modal-content modal-modern">
         <div class="modal-header">
           <h5 class="modal-title">Direct download required</h5>
           <button type="button" class="btn-close" aria-label="Close" (click)="closeProxyPrompt()" [disabled]="proxyConfirmInProgress"></button>
@@ -754,7 +758,7 @@
 
   <div class="modal fade gallerydl-modal" tabindex="-1" role="dialog" [ngClass]="{'show': galleryPromptOpen}" [ngStyle]="{'display': galleryPromptOpen ? 'block' : 'none'}">
     <div class="modal-dialog modal-dialog-centered" role="document">
-      <div class="modal-content">
+      <div class="modal-content modal-modern">
         <div class="modal-header">
           <h5 class="modal-title">Gallery download</h5>
           <button type="button" class="btn-close" aria-label="Close" (click)="closeGalleryPrompt()" [disabled]="galleryConfirmInProgress"></button>
@@ -888,7 +892,7 @@
 
 <div class="modal fade backend-choice-modal" tabindex="-1" role="dialog" [ngClass]="{'show': backendChoiceModalOpen}" [ngStyle]="{'display': backendChoiceModalOpen ? 'block' : 'none'}">
   <div class="modal-dialog modal-dialog-centered" role="document">
-    <div class="modal-content" *ngIf="backendChoiceData as choice">
+    <div class="modal-content modal-modern" *ngIf="backendChoiceData as choice">
       <div class="modal-header">
         <h5 class="modal-title">Choose download backend</h5>
         <button type="button" class="btn-close" aria-label="Close" (click)="closeBackendChoiceModal(true)" [disabled]="backendChoiceSubmitting"></button>
@@ -918,7 +922,7 @@
 
   <div class="modal fade supported-sites-modal" tabindex="-1" role="dialog" [ngClass]="{'show': supportedSitesModalOpen}" [ngStyle]="{'display': supportedSitesModalOpen ? 'block' : 'none'}">
     <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
-      <div class="modal-content">
+      <div class="modal-content modal-modern">
         <div class="modal-header">
           <h5 class="modal-title">Supported sites</h5>
           <button type="button" class="btn-close" aria-label="Close" (click)="closeSupportedSitesModal()"></button>
@@ -962,7 +966,7 @@
 
 <div class="modal fade gallery-settings-modal" tabindex="-1" role="dialog" [ngClass]="{'show': gallerySettingsModalOpen}" [ngStyle]="{'display': gallerySettingsModalOpen ? 'block' : 'none'}">
   <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
-    <div class="modal-content">
+    <div class="modal-content modal-modern">
       <div class="modal-header">
         <h5 class="modal-title">Gallery-dl settings</h5>
         <button type="button" class="btn-close" aria-label="Close" (click)="closeGallerySettingsModal()"></button>
@@ -1086,7 +1090,7 @@
       'dock-left': streamMinimized && streamDockSide === 'left',
       'dock-right': streamMinimized && streamDockSide === 'right'
     }">
-      <div class="modal-content">
+      <div class="modal-content modal-modern">
         <div class="modal-header align-items-center">
           <h5 class="modal-title mb-0 flex-grow-1">{{ streamTitle || 'Stream media' }}</h5>
           <div class="modal-actions">
@@ -1123,127 +1127,314 @@
   </div>
   
 
-  <div *ngIf="downloads.loading" class="alert alert-info" role="alert">
-    Connecting to server...
-  </div>
-  <div class="metube-section-header">Downloading</div>
-  <div class="px-2 py-3 border-bottom">
-    <button type="button" class="btn btn-link text-decoration-none px-0 me-4" disabled #queueDelSelected (click)="delSelectedDownloads('queue')"><fa-icon [icon]="faTrashAlt"></fa-icon>&nbsp; Cancel selected</button>
-    <button type="button" class="btn btn-link text-decoration-none px-0 me-4" disabled #queueDownloadSelected (click)="startSelectedDownloads('queue')"><fa-icon [icon]="faDownload"></fa-icon>&nbsp; Download selected</button>
-  </div>
-  <div class="overflow-auto">
-    <table class="table">
-      <thead>
-        <tr>
-          <th scope="col" style="width: 1rem;">
-            <app-master-checkbox #queueMasterCheckbox [id]="'queue'" [list]="downloads.queue" (changed)="queueSelectionChanged($event)"></app-master-checkbox>
-          </th>
-          <th scope="col">Video</th>
-          <th scope="col" style="width: 8rem;">Speed</th>
-          <th scope="col" style="width: 7rem;">ETA</th>
-          <th scope="col" style="width: 6rem;"></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let download of downloads.queue | keyvalue: asIsOrder; trackBy: identifyDownloadRow" [class.disabled]='download.value.deleting'>
-          <td>
-            <app-slave-checkbox [id]="download.key" [master]="queueMasterCheckbox" [checkable]="download.value"></app-slave-checkbox>
-          </td>
-          <td title="{{ download.value.filename }}">
-            <div class="d-flex flex-column flex-sm-row align-items-center row-gap-2 column-gap-3">
-              <div>{{ download.value.title }}</div>
-              <ngb-progressbar height="1.5rem" [showValue]="download.value.status != 'preparing'" [striped]="download.value.status == 'preparing'" [animated]="download.value.status == 'preparing'" type="success" [value]="download.value.status == 'preparing' ? 100 : download.value.percent | number:'1.0-0'" class="download-progressbar"></ngb-progressbar>
-            </div>
-          </td>
-          <td>{{ download.value.speed | speed }}</td>
-          <td>{{ download.value.eta | eta }}</td>
-          <td>
-            <div class="d-flex">
-              <button *ngIf="download.value.status === 'pending'" type="button" class="btn btn-link" (click)="downloadItemByKey(download.key)"><fa-icon [icon]="faDownload"></fa-icon></button>
-              <button type="button" class="btn btn-link" (click)="delDownload('queue', download.key)"><fa-icon [icon]="faTrashAlt"></fa-icon></button>
-              <a [href]="download.value.original_url || download.value.url" target="_blank" class="btn btn-link"><fa-icon [icon]="faExternalLinkAlt"></fa-icon></a>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+  <div *ngIf="downloads.loading" class="dashboard-banner" role="status">
+    <span class="dashboard-banner__icon">
+      <fa-icon [icon]="faCircleInfo"></fa-icon>
+    </span>
+    <div class="dashboard-banner__content">
+      <span class="dashboard-banner__title">Connecting to server…</span>
+      <span class="dashboard-banner__meta">Fetching current download state.</span>
+    </div>
   </div>
 
-  <div class="metube-section-header">Completed</div>
-  <div class="px-2 py-3 border-bottom">
-    <button type="button" class="btn btn-link text-decoration-none px-0 me-4" disabled #doneDelSelected (click)="delSelectedDownloads('done')"><fa-icon [icon]="faTrashAlt"></fa-icon>&nbsp; Clear selected</button>
-    <button type="button" class="btn btn-link text-decoration-none px-0 me-4" disabled #doneClearCompleted (click)="clearCompletedDownloads()"><fa-icon [icon]="faCheckCircle"></fa-icon>&nbsp; Clear completed</button>
-    <button type="button" class="btn btn-link text-decoration-none px-0 me-4" disabled #doneClearFailed (click)="clearFailedDownloads()"><fa-icon [icon]="faTimesCircle"></fa-icon>&nbsp; Clear failed</button>
-    <button type="button" class="btn btn-link text-decoration-none px-0 me-4" disabled #doneRetryFailed (click)="retryFailedDownloads()"><fa-icon [icon]="faRedoAlt"></fa-icon>&nbsp; Retry failed</button>
-    <button type="button" class="btn btn-link text-decoration-none px-0 me-4" disabled #doneDownloadSelected (click)="downloadSelectedFiles()"><fa-icon [icon]="faDownload"></fa-icon>&nbsp; Download Selected</button>
-  </div>
-  <div class="overflow-auto">
-    <table class="table">
-      <thead>
-        <tr>
-          <th scope="col" style="width: 1rem;">
-            <app-master-checkbox #doneMasterCheckbox [id]="'done'" [list]="downloads.done" (changed)="doneSelectionChanged($event)"></app-master-checkbox>
-          </th>
-          <th scope="col">Video</th>
-          <th scope="col">File Size</th>
-          <th scope="col" style="width: 8rem;"></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let download of downloads.done | keyvalue: asIsOrder; trackBy: identifyDownloadRow" [class.disabled]='download.value.deleting'>
-          <td>
-            <app-slave-checkbox [id]="download.key" [master]="doneMasterCheckbox" [checkable]="download.value"></app-slave-checkbox>
-          </td>
-          <td>
-            <div style="display: inline-block; width: 1.5rem;">
-              <fa-icon *ngIf="download.value.status == 'finished'" [icon]="faCheckCircle" class="text-success"></fa-icon>
-              <fa-icon *ngIf="download.value.status == 'error'" [icon]="faTimesCircle" class="text-danger"></fa-icon>
-            </div>
-            <span ngbTooltip="{{download.value.msg}} | {{download.value.error}}"><a *ngIf="!!download.value.filename; else noDownloadLink" href="{{buildDownloadLink(download.value)}}" target="_blank">{{ download.value.title }}</a></span>
-            <ng-template #noDownloadLink>
-              {{download.value.title}}
-              <span *ngIf="download.value.msg"><br>{{download.value.msg}}</span>
-              <span *ngIf="download.value.error"><br>Error: {{download.value.error}}</span>
-            </ng-template>
-          </td>
-          <td>
-            <span *ngIf="download.value.size">{{ download.value.size | fileSize }}</span>
-          </td>
-          <td>
-            <div class="d-flex">
-              <button *ngIf="download.value.status == 'error'" type="button" class="btn btn-link" (click)="retryDownload(download.key, download.value)"><fa-icon [icon]="faRedoAlt"></fa-icon></button>
-              <button *ngIf="download.value.filename" type="button" class="btn btn-link" (click)="renameDownload(download.key, download.value)"><fa-icon [icon]="faPen"></fa-icon></button>
-              <button *ngIf="download.value.filename && download.value.status == 'finished'" type="button" class="btn btn-link" (click)="openStream(download.key, download.value)"><fa-icon [icon]="faPlay"></fa-icon></button>
-              <a *ngIf="download.value.filename" href="{{buildDownloadLink(download.value)}}" download class="btn btn-link"><fa-icon [icon]="faDownload"></fa-icon></a>
-              <a [href]="download.value.original_url || download.value.url" target="_blank" class="btn btn-link"><fa-icon [icon]="faExternalLinkAlt"></fa-icon></a>
-              <button type="button" class="btn btn-link" (click)="delDownload('done', download.key)"><fa-icon [icon]="faTrashAlt"></fa-icon></button>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+  <section class="dashboard-section" aria-labelledby="downloadingHeading">
+    <header class="dashboard-section__header">
+      <div class="dashboard-section__title">
+        <span class="dashboard-section__icon dashboard-section__icon--accent">
+          <fa-icon [icon]="faDownload"></fa-icon>
+        </span>
+        <div>
+          <h2 id="downloadingHeading" class="dashboard-section__heading">Downloading</h2>
+          <p class="dashboard-section__subtitle">
+            {{ downloads.queue.size || 0 }} active or queued item{{ downloads.queue.size === 1 ? '' : 's' }}.
+          </p>
+        </div>
+      </div>
+      <div class="dashboard-section__actions">
+        <button type="button"
+                class="dashboard-action dashboard-action--danger"
+                disabled
+                #queueDelSelected
+                (click)="delSelectedDownloads('queue')">
+          <fa-icon [icon]="faTrashAlt"></fa-icon>
+          <span>Cancel selected</span>
+        </button>
+        <button type="button"
+                class="dashboard-action"
+                disabled
+                #queueDownloadSelected
+                (click)="startSelectedDownloads('queue')">
+          <fa-icon [icon]="faDownload"></fa-icon>
+          <span>Download selected</span>
+        </button>
+      </div>
+    </header>
+    <div class="dashboard-section__body">
+      <ng-container *ngIf="downloads.queue.size > 0; else queueEmptyState">
+        <div class="dashboard-table">
+          <div class="table-responsive">
+            <table class="table dashboard-table__inner align-middle">
+              <thead>
+                <tr>
+                  <th scope="col" class="dashboard-table__select">
+                    <app-master-checkbox #queueMasterCheckbox [id]="'queue'" [list]="downloads.queue" (changed)="queueSelectionChanged($event)"></app-master-checkbox>
+                  </th>
+                  <th scope="col">Video</th>
+                  <th scope="col" class="dashboard-table__metric">Speed</th>
+                  <th scope="col" class="dashboard-table__metric">ETA</th>
+                  <th scope="col" class="dashboard-table__actions"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let download of downloads.queue | keyvalue: asIsOrder; trackBy: identifyDownloadRow" [class.disabled]="download.value.deleting">
+                  <td>
+                    <app-slave-checkbox [id]="download.key" [master]="queueMasterCheckbox" [checkable]="download.value"></app-slave-checkbox>
+                  </td>
+                  <td title="{{ download.value.filename }}">
+                    <div class="dashboard-download">
+                      <div class="dashboard-download__title text-truncate">{{ download.value.title }}</div>
+                      <ngb-progressbar height="1.25rem"
+                                       [showValue]="download.value.status != 'preparing'"
+                                       [striped]="download.value.status == 'preparing'"
+                                       [animated]="download.value.status == 'preparing'"
+                                       type="success"
+                                       [value]="download.value.status == 'preparing' ? 100 : download.value.percent | number:'1.0-0'"
+                                       class="download-progressbar"></ngb-progressbar>
+                    </div>
+                  </td>
+                  <td class="dashboard-table__metric">{{ download.value.speed | speed }}</td>
+                  <td class="dashboard-table__metric">{{ download.value.eta | eta }}</td>
+                  <td>
+                    <div class="dashboard-row-actions">
+                      <button *ngIf="download.value.status === 'pending'"
+                              type="button"
+                              class="dashboard-row-actions__btn"
+                              (click)="downloadItemByKey(download.key)"
+                              ngbTooltip="Start download">
+                        <fa-icon [icon]="faDownload"></fa-icon>
+                      </button>
+                      <button type="button"
+                              class="dashboard-row-actions__btn"
+                              (click)="delDownload('queue', download.key)"
+                              ngbTooltip="Remove from queue">
+                        <fa-icon [icon]="faTrashAlt"></fa-icon>
+                      </button>
+                      <a [href]="download.value.original_url || download.value.url"
+                         target="_blank"
+                         class="dashboard-row-actions__btn"
+                         ngbTooltip="Open source URL">
+                        <fa-icon [icon]="faExternalLinkAlt"></fa-icon>
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </ng-container>
+      <ng-template #queueEmptyState>
+        <div class="dashboard-empty">
+          <span class="dashboard-empty__icon">
+            <fa-icon [icon]="faLayerGroup"></fa-icon>
+          </span>
+          <div class="dashboard-empty__title">No downloads in progress</div>
+          <p class="dashboard-empty__meta">Start a download above to see progress here.</p>
+        </div>
+      </ng-template>
+    </div>
+  </section>
+
+  <section class="dashboard-section" aria-labelledby="completedHeading">
+    <header class="dashboard-section__header">
+      <div class="dashboard-section__title">
+        <span class="dashboard-section__icon dashboard-section__icon--success">
+          <fa-icon [icon]="faCheckCircle"></fa-icon>
+        </span>
+        <div>
+          <h2 id="completedHeading" class="dashboard-section__heading">Completed</h2>
+          <p class="dashboard-section__subtitle">
+            {{ downloads.done.size || 0 }} finished item{{ downloads.done.size === 1 ? '' : 's' }} ready to review.
+          </p>
+        </div>
+      </div>
+      <div class="dashboard-section__actions">
+        <button type="button"
+                class="dashboard-action"
+                disabled
+                #doneDelSelected
+                (click)="delSelectedDownloads('done')">
+          <fa-icon [icon]="faTrashAlt"></fa-icon>
+          <span>Clear selected</span>
+        </button>
+        <button type="button"
+                class="dashboard-action"
+                disabled
+                #doneClearCompleted
+                (click)="clearCompletedDownloads()">
+          <fa-icon [icon]="faCheckCircle"></fa-icon>
+          <span>Clear completed</span>
+        </button>
+        <button type="button"
+                class="dashboard-action"
+                disabled
+                #doneClearFailed
+                (click)="clearFailedDownloads()">
+          <fa-icon [icon]="faTimesCircle"></fa-icon>
+          <span>Clear failed</span>
+        </button>
+        <button type="button"
+                class="dashboard-action"
+                disabled
+                #doneRetryFailed
+                (click)="retryFailedDownloads()">
+          <fa-icon [icon]="faRedoAlt"></fa-icon>
+          <span>Retry failed</span>
+        </button>
+        <button type="button"
+                class="dashboard-action"
+                disabled
+                #doneDownloadSelected
+                (click)="downloadSelectedFiles()">
+          <fa-icon [icon]="faDownload"></fa-icon>
+          <span>Download selected</span>
+        </button>
+      </div>
+    </header>
+    <div class="dashboard-section__body">
+      <ng-container *ngIf="downloads.done.size > 0; else completedEmptyState">
+        <div class="dashboard-table">
+          <div class="table-responsive">
+            <table class="table dashboard-table__inner align-middle">
+              <thead>
+                <tr>
+                  <th scope="col" class="dashboard-table__select">
+                    <app-master-checkbox #doneMasterCheckbox [id]="'done'" [list]="downloads.done" (changed)="doneSelectionChanged($event)"></app-master-checkbox>
+                  </th>
+                  <th scope="col">Video</th>
+                  <th scope="col" class="dashboard-table__metric">File Size</th>
+                  <th scope="col" class="dashboard-table__actions"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let download of downloads.done | keyvalue: asIsOrder; trackBy: identifyDownloadRow" [class.disabled]="download.value.deleting">
+                  <td>
+                    <app-slave-checkbox [id]="download.key" [master]="doneMasterCheckbox" [checkable]="download.value"></app-slave-checkbox>
+                  </td>
+                  <td>
+                    <div class="dashboard-result">
+                      <span class="dashboard-result__status">
+                        <fa-icon *ngIf="download.value.status == 'finished'" [icon]="faCheckCircle" class="text-success"></fa-icon>
+                        <fa-icon *ngIf="download.value.status == 'error'" [icon]="faTimesCircle" class="text-danger"></fa-icon>
+                      </span>
+                      <div class="dashboard-result__body">
+                        <a *ngIf="!!download.value.filename; else noDownloadLink" [href]="buildDownloadLink(download.value)" target="_blank" class="dashboard-result__title" ngbTooltip="{{download.value.msg}} | {{download.value.error}}">
+                          {{ download.value.title }}
+                        </a>
+                        <ng-template #noDownloadLink>
+                          <div class="dashboard-result__title" ngbTooltip="{{download.value.msg}} | {{download.value.error}}">
+                            {{download.value.title}}
+                          </div>
+                          <div class="dashboard-result__meta" *ngIf="download.value.msg">{{download.value.msg}}</div>
+                          <div class="dashboard-result__meta" *ngIf="download.value.error">Error: {{download.value.error}}</div>
+                        </ng-template>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="dashboard-table__metric">
+                    <span *ngIf="download.value.size">{{ download.value.size | fileSize }}</span>
+                  </td>
+                  <td>
+                    <div class="dashboard-row-actions">
+                      <button *ngIf="download.value.status == 'error'"
+                              type="button"
+                              class="dashboard-row-actions__btn"
+                              (click)="retryDownload(download.key, download.value)"
+                              ngbTooltip="Retry">
+                        <fa-icon [icon]="faRedoAlt"></fa-icon>
+                      </button>
+                      <button *ngIf="download.value.filename"
+                              type="button"
+                              class="dashboard-row-actions__btn"
+                              (click)="renameDownload(download.key, download.value)"
+                              ngbTooltip="Rename">
+                        <fa-icon [icon]="faPen"></fa-icon>
+                      </button>
+                      <button *ngIf="download.value.filename && download.value.status == 'finished'"
+                              type="button"
+                              class="dashboard-row-actions__btn"
+                              (click)="openStream(download.key, download.value)"
+                              ngbTooltip="Stream">
+                        <fa-icon [icon]="faPlay"></fa-icon>
+                      </button>
+                      <a *ngIf="download.value.filename"
+                         [href]="buildDownloadLink(download.value)"
+                         download
+                         class="dashboard-row-actions__btn"
+                         ngbTooltip="Download file">
+                        <fa-icon [icon]="faDownload"></fa-icon>
+                      </a>
+                      <a [href]="download.value.original_url || download.value.url"
+                         target="_blank"
+                         class="dashboard-row-actions__btn"
+                         ngbTooltip="Open source URL">
+                        <fa-icon [icon]="faExternalLinkAlt"></fa-icon>
+                      </a>
+                      <button type="button"
+                              class="dashboard-row-actions__btn"
+                              (click)="delDownload('done', download.key)"
+                              ngbTooltip="Remove entry">
+                        <fa-icon [icon]="faTrashAlt"></fa-icon>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </ng-container>
+      <ng-template #completedEmptyState>
+        <div class="dashboard-empty">
+          <span class="dashboard-empty__icon">
+            <fa-icon [icon]="faCheckCircle"></fa-icon>
+          </span>
+          <div class="dashboard-empty__title">No completed downloads yet</div>
+          <p class="dashboard-empty__meta">Finished jobs will appear here with quick actions.</p>
+        </div>
+      </ng-template>
+    </div>
+  </section>
 </main><!-- /.container -->
 
-<footer class="footer navbar-dark bg-dark py-3 mt-5">
-  <div class="container text-center">
-    <div class="footer-content" *ngIf="ytDlpVersion && metubeVersion">
-      <div class="version-item">
-        <span class="version-label">yt-dlp</span>
-        <span class="version-value">{{ytDlpVersion}}</span>
+<footer class="app-footer" aria-label="Application footer">
+  <div class="app-footer__container container">
+    <div class="app-footer__content" *ngIf="ytDlpVersion && metubeVersion">
+      <div class="app-footer__item">
+        <span class="app-footer__label">yt-dlp</span>
+        <span class="app-footer__value">{{ytDlpVersion}}</span>
       </div>
-      <div class="version-separator"></div>
-      <div class="version-item">
-        <span class="version-label">MeTubeEX</span>
-        <span class="version-value">{{metubeVersion}}</span>
+      <ng-container *ngIf="galleryDlVersion">
+        <div class="app-footer__separator"></div>
+        <div class="app-footer__item">
+          <span class="app-footer__label">gallery-dl</span>
+          <span class="app-footer__value">{{galleryDlVersion}}</span>
+        </div>
+      </ng-container>
+      <div class="app-footer__separator"></div>
+      <div class="app-footer__item">
+        <span class="app-footer__label">MeTubeEX</span>
+        <span class="app-footer__value">{{metubeVersion}}</span>
       </div>
-      <div class="version-separator"></div>
-      <div class="version-item" *ngIf="ytDlpOptionsUpdateTime">
-        <span class="version-label">yt-dlp-options</span>
-        <span class="version-value">{{ytDlpOptionsUpdateTime}}</span>
-      </div>
-      <div class="version-separator" *ngIf="ytDlpOptionsUpdateTime"></div>
-      <a href="https://github.com/NaxonM/metube-extended" target="_blank" class="github-link">
+      <ng-container *ngIf="ytDlpOptionsUpdateTime">
+        <div class="app-footer__separator"></div>
+        <div class="app-footer__item">
+          <span class="app-footer__label">yt-dlp-options</span>
+          <span class="app-footer__value">{{ytDlpOptionsUpdateTime}}</span>
+        </div>
+      </ng-container>
+      <div class="app-footer__separator"></div>
+      <a href="https://github.com/NaxonM/metube-extended" target="_blank" class="app-footer__link">
         <fa-icon [icon]="faGithub"></fa-icon>
         <span>GitHub</span>
       </a>
