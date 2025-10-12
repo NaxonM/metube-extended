@@ -23,6 +23,7 @@ queue-wal
 node_modules
 /ui/dist/
 /ui/coverage/
+/ui/.angular/
 .docker-cache/
 docker-cache/
 /.dev-notes/

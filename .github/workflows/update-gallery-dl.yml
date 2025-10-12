@@ -1,0 +1,81 @@
+name: update-gallery-dl
+
+on:
+  schedule:
+    - cron: '30 0 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for gallery-dl update
+        id: check
+        run: |
+          python <<'PY'
+import json
+import hashlib
+import os
+import re
+import sys
+from pathlib import Path
+from urllib.request import urlopen
+
+GITHUB_OUTPUT = Path(os.environ["GITHUB_OUTPUT"])
+dockerfile = Path("Dockerfile")
+content = dockerfile.read_text()
+
+match = re.search(r"ARG GALLERY_DL_VERSION=([\w\.\-]+)", content)
+if not match:
+    raise SystemExit("Unable to locate current gallery-dl version in Dockerfile")
+
+current_version = match.group(1)
+
+with urlopen("https://api.github.com/repos/mikf/gallery-dl/releases/latest") as resp:
+    release = json.load(resp)
+
+latest_version = release["tag_name"].lstrip("v")
+
+asset_url = None
+for asset in release.get("assets", []):
+    if asset.get("name") == "gallery-dl.bin":
+        asset_url = asset.get("browser_download_url")
+        break
+
+if asset_url is None:
+    raise SystemExit("Unable to locate gallery-dl binary asset in latest release")
+
+if latest_version == current_version:
+    GITHUB_OUTPUT.write_text("updated=false\n")
+    sys.exit(0)
+
+with urlopen(asset_url) as resp:
+    binary = resp.read()
+
+sha256 = hashlib.sha256(binary).hexdigest()
+
+new_content = re.sub(r"ARG GALLERY_DL_VERSION=.*", f"ARG GALLERY_DL_VERSION={latest_version}", content)
+new_content = re.sub(r"ARG GALLERY_DL_SHA256=.*", f"ARG GALLERY_DL_SHA256={sha256}", new_content)
+dockerfile.write_text(new_content)
+
+with open("gallery-dl.bin", "wb") as fh:
+    fh.write(binary)
+
+with GITHUB_OUTPUT.open("a") as fh:
+    fh.write("updated=true\n")
+    fh.write(f"new_version={latest_version}\n")
+PY
+
+      - name: Commit and push
+        if: steps.check.outputs.updated == 'true'
+        run: |
+          git config --global user.email "updater@metube"
+          git config --global user.name "AutoUpdater"
+          git add Dockerfile
+          git commit -m "upgrade gallery-dl to ${steps.check.outputs.new_version}"
+          git push

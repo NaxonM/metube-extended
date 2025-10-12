@@ -48,13 +48,20 @@ Stop the stack with `docker compose down`; follow the on-screen hints during ins
 ```bash
 git clone https://github.com/NaxonM/metube-extended.git
 cd metube-extended/ui
-npm install
-node_modules/.bin/ng build --configuration production
+npm install              # requires Node 22+
+npm run lint             # optional, but recommended before building
+npm run build -- --configuration production
 cd ..
 python -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 python app/main.py
 ```
+
+### Development quick start
+
+- **Tooling versions:** Node 22.x LTS, npm 10+, Python 3.13.
+- **Key scripts:** `npm run lint`, `npm run build -- --configuration production`, `npm run test`.
+- **Docker build:** `docker build -t metubeex:dev .` (uses the Angular bundle from the build stage).
 
 ### Uninstall
 

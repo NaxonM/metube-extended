@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.6
 
-FROM node:lts AS builder
+# Node.js builder stage pinned to Node 22 LTS to match Angular 20 toolchain
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /metube
 COPY ui/package*.json ./
