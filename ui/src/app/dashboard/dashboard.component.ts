@@ -1,7 +1,7 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { CookieService } from 'ngx-cookie-service';
-import { Dropdown } from 'bootstrap';
 
 import { faDownload, faClock, faCheck, faTimesCircle, faTachometerAlt, faSun, faMoon, faCircleHalfStroke, faRightFromBracket, faUserShield } from '@fortawesome/free-solid-svg-icons';
 
@@ -46,7 +46,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private metricsSubscription?: Subscription;
   private themeMediaQuery?: MediaQueryList;
 
-  constructor(public readonly downloads: DownloadsService, private readonly cookieService: CookieService) {
+  constructor(
+    public readonly downloads: DownloadsService,
+    private readonly cookieService: CookieService,
+    private readonly router: Router
+  ) {
     this.activeTheme = this.getPreferredTheme();
   }
 
@@ -80,10 +84,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   onThemeSelected(theme: Theme): void {
     this.cookieService.set('metube_theme', theme.id, { expires: 3650 });
     this.setTheme(theme);
-    const dropdownElement = document.getElementById('theme-select');
-    if (dropdownElement) {
-      Dropdown.getOrCreateInstance(dropdownElement).hide();
-    }
+  }
+
+  navigateToAdmin(): void {
+    this.router.navigate(['/admin']);
   }
 
   private updateMetrics(metrics: DownloadMetrics): void {

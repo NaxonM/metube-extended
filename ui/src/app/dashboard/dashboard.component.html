@@ -40,23 +40,26 @@
         <fa-icon [icon]="faRightFromBracket"></fa-icon>
         Logout
       </a>
-      <div class="nav-theme">
-        <button class="btn btn-link nav-link dropdown-toggle" id="theme-select" type="button" aria-expanded="false" data-bs-toggle="dropdown" data-bs-display="static">
+      <div class="nav-theme" ngbDropdown [autoClose]="'inside'">
+        <button class="btn btn-link nav-link dropdown-toggle" id="theme-select" type="button" ngbDropdownToggle>
           <fa-icon [icon]="activeTheme.icon"></fa-icon>
         </button>
-        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="theme-select">
-          <li *ngFor="let theme of themes">
-            <button type="button" class="dropdown-item d-flex align-items-center" [ngClass]="{'active' : activeTheme == theme}" (click)="onThemeSelected(theme)">
-              <span class="me-2 opacity-50">
-                <fa-icon [icon]="theme.icon"></fa-icon>
-              </span>
-              {{ theme.displayName }}
-              <span class="ms-auto" [ngClass]="{'d-none' : activeTheme != theme}">
-                <fa-icon [icon]="faCheck"></fa-icon>
-              </span>
-            </button>
-          </li>
-        </ul>
+        <div ngbDropdownMenu class="dropdown-menu dropdown-menu-end" aria-labelledby="theme-select">
+          <button type="button"
+                  ngbDropdownItem
+                  class="dropdown-item d-flex align-items-center"
+                  *ngFor="let theme of themes"
+                  [ngClass]="{'active' : activeTheme == theme}"
+                  (click)="onThemeSelected(theme)">
+            <span class="me-2 opacity-50">
+              <fa-icon [icon]="theme.icon"></fa-icon>
+            </span>
+            {{ theme.displayName }}
+            <span class="ms-auto" [ngClass]="{'d-none' : activeTheme != theme}">
+              <fa-icon [icon]="faCheck"></fa-icon>
+            </span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

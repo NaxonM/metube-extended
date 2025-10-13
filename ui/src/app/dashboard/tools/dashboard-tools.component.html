@@ -194,14 +194,13 @@
                 <span class="advanced-chip__icon"><fa-icon [icon]="faKey"></fa-icon></span>
                 <span class="advanced-chip__label">Gallery-dl settings</span>
               </button>
-              <a *ngIf="isAdmin"
-                 class="advanced-chip"
-                 [routerLink]="['/admin']"
-                 role="button"
-                 tabindex="0">
+              <button *ngIf="isAdmin"
+                      type="button"
+                      class="advanced-chip"
+                      (click)="navigateToAdmin()">
                 <span class="advanced-chip__icon"><fa-icon [icon]="faLayerGroup"></fa-icon></span>
                 <span class="advanced-chip__label">Admin tools</span>
-              </a>
+              </button>
               <button type="button"
                       class="advanced-chip"
                       (click)="openSupportedSitesModal()">

@@ -1,4 +1,5 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
+import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 
@@ -136,7 +137,12 @@ export class DashboardToolsComponent implements OnInit {
 
   pendingAddRequest: PendingAddRequest | null = null;
 
-  constructor(public readonly downloads: DownloadsService, private readonly cookieService: CookieService, private readonly http: HttpClient) {
+  constructor(
+    public readonly downloads: DownloadsService,
+    private readonly cookieService: CookieService,
+    private readonly http: HttpClient,
+    private readonly router: Router
+  ) {
     this.format = this.cookieService.get('metube_format') || 'any';
     this.setQualities();
     this.quality = this.cookieService.get('metube_quality') || 'best';
@@ -476,6 +482,10 @@ export class DashboardToolsComponent implements OnInit {
 
   openGallerySettingsModal(): void {
     this.gallerySettingsModalOpen = true;
+  }
+
+  navigateToAdmin(): void {
+    this.router.navigate(['/admin']);
   }
 
   closeCookiesModal(): void {
