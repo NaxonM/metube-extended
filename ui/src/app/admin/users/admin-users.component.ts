@@ -33,7 +33,14 @@ export class AdminUsersComponent implements OnInit {
     this.adminLoading = true;
     this.adminError = '';
     this.downloads.listUsers().subscribe(response => {
-      this.adminUsers = (response?.users ?? []).slice().sort((a, b) => a.username.localeCompare(b.username));
+      if (!response || (response as any)?.status === 'error') {
+        const message = (response as any)?.msg || 'Unable to load users.';
+        this.adminError = message;
+        this.adminUsers = [];
+        this.adminLoading = false;
+        return;
+      }
+      this.adminUsers = (response.users ?? []).slice().sort((a, b) => a.username.localeCompare(b.username));
       this.adminLoading = false;
     }, () => {
       this.adminLoading = false;

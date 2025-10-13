@@ -807,8 +807,8 @@ export class DownloadsService {
   }
 
   public listUsers() {
-    return this.http.get<{users: ManagedUser[]}>('admin/users').pipe(
-      catchError(() => of({users: [] as ManagedUser[]}))
+    return this.http.get<{users: ManagedUser[]} & Partial<Status>>('admin/users').pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<{users: ManagedUser[]} & Partial<Status>>(error))
     );
   }
 

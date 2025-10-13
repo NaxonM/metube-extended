@@ -6,11 +6,13 @@ import time
 import asyncio
 import multiprocessing
 import logging
+import math
 import re
 
 import yt_dlp.networking.impersonate
 from dl_formats import get_format, get_opts, AUDIO_FORMATS
 from datetime import datetime
+from typing import Optional, Any
 
 log = logging.getLogger('ytdl')
 
@@ -70,7 +72,18 @@ class DownloadInfo:
 class Download:
     manager = None
 
-    def __init__(self, download_dir, temp_dir, output_template, output_template_chapter, quality, format, ytdl_opts, info):
+    def __init__(
+        self,
+        download_dir,
+        temp_dir,
+        output_template,
+        output_template_chapter,
+        quality,
+        format,
+        ytdl_opts,
+        info,
+        size_limit_bytes: Optional[int] = None,
+    ):
         self.download_dir = download_dir
         self.temp_dir = temp_dir
         self.output_template = output_template
@@ -86,6 +99,8 @@ class Download:
         self.proc = None
         self.loop = None
         self.notifier = None
+        self.size_limit_bytes = size_limit_bytes
+        self._limit_error_emitted = False
 
     def _download(self):
         log.info(f"Starting download for: {self.info.title} ({self.info.url})")
@@ -149,6 +164,53 @@ class Download:
             log.error(f"Download error for {self.info.title}: {str(exc)}")
             self.status_queue.put({'status': 'error', 'msg': str(exc), '__event': 'download_error'})
 
+    def _calculate_limit_violation(self, status: Any) -> Optional[int]:
+        limit = self.size_limit_bytes
+        if not limit or not isinstance(status, dict):
+            return None
+        total = status.get('total_bytes') or status.get('total_bytes_estimate')
+        downloaded = status.get('downloaded_bytes')
+        if isinstance(total, (int, float)) and total > limit:
+            return int(total)
+        if isinstance(downloaded, (int, float)) and downloaded > limit:
+            return int(downloaded)
+        return None
+
+    def _format_limit_message(self, approx_bytes: int) -> str:
+        limit = self.size_limit_bytes or 0
+        limit_mb = max(1, math.ceil(limit / (1024 * 1024))) if limit else 0
+        approx_mb = max(1, math.ceil(approx_bytes / (1024 * 1024)))
+        if limit_mb > 0:
+            return (
+                f'This download requires approximately {approx_mb} MB which exceeds '
+                f'the configured size limit of {limit_mb} MB.'
+            )
+        return (
+            f'This download requires approximately {approx_mb} MB and cannot be processed '
+            'due to the configured size limit.'
+        )
+
+    async def _abort_for_limit(self, approx_bytes: int):
+        if self._limit_error_emitted:
+            return
+        self._limit_error_emitted = True
+        message = self._format_limit_message(approx_bytes)
+        self.info.status = 'error'
+        self.info.msg = message
+        self.info.error = message
+        self.info.percent = 0
+        try:
+            if self.proc and self.proc.is_alive():
+                self.proc.kill()
+        except Exception as exc:
+            log.debug('Failed to kill process for size limit enforcement: %s', exc)
+        if self.status_queue is not None:
+            try:
+                self.status_queue.put(None)
+            except Exception:
+                pass
+        await self.notifier.updated(self.info)
+
     async def start(self, notifier):
         log.info(f"Preparing download for: {self.info.title}")
         if Download.manager is None:
@@ -201,6 +263,11 @@ class Download:
                 self.info.cookie_warning = status.get('message')
                 self.info.cookie_warning_at = time.time()
                 continue
+            if isinstance(status, dict):
+                violation_bytes = self._calculate_limit_violation(status)
+                if violation_bytes is not None:
+                    await self._abort_for_limit(violation_bytes)
+                    return
             if self.canceled:
                 log.info(f"Download {self.info.title} is canceled; stopping status updates.")
                 return
@@ -289,7 +356,16 @@ class PersistentQueue:
                     shelf.pop(key, None)
 
 class DownloadQueue:
-    def __init__(self, config, notifier, state_dir=None, user_id=None, cookie_status_store=None, max_history_items: int = 200):
+    def __init__(
+        self,
+        config,
+        notifier,
+        state_dir=None,
+        user_id=None,
+        cookie_status_store=None,
+        download_limit_source=None,
+        max_history_items: int = 200,
+    ):
         self.config = config
         self.notifier = notifier
         self.user_id = user_id
@@ -301,6 +377,7 @@ class DownloadQueue:
         self.active_downloads = set()
         self.semaphore = None
         self.cookie_status_store = cookie_status_store
+        self.download_limit_source = download_limit_source
         self.max_history_items = max_history_items if max_history_items is not None else 200
         # For sequential mode, use an asyncio lock to ensure one-at-a-time execution.
         if self.config.DOWNLOAD_MODE == 'sequential':
@@ -327,6 +404,81 @@ class DownloadQueue:
         asyncio.create_task(self.__import_queue())
         asyncio.create_task(self.__import_pending())
 
+    def _current_size_limit(self) -> Optional[int]:
+        if not self.download_limit_source:
+            return None
+        try:
+            limit = getattr(self.download_limit_source, 'size_limit_bytes', None)
+            if callable(limit):
+                limit = limit()
+        except Exception as exc:
+            log.debug('Failed to resolve size limit: %s', exc)
+            return None
+        if not isinstance(limit, (int, float)):
+            return None
+        limit_int = int(limit)
+        if limit_int <= 0:
+            return None
+        return limit_int
+
+    def _apply_size_limit(self, download: Download):
+        limit = self._current_size_limit()
+        download.size_limit_bytes = limit
+
+    def _estimate_download_size(self, info: DownloadInfo) -> Optional[int]:
+        entry = getattr(info, 'entry', None)
+        if not isinstance(entry, dict):
+            return None
+        for key in ('filesize', 'filesize_approx', 'filesize_estimate', 'filesize_approximation'):
+            value = entry.get(key)
+            if isinstance(value, (int, float)) and value > 0:
+                return int(value)
+
+        def _accumulate(items: Any) -> Optional[int]:
+            if not isinstance(items, list):
+                return None
+            total = 0
+            found = False
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                size = item.get('filesize') or item.get('filesize_approx') or item.get('filesize_estimate')
+                if isinstance(size, (int, float)) and size > 0:
+                    total += int(size)
+                    found = True
+            return total if found else None
+
+        requested_downloads = _accumulate(entry.get('requested_downloads'))
+        if requested_downloads is not None:
+            return requested_downloads
+
+        requested_formats = _accumulate(entry.get('requested_formats'))
+        if requested_formats is not None:
+            return requested_formats
+
+        fragments = entry.get('fragments')
+        if isinstance(fragments, list):
+            total = 0
+            found = False
+            for fragment in fragments:
+                if not isinstance(fragment, dict):
+                    continue
+                size = fragment.get('filesize') or fragment.get('filesize_approx')
+                if isinstance(size, (int, float)) and size > 0:
+                    total += int(size)
+                    found = True
+            if found:
+                return total
+        return None
+
+    def _format_limit_error(self, estimated_bytes: int, limit_bytes: int) -> str:
+        estimated_mb = max(1, math.ceil(estimated_bytes / (1024 * 1024)))
+        limit_mb = max(1, math.ceil(limit_bytes / (1024 * 1024)))
+        return (
+            f'This download is estimated at {estimated_mb} MB which exceeds the configured '
+            f'size limit of {limit_mb} MB.'
+        )
+
     def _resolve_download_directory(self, info):
         base_directory = self.config.DOWNLOAD_DIR if (info.quality != 'audio' and info.format not in AUDIO_FORMATS) else self.config.AUDIO_DOWNLOAD_DIR
         base_directory = os.path.realpath(base_directory)
@@ -342,6 +494,7 @@ class DownloadQueue:
         if download.canceled:
             log.info(f"Download {download.info.title} was canceled, skipping start.")
             return
+        self._apply_size_limit(download)
         if self.config.DOWNLOAD_MODE == 'sequential':
             async with self.seq_lock:
                 log.info("Starting sequential download.")
@@ -464,13 +617,31 @@ class DownloadQueue:
             except OSError:
                 size = -1
             log.info('yt-dlp download %s will use cookie file %s (size=%s)', dl.id, cookie_path, size)
-        download = Download(dldirectory, self.config.TEMP_DIR, output, output_chapter, dl.quality, dl.format, ytdl_options, dl)
+        size_limit = self._current_size_limit()
+        estimated_size = self._estimate_download_size(dl)
+        if size_limit is not None and estimated_size is not None and estimated_size > size_limit:
+            msg = self._format_limit_error(estimated_size, size_limit)
+            log.info('Download %s rejected due to size limit (%s bytes > %s bytes)', dl.id, estimated_size, size_limit)
+            return {'status': 'error', 'msg': msg}
+        download = Download(
+            dldirectory,
+            self.config.TEMP_DIR,
+            output,
+            output_chapter,
+            dl.quality,
+            dl.format,
+            ytdl_options,
+            dl,
+            size_limit_bytes=size_limit,
+        )
+        self._apply_size_limit(download)
         if auto_start is True:
             self.queue.put(download)
             asyncio.create_task(self.__start_download(download))
         else:
             self.pending.put(download)
         await self.notifier.added(dl)
+        return {'status': 'ok'}
 
     async def __add_entry(self, entry, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already, cookie_path=None, cookie_profile_id=None):
         if not entry:
@@ -519,7 +690,9 @@ class DownloadQueue:
             if not self.queue.exists(key):
                 original_url = entry.get('webpage_url') or entry.get('url') or key
                 dl = DownloadInfo(entry['id'], entry.get('title') or entry['id'], key, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookie_path, self.user_id, original_url=original_url, cookie_profile_id=cookie_profile_id)
-                await self.__add_download(dl, auto_start, cookie_path)
+                result = await self.__add_download(dl, auto_start, cookie_path)
+                if result and result.get('status') == 'error':
+                    return result
             return {'status': 'ok'}
         return {'status': 'error', 'msg': f'Unsupported resource "{etype}"'}
 

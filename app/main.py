@@ -241,9 +241,33 @@ def ensure_default_admin():
 ensure_default_admin()
 
 gallerydl_state_dir = os.path.join(config.STATE_DIR, 'gallerydl')
-credential_store = CredentialStore(gallerydl_state_dir, config.SECRET_KEY)
-gallery_cookie_store = CookieStore(gallerydl_state_dir)
+_gallery_credential_stores: Dict[str, CredentialStore] = {}
+_gallery_cookie_stores: Dict[str, CookieStore] = {}
 ytdlp_cookie_stores: Dict[str, CookieProfileStore] = {}
+
+
+def _ensure_gallerydl_user_dir(user_id: str) -> str:
+    path = os.path.join(gallerydl_state_dir, user_id)
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def get_gallery_credential_store(user_id: str) -> CredentialStore:
+    user_dir = _ensure_gallerydl_user_dir(user_id)
+    store = _gallery_credential_stores.get(user_dir)
+    if store is None:
+        store = CredentialStore(user_dir, config.SECRET_KEY)
+        _gallery_credential_stores[user_dir] = store
+    return store
+
+
+def get_gallery_cookie_store(user_id: str) -> CookieStore:
+    user_dir = _ensure_gallerydl_user_dir(user_id)
+    store = _gallery_cookie_stores.get(user_dir)
+    if store is None:
+        store = CookieStore(user_dir)
+        _gallery_cookie_stores[user_dir] = store
+    return store
 
 class ObjectSerializer(json.JSONEncoder):
     def default(self, obj):
@@ -393,8 +417,6 @@ class DownloadManager:
         sio_server: socketio.AsyncServer,
         proxy_settings: ProxySettingsStore,
         cookie_status_store: CookieStatusStore,
-        credential_store,
-        gallery_cookie_store,
     ):
         self.config = config
         self.sio = sio_server
@@ -404,8 +426,6 @@ class DownloadManager:
         self._notifiers: Dict[str, UserNotifier] = {}
         self.proxy_settings = proxy_settings
         self.cookie_status_store = cookie_status_store
-        self.credential_store = credential_store
-        self.gallery_cookie_store = gallery_cookie_store
         self._lock = asyncio.Lock()
         try:
             self.max_history_items = max(0, int(getattr(self.config, 'MAX_HISTORY_ITEMS', 200)))
@@ -436,6 +456,7 @@ class DownloadManager:
                 state_dir=self._state_dir_for(user_id),
                 user_id=user_id,
                 cookie_status_store=self.cookie_status_store,
+                download_limit_source=self.proxy_settings,
                 max_history_items=self.max_history_items,
             )
             await queue.initialize()
@@ -457,8 +478,8 @@ class DownloadManager:
                 notifier,
                 self._state_dir_for(user_id),
                 executable_path=getattr(self.config, 'GALLERY_DL_EXEC', 'gallery-dl'),
-                credential_store=self.credential_store,
-                cookie_store=self.gallery_cookie_store,
+                credential_store=get_gallery_credential_store(user_id),
+                cookie_store=get_gallery_cookie_store(user_id),
                 max_history_items=self.max_history_items,
             )
             self._gallery_queues[user_id] = gallery_queue
@@ -493,9 +514,15 @@ download_manager = DownloadManager(
     sio,
     proxy_settings,
     cookie_status_store,
-    credential_store,
-    gallery_cookie_store,
 )
+
+
+async def require_user_session(request):
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        raise web.HTTPUnauthorized()
+    return session, user_id
 
 
 async def get_user_context(request):
@@ -728,7 +755,7 @@ async def add(request):
     playlist_item_limit = post.get('playlist_item_limit')
     auto_start = post.get('auto_start')
 
-    _session, user_id, queue = await get_user_context(request)
+    session, user_id, queue = await get_user_context(request)
     proxy_queue: Optional[ProxyDownloadManager] = None
 
     legacy_cookie_path = session.get('cookie_file')
@@ -1078,32 +1105,22 @@ async def gallerydl_add(request):
             return lowered in ('1', 'true', 'yes', 'on')
         return False
 
-    credential_id = post.get('credential_id')
-    if credential_id is not None:
-        if not isinstance(credential_id, str):
-            raise web.HTTPBadRequest(text='credential_id must be a string')
-        credential_id = credential_id.strip()
-        if not credential_id:
-            credential_id = None
-        elif len(credential_id) > 120:
+    credential_id_raw = post.get('credential_id')
+    if credential_id_raw is not None and not isinstance(credential_id_raw, str):
+        raise web.HTTPBadRequest(text='credential_id must be a string')
+    credential_id = credential_id_raw.strip() if isinstance(credential_id_raw, str) else None
+    if credential_id:
+        if len(credential_id) > 120:
             raise web.HTTPBadRequest(text='credential_id is too long')
-        elif not credential_store.get_credential(credential_id):
-            raise web.HTTPBadRequest(text='Credential profile not found')
+    else:
+        credential_id = None
 
-    cookie_name = post.get('cookie_name')
-    if cookie_name is not None:
-        if not isinstance(cookie_name, str):
-            raise web.HTTPBadRequest(text='cookie_name must be a string')
-        cookie_name = cookie_name.strip()
-        if not cookie_name:
-            cookie_name = None
-        else:
-            try:
-                cookie_path = gallery_cookie_store.resolve_path(cookie_name)
-            except ValueError as exc:
-                raise web.HTTPBadRequest(text=str(exc))
-            if not os.path.exists(cookie_path):
-                raise web.HTTPBadRequest(text='Cookie file not found')
+    cookie_name_raw = post.get('cookie_name')
+    if cookie_name_raw is not None and not isinstance(cookie_name_raw, str):
+        raise web.HTTPBadRequest(text='cookie_name must be a string')
+    cookie_name = cookie_name_raw.strip() if isinstance(cookie_name_raw, str) else None
+    if cookie_name == '':
+        cookie_name = None
 
     proxy_value = _parse_optional_string('proxy', 200)
 
@@ -1126,21 +1143,35 @@ async def gallerydl_add(request):
     write_tags = _parse_bool('write_tags')
     download_archive = _parse_bool('download_archive')
 
-    archive_id = post.get('archive_id')
-    if archive_id is not None:
-        if not isinstance(archive_id, str):
-            raise web.HTTPBadRequest(text='archive_id must be a string')
-        archive_id = archive_id.strip()
-        if not archive_id:
-            archive_id = None
-        elif len(archive_id) > 120:
+    archive_id_raw = post.get('archive_id')
+    if archive_id_raw is not None and not isinstance(archive_id_raw, str):
+        raise web.HTTPBadRequest(text='archive_id must be a string')
+    archive_id = archive_id_raw.strip() if isinstance(archive_id_raw, str) else None
+    if archive_id:
+        if len(archive_id) > 120:
             raise web.HTTPBadRequest(text='archive_id is too long')
-        elif not all(ch.isalnum() or ch in ('-', '_', '.') for ch in archive_id):
+        if not all(ch.isalnum() or ch in ('-', '_', '.') for ch in archive_id):
             raise web.HTTPBadRequest(text='archive_id contains invalid characters')
+    else:
+        archive_id = None
     if download_archive and archive_id is None:
         archive_id = None
 
     _session, user_id, _ = await get_user_context(request)
+    credential_store = get_gallery_credential_store(user_id)
+    cookie_store = get_gallery_cookie_store(user_id)
+
+    if credential_id and not credential_store.get_credential(credential_id):
+        raise web.HTTPBadRequest(text='Credential profile not found')
+
+    if cookie_name:
+        try:
+            cookie_path = cookie_store.resolve_path(cookie_name)
+        except ValueError as exc:
+            raise web.HTTPBadRequest(text=str(exc))
+        if not os.path.exists(cookie_path):
+            raise web.HTTPBadRequest(text='Cookie file not found')
+
     gallery_queue = await download_manager.get_gallery_queue(user_id)
     result = await gallery_queue.add_job(
         url=url,
@@ -1164,16 +1195,15 @@ async def gallerydl_add(request):
 
 @routes.get(config.URL_PREFIX + 'gallerydl/credentials')
 async def gallerydl_list_credentials(request):
-    session = await get_session(request)
-    ensure_admin(session)
-    records = credential_store.list_credentials()
+    _session, user_id = await require_user_session(request)
+    store = get_gallery_credential_store(user_id)
+    records = store.list_credentials()
     return web.json_response({'status': 'ok', 'credentials': records})
 
 
 @routes.post(config.URL_PREFIX + 'gallerydl/credentials')
 async def gallerydl_create_credential(request):
-    session = await get_session(request)
-    ensure_admin(session)
+    _session, user_id = await require_user_session(request)
     try:
         payload = await request.json()
     except json.JSONDecodeError:
@@ -1192,7 +1222,8 @@ async def gallerydl_create_credential(request):
     if not isinstance(extra_args, list):
         raise web.HTTPBadRequest(text='extra_args must be an array')
 
-    record = credential_store.create_credential(
+    store = get_gallery_credential_store(user_id)
+    record = store.create_credential(
         name=name,
         extractor=extractor,
         username=username,
@@ -1205,10 +1236,10 @@ async def gallerydl_create_credential(request):
 
 @routes.get(config.URL_PREFIX + 'gallerydl/credentials/{credential_id}')
 async def gallerydl_get_credential(request):
-    session = await get_session(request)
-    ensure_admin(session)
+    _session, user_id = await require_user_session(request)
     credential_id = request.match_info.get('credential_id')
-    record = credential_store.get_credential(credential_id)
+    store = get_gallery_credential_store(user_id)
+    record = store.get_credential(credential_id)
     if not record:
         raise web.HTTPNotFound(text='Credential not found')
     values = dict(record.get('values') or {})
@@ -1222,8 +1253,7 @@ async def gallerydl_get_credential(request):
 
 @routes.patch(config.URL_PREFIX + 'gallerydl/credentials/{credential_id}')
 async def gallerydl_update_credential(request):
-    session = await get_session(request)
-    ensure_admin(session)
+    _session, user_id = await require_user_session(request)
     credential_id = request.match_info.get('credential_id')
     try:
         payload = await request.json()
@@ -1236,9 +1266,9 @@ async def gallerydl_update_credential(request):
     password = payload.get('password') if 'password' in payload else None
     if password is not None and not isinstance(password, str):
         raise web.HTTPBadRequest(text='password must be a string')
-
+    store = get_gallery_credential_store(user_id)
     try:
-        record = credential_store.update_credential(
+        record = store.update_credential(
             credential_id,
             name=payload.get('name'),
             extractor=payload.get('extractor'),
@@ -1256,11 +1286,11 @@ async def gallerydl_update_credential(request):
 
 @routes.delete(config.URL_PREFIX + 'gallerydl/credentials/{credential_id}')
 async def gallerydl_delete_credential(request):
-    session = await get_session(request)
-    ensure_admin(session)
+    _session, user_id = await require_user_session(request)
     credential_id = request.match_info.get('credential_id')
+    store = get_gallery_credential_store(user_id)
     try:
-        credential_store.delete_credential(credential_id)
+        store.delete_credential(credential_id)
     except KeyError:
         raise web.HTTPNotFound(text='Credential not found')
     return web.json_response({'status': 'ok'})
@@ -1268,16 +1298,15 @@ async def gallerydl_delete_credential(request):
 
 @routes.get(config.URL_PREFIX + 'gallerydl/cookies')
 async def gallerydl_list_cookies(request):
-    session = await get_session(request)
-    ensure_admin(session)
-    cookies = gallery_cookie_store.list_cookies()
+    _session, user_id = await require_user_session(request)
+    store = get_gallery_cookie_store(user_id)
+    cookies = store.list_cookies()
     return web.json_response({'status': 'ok', 'cookies': cookies})
 
 
 @routes.post(config.URL_PREFIX + 'gallerydl/cookies')
 async def gallerydl_save_cookie(request):
-    session = await get_session(request)
-    ensure_admin(session)
+    _session, user_id = await require_user_session(request)
     try:
         payload = await request.json()
     except json.JSONDecodeError:
@@ -1293,7 +1322,8 @@ async def gallerydl_save_cookie(request):
         raise web.HTTPRequestEntityTooLarge()
 
     try:
-        record = gallery_cookie_store.save_cookie(name, content.rstrip('\n') + '\n')
+        store = get_gallery_cookie_store(user_id)
+        record = store.save_cookie(name, content.rstrip('\n') + '\n')
     except ValueError as exc:
         raise web.HTTPBadRequest(text=str(exc))
     return web.json_response({'status': 'ok', 'cookie': record})
@@ -1301,11 +1331,11 @@ async def gallerydl_save_cookie(request):
 
 @routes.get(config.URL_PREFIX + 'gallerydl/cookies/{name}')
 async def gallerydl_get_cookie(request):
-    session = await get_session(request)
-    ensure_admin(session)
+    _session, user_id = await require_user_session(request)
     name = request.match_info.get('name')
+    store = get_gallery_cookie_store(user_id)
     try:
-        content = gallery_cookie_store.read_cookie(name)
+        content = store.read_cookie(name)
     except (ValueError, FileNotFoundError):
         raise web.HTTPNotFound(text='Cookie not found')
     return web.json_response({'status': 'ok', 'name': name, 'content': content})
@@ -1313,11 +1343,11 @@ async def gallerydl_get_cookie(request):
 
 @routes.delete(config.URL_PREFIX + 'gallerydl/cookies/{name}')
 async def gallerydl_delete_cookie(request):
-    session = await get_session(request)
-    ensure_admin(session)
+    _session, user_id = await require_user_session(request)
     name = request.match_info.get('name')
+    store = get_gallery_cookie_store(user_id)
     try:
-        gallery_cookie_store.delete_cookie(name)
+        store.delete_cookie(name)
     except (ValueError, FileNotFoundError):
         raise web.HTTPNotFound(text='Cookie not found')
     return web.json_response({'status': 'ok'})

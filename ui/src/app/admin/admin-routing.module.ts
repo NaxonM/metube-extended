@@ -19,10 +19,6 @@ const routes: Routes = [
       {
         path: 'system',
         loadChildren: () => import('./system/admin-system.module').then(m => m.AdminSystemModule)
-      },
-      {
-        path: 'gallery',
-        loadChildren: () => import('./gallery/admin-gallery.module').then(m => m.AdminGalleryModule)
       }
     ]
   }

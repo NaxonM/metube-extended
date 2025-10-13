@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { faTachometerAlt, faUserShield, faServer, faImages } from '@fortawesome/free-solid-svg-icons';
+import { faTachometerAlt, faUserShield, faServer } from '@fortawesome/free-solid-svg-icons';
 
 import { DownloadsService, CurrentUser } from '../downloads.service';
 
@@ -21,13 +21,11 @@ export class AdminComponent implements OnInit {
   faUserShield = faUserShield;
   faTachometerAlt = faTachometerAlt;
   faServer = faServer;
-  faImages = faImages;
 
   navLinks: AdminNavLink[] = [
     { label: 'Users', description: 'Manage accounts and roles.', icon: faUserShield, link: 'users' },
-    { label: 'Proxy', description: 'Configure proxy download limits.', icon: faTachometerAlt, link: 'proxy' },
-    { label: 'System', description: 'Monitor resource utilisation.', icon: faServer, link: 'system' },
-    { label: 'Gallery-dl', description: 'Maintain gallery-dl credentials and cookies.', icon: faImages, link: 'gallery' }
+    { label: 'Download limits', description: 'Enforce size caps for all downloads.', icon: faTachometerAlt, link: 'proxy' },
+    { label: 'System', description: 'Monitor resource utilisation.', icon: faServer, link: 'system' }
   ];
 
   currentUser: CurrentUser | null = null;
