@@ -1,0 +1,134 @@
+<div *ngIf="downloads.loading" class="dashboard-banner" role="status">
+  <span class="dashboard-banner__icon">
+    <fa-icon [icon]="faCircleInfo"></fa-icon>
+  </span>
+  <div class="dashboard-banner__content">
+    <span class="dashboard-banner__title">Connecting to server…</span>
+    <span class="dashboard-banner__meta">Fetching current download state.</span>
+  </div>
+</div>
+
+<section class="dashboard-section" aria-labelledby="downloadingHeading">
+  <header class="dashboard-section__header">
+    <div class="dashboard-section__title">
+      <span class="dashboard-section__icon dashboard-section__icon--accent">
+        <fa-icon [icon]="faDownload"></fa-icon>
+      </span>
+      <div>
+        <h2 id="downloadingHeading" class="dashboard-section__heading">Downloading</h2>
+        <p class="dashboard-section__subtitle">
+          {{ downloads.queue.size || 0 }} active or queued item{{ downloads.queue.size === 1 ? '' : 's' }}.
+        </p>
+      </div>
+    </div>
+    <div class="dashboard-section__actions">
+      <button type="button"
+              class="dashboard-action dashboard-action--danger"
+              disabled
+              #queueDelSelected
+              (click)="delSelectedDownloads()">
+        <fa-icon [icon]="faTrashAlt"></fa-icon>
+        <span>Cancel selected</span>
+      </button>
+      <button type="button"
+              class="dashboard-action"
+              disabled
+              #queueDownloadSelected
+              (click)="startSelectedDownloads()">
+        <fa-icon [icon]="faDownload"></fa-icon>
+        <span>Download selected</span>
+      </button>
+    </div>
+  </header>
+  <div class="dashboard-section__body">
+    <ng-container *ngIf="visibleQueueKeys.length > 0; else queueEmptyState">
+      <div class="download-list__toolbar">
+        <div class="download-list__bulk">
+          <app-master-checkbox
+            #queueMasterCheckbox
+            [id]="'queue'"
+            [list]="downloads.queue"
+            (changed)="queueSelectionChanged($event)"></app-master-checkbox>
+          <span>Select all</span>
+        </div>
+        <div class="download-list__meta">
+          {{ downloads.queue.size }} item{{ downloads.queue.size === 1 ? '' : 's' }} in progress
+        </div>
+      </div>
+      <div class="download-list">
+        <ng-container *ngFor="let key of visibleQueueKeys; trackBy: trackByKey">
+          <ng-container *ngIf="downloads.queue.get(key) as download">
+            <article class="download-card"
+                     [class.is-disabled]="download.deleting">
+              <div class="download-card__select">
+                <app-slave-checkbox [id]="key" [master]="queueMasterCheckbox" [checkable]="download"></app-slave-checkbox>
+              </div>
+              <div class="download-card__body">
+                <div class="download-card__title">
+                  <span class="download-card__icon download-card__icon--queue">
+                    <fa-icon [icon]="faDownload"></fa-icon>
+                  </span>
+                  <div class="download-card__info">
+                    <span class="download-card__name">{{ download.title }}</span>
+                    <div class="download-card__meta-group">
+                      <span class="download-card__meta" *ngIf="download.progress">{{ download.progress }}</span>
+                      <span class="download-card__meta" *ngIf="download.speed !== undefined && download.speed !== null">{{ download.speed | speed }}</span>
+                      <span class="download-card__meta" *ngIf="download.eta !== undefined && download.eta !== null">{{ download.eta | eta }}</span>
+                    </div>
+                  </div>
+                </div>
+                <ngb-progressbar height="1.1rem"
+                                 [showValue]="download.status != 'preparing'"
+                                 [striped]="download.status == 'preparing'"
+                                 [animated]="download.status == 'preparing'"
+                                 type="success"
+                                 [value]="download.status == 'preparing' ? 100 : download.percent | number:'1.0-0'"
+                                 class="download-card__progress"></ngb-progressbar>
+              </div>
+              <div class="download-card__actions">
+                <button *ngIf="download.status === 'pending'"
+                        type="button"
+                        class="download-card__btn"
+                        (click)="downloadItemByKey(key)"
+                        ngbTooltip="Start download">
+                  <fa-icon [icon]="faDownload"></fa-icon>
+                </button>
+                <button type="button"
+                        class="download-card__btn"
+                        (click)="delDownload(key)"
+                        ngbTooltip="Remove from queue">
+                  <fa-icon [icon]="faTrashAlt"></fa-icon>
+                </button>
+                <a [href]="download.original_url || download.url"
+                   target="_blank"
+                   class="download-card__btn"
+                   ngbTooltip="Open source URL">
+                  <fa-icon [icon]="faExternalLinkAlt"></fa-icon>
+                </a>
+              </div>
+            </article>
+          </ng-container>
+        </ng-container>
+      </div>
+      <div class="download-list__footer" *ngIf="hiddenQueueCount > 0">
+        <button type="button" class="btn btn-link btn-sm" (click)="showAllQueue()">
+          Show {{ hiddenQueueCount }} more
+        </button>
+      </div>
+      <div class="download-list__footer" *ngIf="queueExpanded && downloads.queue.size > queueDisplayLimit">
+        <button type="button" class="btn btn-link btn-sm" (click)="showLessQueue()">
+          Show less
+        </button>
+      </div>
+    </ng-container>
+    <ng-template #queueEmptyState>
+      <div class="dashboard-empty">
+        <span class="dashboard-empty__icon">
+          <fa-icon [icon]="faLayerGroup"></fa-icon>
+        </span>
+        <div class="dashboard-empty__title">No downloads in progress</div>
+        <p class="dashboard-empty__meta">Start a download above to see progress here.</p>
+      </div>
+    </ng-template>
+  </div>
+</section>

@@ -12,6 +12,8 @@ pending-wal
 queue
 queue-shm
 queue-wal
+!ui/src/app/dashboard/queue/
+!ui/src/app/dashboard/queue/**
 
 # Environment file
 .env
