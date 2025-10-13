@@ -70,6 +70,8 @@ class HlsStreamManager:
             else:
                 self._ffmpeg_exec = resolved
                 log.info("Adaptive streaming enabled using ffmpeg binary at %s", resolved)
+        
+        log.debug("FFmpeg executable resolved to: %s", self._ffmpeg_exec)
 
         self._cpu_limit_total = self._compute_cpu_limit()
         self._memory_limit_bytes = self._compute_memory_limit()
