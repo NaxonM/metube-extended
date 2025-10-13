@@ -7,6 +7,9 @@ import { DownloadsService, Download, Status } from '../../downloads.service';
 import { MasterCheckboxComponent } from '../../master-checkbox.component';
 import { DashboardToolsComponent } from '../tools/dashboard-tools.component';
 
+type HlsModule = typeof import('hls.js');
+type HlsInstance = import('hls.js').default;
+
 @Component({
     selector: 'app-dashboard-history',
     templateUrl: './dashboard-history.component.html',
@@ -30,11 +33,25 @@ export class DashboardHistoryComponent implements OnInit, AfterViewInit, OnDestr
   private renameTargetKey: string | null = null;
   private renameOriginalName = '';
 
+  deleteModalOpen = false;
+  deleteWorking = false;
+  deleteError = '';
+  deleteTargetTitle = '';
+  deleteTargetFilename = '';
+  deleteTargetSize: number | null = null;
+  private deleteTargetKey: string | null = null;
+
   streamModalOpen = false;
   streamSource: string | null = null;
+  streamFallbackSource: string | null = null;
+  streamHlsSource: string | null = null;
   streamMimeType = '';
   streamTitle = '';
   streamType: 'audio' | 'video' = 'video';
+  streamFilename = '';
+  streamFilesize: number | null = null;
+  streamLoading = false;
+  streamError = '';
   streamMinimized = false;
   streamDockSide: 'left' | 'right' = 'right';
 
@@ -61,6 +78,8 @@ export class DashboardHistoryComponent implements OnInit, AfterViewInit, OnDestr
   @ViewChild('streamAudio') streamAudio?: ElementRef<HTMLAudioElement>;
 
   private doneSubscription?: Subscription;
+  private hlsModule?: HlsModule;
+  private hlsInstance: HlsInstance | null = null;
 
   constructor(public readonly downloads: DownloadsService) {}
 
@@ -81,6 +100,7 @@ export class DashboardHistoryComponent implements OnInit, AfterViewInit, OnDestr
 
   ngOnDestroy(): void {
     this.doneSubscription?.unsubscribe();
+    this.destroyHlsInstance();
   }
 
   trackByKey(index: number, key: string): string {
@@ -112,8 +132,49 @@ export class DashboardHistoryComponent implements OnInit, AfterViewInit, OnDestr
     this.refreshDoneView();
   }
 
-  delDownload(id: string): void {
-    this.downloads.delById('done', [id]).subscribe();
+  openDeleteModal(id: string, download: Download): void {
+    this.deleteTargetKey = id;
+    this.deleteTargetTitle = download.title || download.filename || 'Selected download';
+    this.deleteTargetFilename = download.filename || '';
+    this.deleteTargetSize = typeof download.size === 'number' ? download.size : null;
+    this.deleteError = '';
+    this.deleteWorking = false;
+    this.deleteModalOpen = true;
+  }
+
+  closeDeleteModal(): void {
+    if (this.deleteWorking) {
+      return;
+    }
+    this.deleteModalOpen = false;
+    this.deleteError = '';
+    this.deleteTargetKey = null;
+    this.deleteTargetFilename = '';
+    this.deleteTargetTitle = '';
+    this.deleteTargetSize = null;
+  }
+
+  confirmDelete(): void {
+    if (!this.deleteTargetKey || this.deleteWorking) {
+      return;
+    }
+    this.deleteWorking = true;
+    this.deleteError = '';
+    this.downloads.delById('done', [this.deleteTargetKey]).subscribe({
+      next: () => {
+        this.deleteWorking = false;
+        this.closeDeleteModal();
+      },
+      error: (error: unknown) => {
+        this.deleteWorking = false;
+        if (error && typeof error === 'object' && 'error' in error) {
+          const payload = (error as { error?: { msg?: string } }).error;
+          this.deleteError = payload?.msg || 'Unable to delete download. Please try again.';
+        } else {
+          this.deleteError = 'Unable to delete download. Please try again.';
+        }
+      },
+    });
   }
 
   clearCompletedDownloads(): void {
@@ -240,16 +301,22 @@ export class DashboardHistoryComponent implements OnInit, AfterViewInit, OnDestr
     this.streamTitle = download.title || download.filename;
     this.streamMimeType = mimeType;
     this.streamType = this.getStreamType(mimeType, download);
-    this.streamSource = this.buildStreamLink(key);
+    this.streamFilename = download.filename || '';
+    this.streamFilesize = typeof download.size === 'number' ? download.size : null;
+    this.streamFallbackSource = this.buildStreamFallbackLink(key);
+    this.streamHlsSource = this.buildHlsLink(key);
+    this.streamSource = null;
+    this.streamLoading = true;
+    this.streamError = '';
     this.streamModalOpen = true;
     this.streamMinimized = false;
     this.streamDockSide = 'right';
 
     setTimeout(() => {
       if (this.streamType === 'audio') {
-        this.streamAudio?.nativeElement?.load();
+        this.initializeAudioStream();
       } else {
-        this.streamVideo?.nativeElement?.load();
+        this.initializeVideoStream();
       }
     }, 0);
   }
@@ -265,12 +332,19 @@ export class DashboardHistoryComponent implements OnInit, AfterViewInit, OnDestr
       audioEl.pause();
       audioEl.currentTime = 0;
     }
+    this.destroyHlsInstance();
     this.streamModalOpen = false;
     this.streamSource = null;
+    this.streamFallbackSource = null;
+    this.streamHlsSource = null;
     this.streamTitle = '';
     this.streamMimeType = '';
     this.streamType = 'video';
     this.streamMinimized = false;
+    this.streamFilename = '';
+    this.streamFilesize = null;
+    this.streamLoading = false;
+    this.streamError = '';
   }
 
   minimizeStream(side: 'left' | 'right' = this.streamDockSide): void {
@@ -392,6 +466,10 @@ export class DashboardHistoryComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   private buildStreamLink(id: string): string {
+    return this.buildStreamFallbackLink(id);
+  }
+
+  private buildStreamFallbackLink(id: string): string {
     const encoded = encodeURIComponent(id);
     const relative = `stream?id=${encoded}`;
     try {
@@ -399,6 +477,157 @@ export class DashboardHistoryComponent implements OnInit, AfterViewInit, OnDestr
     } catch {
       return relative;
     }
+  }
+
+  private buildHlsLink(id: string): string {
+    const token = this.encodeStreamToken(id);
+    const relative = `stream/hls/${token}/index.m3u8`;
+    try {
+      return new URL(relative, window.location.href).toString();
+    } catch {
+      return relative;
+    }
+  }
+
+  private encodeStreamToken(value: string): string {
+    const utf8 = encodeURIComponent(value).replace(/%([0-9A-F]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+    return btoa(utf8).replace(/=+$/, '');
+  }
+
+  private async initializeVideoStream(): Promise<void> {
+    const videoEl = this.streamVideo?.nativeElement;
+    if (!videoEl) {
+      this.streamLoading = false;
+      return;
+    }
+
+    const hlsSource = this.streamHlsSource;
+    const fallbackSource = this.streamFallbackSource;
+
+    if (!hlsSource || !fallbackSource) {
+      this.streamLoading = false;
+      return;
+    }
+
+    this.destroyHlsInstance();
+    this.streamSource = null;
+
+    if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+      this.streamSource = hlsSource;
+      this.attachVideoListeners(videoEl, fallbackSource);
+      videoEl.src = hlsSource;
+      videoEl.load();
+      return;
+    }
+
+    try {
+      const module = await this.loadHlsModule();
+      if (!module) {
+        throw new Error('Unable to load hls.js');
+      }
+      const { default: Hls } = module;
+      if (!Hls.isSupported()) {
+        throw new Error('hls.js is not supported in this browser');
+      }
+
+      const instance = new Hls({ enableWorker: true });
+      this.hlsInstance = instance;
+      this.attachVideoListeners(videoEl, fallbackSource);
+
+      instance.attachMedia(videoEl);
+      instance.on(Hls.Events.MEDIA_ATTACHED, () => {
+        instance.loadSource(hlsSource);
+      });
+      instance.on(Hls.Events.MANIFEST_PARSED, () => {
+        this.streamLoading = false;
+        videoEl.play().catch(() => undefined);
+      });
+      instance.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data?.fatal) {
+          return;
+        }
+        this.streamError = 'Adaptive stream encountered an error. Falling back to original file.';
+        this.startFallbackVideoPlayback(videoEl, fallbackSource);
+      });
+    } catch {
+      this.streamError = 'Adaptive stream is unavailable. Playing original file.';
+      this.startFallbackVideoPlayback(videoEl, fallbackSource);
+    }
+  }
+
+  private initializeAudioStream(): void {
+    const audioEl = this.streamAudio?.nativeElement;
+    const fallbackSource = this.streamFallbackSource;
+    if (!audioEl || !fallbackSource) {
+      this.streamLoading = false;
+      return;
+    }
+    const onReady = () => {
+      this.streamLoading = false;
+      audioEl.play().catch(() => undefined);
+    };
+    const onError = () => {
+      this.streamLoading = false;
+      if (!this.streamError) {
+        this.streamError = 'Unable to load audio stream. Please download the file instead.';
+      }
+    };
+    audioEl.addEventListener('canplay', onReady, { once: true });
+    audioEl.addEventListener('error', onError, { once: true });
+    this.streamSource = fallbackSource;
+    audioEl.src = fallbackSource;
+    audioEl.load();
+  }
+
+  private attachVideoListeners(videoEl: HTMLVideoElement, fallbackSource: string): void {
+    const onLoaded = () => {
+      this.streamLoading = false;
+      videoEl.play().catch(() => undefined);
+    };
+    const onError = () => {
+      if (!this.streamError) {
+        this.streamError = 'Unable to play adaptive stream. Falling back to original file.';
+      }
+      this.startFallbackVideoPlayback(videoEl, fallbackSource);
+    };
+
+    videoEl.addEventListener('loadedmetadata', onLoaded, { once: true });
+    videoEl.addEventListener('error', onError, { once: true });
+  }
+
+  private startFallbackVideoPlayback(videoEl: HTMLVideoElement, fallback: string): void {
+    this.destroyHlsInstance();
+    this.streamSource = fallback;
+    this.streamLoading = false;
+    videoEl.src = fallback;
+    videoEl.load();
+    videoEl.play().catch(() => undefined);
+  }
+
+  private async loadHlsModule(): Promise<HlsModule | null> {
+    if (this.hlsModule) {
+      return this.hlsModule;
+    }
+    try {
+      const module = await import('hls.js');
+      this.hlsModule = module;
+      return module;
+    } catch {
+      return null;
+    }
+  }
+
+  private destroyHlsInstance(): void {
+    if (!this.hlsInstance) {
+      return;
+    }
+    try {
+      this.hlsInstance.destroy();
+    } catch {
+      this.hlsInstance = null;
+      return;
+    }
+    this.hlsInstance = null;
   }
 
 }

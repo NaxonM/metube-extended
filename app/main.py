@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # pylint: disable=no-member,method-hidden
 
+import base64
 import os
 import sys
 import asyncio
@@ -9,7 +10,7 @@ import time
 import functools
 from contextlib import suppress
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, NamedTuple, Optional
 from aiohttp import web
 from aiohttp.client_exceptions import ClientConnectionResetError
 from aiohttp.log import access_logger
@@ -36,6 +37,11 @@ from gallerydl_manager import (
 from gallerydl_credentials import CredentialStore, CookieStore
 from ytdlp_cookies import CookieProfileStore
 import importlib.util
+from streaming import (
+    HlsGenerationError,
+    HlsStreamManager,
+    HlsUnavailableError,
+)
 
 
 def _load_hq_module():
@@ -144,9 +150,12 @@ class Config:
         'PROXY_DOWNLOAD_LIMIT_MB': '0',
         'GALLERY_DL_EXEC': '/usr/local/bin/gallery-dl',
         'MAX_HISTORY_ITEMS': '200',
+        'STREAM_TRANSCODE_ENABLED': 'true',
+        'STREAM_TRANSCODE_TTL_SECONDS': '1200',
+        'STREAM_TRANSCODE_FFMPEG': 'ffmpeg',
     }
 
-    _BOOLEAN = ('DOWNLOAD_DIRS_INDEXABLE', 'CUSTOM_DIRS', 'CREATE_CUSTOM_DIRS', 'DELETE_FILE_ON_TRASHCAN', 'DEFAULT_OPTION_PLAYLIST_STRICT_MODE', 'HTTPS', 'ENABLE_ACCESSLOG', 'PROXY_DOWNLOAD_LIMIT_ENABLED')
+    _BOOLEAN = ('DOWNLOAD_DIRS_INDEXABLE', 'CUSTOM_DIRS', 'CREATE_CUSTOM_DIRS', 'DELETE_FILE_ON_TRASHCAN', 'DEFAULT_OPTION_PLAYLIST_STRICT_MODE', 'HTTPS', 'ENABLE_ACCESSLOG', 'PROXY_DOWNLOAD_LIMIT_ENABLED', 'STREAM_TRANSCODE_ENABLED')
 
     def __init__(self):
         for k, v in self._DEFAULTS.items():
@@ -515,6 +524,83 @@ download_manager = DownloadManager(
     proxy_settings,
     cookie_status_store,
 )
+
+try:
+    ttl_seconds = int(getattr(config, 'STREAM_TRANSCODE_TTL_SECONDS', 1200))
+except (TypeError, ValueError):
+    ttl_seconds = 1200
+stream_hls_manager = HlsStreamManager(
+    os.path.join(config.STATE_DIR, 'hls'),
+    ffmpeg_path=getattr(config, 'STREAM_TRANSCODE_FFMPEG', 'ffmpeg'),
+    enabled=bool(getattr(config, 'STREAM_TRANSCODE_ENABLED', True)),
+    ttl_seconds=max(ttl_seconds, 300),
+)
+
+
+class StreamTarget(NamedTuple):
+    file_path: str
+    base_directory: str
+
+
+def _decode_stream_token(token: str) -> str:
+    padding = '=' * (-len(token) % 4)
+    try:
+        return base64.urlsafe_b64decode(token + padding).decode('utf-8')
+    except Exception:
+        raise web.HTTPNotFound(text='Invalid stream identifier')
+
+
+def _path_is_inside(path: str, base: str) -> bool:
+    try:
+        normalized_path = os.path.abspath(path)
+        normalized_base = os.path.abspath(base)
+        return os.path.commonpath([normalized_path, normalized_base]) == normalized_base
+    except (ValueError, OSError):
+        return False
+
+
+def _sanitize_segment_name(name: str) -> str:
+    if not name:
+        raise web.HTTPNotFound()
+    if '/' in name or '\\' in name:
+        raise web.HTTPNotFound()
+    if name.startswith('.'):
+        raise web.HTTPNotFound()
+    return name
+
+
+async def resolve_stream_target(user_id: str, download_id: str) -> StreamTarget:
+    queue = await download_manager.get_queue(user_id)
+    if queue.done.exists(download_id):
+        dl = queue.done.get(download_id)
+        info = dl.info
+        filename = getattr(info, 'filename', None)
+        if filename:
+            directory = queue._resolve_download_directory(info)
+            if directory:
+                file_path = os.path.abspath(os.path.normpath(os.path.join(directory, filename)))
+                base_directory = os.path.abspath(directory)
+                if os.path.isfile(file_path) and _path_is_inside(file_path, base_directory):
+                    return StreamTarget(file_path=file_path, base_directory=base_directory)
+        raise web.HTTPNotFound(text='File not available for streaming')
+
+    proxy_queue = await download_manager.get_proxy_queue(user_id)
+    proxy_job = proxy_queue.get_done(download_id)
+    if proxy_job and proxy_job.file_path:
+        file_path = os.path.abspath(os.path.normpath(proxy_job.file_path))
+        base_directory = os.path.abspath(os.path.dirname(proxy_job.file_path))
+        if os.path.isfile(file_path) and _path_is_inside(file_path, base_directory):
+            return StreamTarget(file_path=file_path, base_directory=base_directory)
+
+    gallery_queue = await download_manager.get_gallery_queue(user_id)
+    try:
+        gallery_job = gallery_queue.done.get(download_id)
+    except (AttributeError, KeyError):  # pragma: no cover - defensive for unexpected storage implementations
+        gallery_job = None
+    if gallery_job and getattr(gallery_job, 'archive_path', None):
+        raise web.HTTPNotFound(text='Streaming archives is not supported')
+
+    raise web.HTTPNotFound(text='Download not found')
 
 
 async def require_user_session(request):
@@ -1774,35 +1860,14 @@ async def history(request):
 
 @routes.get(config.URL_PREFIX + 'stream')
 async def stream_download(request):
-    _session, user_id, queue = await get_user_context(request)
-    proxy_queue = await download_manager.get_proxy_queue(user_id)
+    _session, user_id, _ = await get_user_context(request)
     download_id = request.query.get('id')
     if not download_id:
         raise web.HTTPBadRequest(text='Missing id parameter')
 
-    download = queue.done.get(download_id) if queue.done.exists(download_id) else None
-    proxy_job = proxy_queue.get_done(download_id)
-
-    if download is None and proxy_job is None:
-        raise web.HTTPNotFound(text='Download not found')
-
-    if download is not None:
-        info = download.info
-        if not info.filename:
-            raise web.HTTPNotFound(text='File not available for streaming')
-        directory = queue._resolve_download_directory(info)
-        if not directory:
-            raise web.HTTPNotFound(text='Download directory unavailable')
-        file_path = os.path.abspath(os.path.normpath(os.path.join(directory, info.filename)))
-        base_directory = os.path.abspath(directory)
-    else:
-        info = proxy_job.info
-        file_path = proxy_job.file_path
-        if not file_path:
-            raise web.HTTPNotFound(text='File not available for streaming')
-        file_path = os.path.abspath(os.path.normpath(file_path))
-        directory = queue._resolve_download_directory(info)
-        base_directory = os.path.abspath(directory or os.path.dirname(file_path))
+    target = await resolve_stream_target(user_id, download_id)
+    file_path = target.file_path
+    base_directory = target.base_directory
 
     try:
         if os.path.commonpath([file_path, base_directory]) != base_directory:
@@ -1904,6 +1969,60 @@ async def stream_download(request):
 
     response = web.FileResponse(path=file_path, headers=headers)
     response.content_type = mime_type or 'application/octet-stream'
+    return response
+
+
+@routes.get(config.URL_PREFIX + 'stream/hls/{token}/index.m3u8')
+async def stream_hls_playlist(request):
+    _session, user_id = await require_user_session(request)
+    token = request.match_info.get('token', '')
+    download_id = _decode_stream_token(token)
+    target = await resolve_stream_target(user_id, download_id)
+
+    try:
+        session = await stream_hls_manager.ensure_session(user_id, download_id, target.file_path)
+    except HlsUnavailableError:
+        raise web.HTTPNotFound(text='Adaptive streaming is not available')
+    except HlsGenerationError as exc:
+        raise web.HTTPInternalServerError(text=str(exc))
+
+    headers = {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+    }
+    response = web.FileResponse(session.playlist_path, headers=headers)
+    response.content_type = 'application/vnd.apple.mpegurl'
+    return response
+
+
+@routes.get(config.URL_PREFIX + 'stream/hls/{token}/{segment}')
+async def stream_hls_segment(request):
+    _session, user_id = await require_user_session(request)
+    token = request.match_info.get('token', '')
+    segment_name = _sanitize_segment_name(request.match_info.get('segment', ''))
+    download_id = _decode_stream_token(token)
+    target = await resolve_stream_target(user_id, download_id)
+
+    directory = stream_hls_manager.session_directory(user_id, download_id)
+    segment_path = os.path.join(directory, segment_name)
+
+    if not os.path.exists(segment_path):
+        try:
+            session = await stream_hls_manager.ensure_session(user_id, download_id, target.file_path)
+        except HlsUnavailableError:
+            raise web.HTTPNotFound(text='Adaptive streaming is not available')
+        except HlsGenerationError as exc:
+            raise web.HTTPInternalServerError(text=str(exc))
+        segment_path = os.path.join(session.directory, segment_name)
+        if not os.path.exists(segment_path):
+            raise web.HTTPNotFound(text='Segment not found')
+
+    stream_hls_manager.touch_session(user_id, download_id)
+
+    headers = {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+    }
+    response = web.FileResponse(segment_path, headers=headers)
+    response.content_type = 'video/mp2t'
     return response
 
 @sio.event

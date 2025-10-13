@@ -14,6 +14,30 @@
         transform: rotate(180deg) scale(1.05)
     100%
         transform: rotate(360deg) scale(1)
+
+@keyframes download-button-pulse
+    0%
+        transform: scale(1)
+        opacity: 0.65
+    50%
+        transform: scale(1.12)
+        opacity: 0.9
+    100%
+        transform: scale(1)
+        opacity: 0.65
+
+@keyframes download-button-flare
+    0%
+        transform: translateX(-120%) skewX(-15deg)
+        opacity: 0
+    45%
+        opacity: 0.8
+    60%
+        transform: translateX(60%) skewX(-15deg)
+        opacity: 0
+    100%
+        transform: translateX(100%) skewX(-15deg)
+        opacity: 0
 .supported-sites-modal .modal-body
     display: flex
     flex-direction: column
@@ -568,20 +592,96 @@
     border-radius: 0.9rem
 
 .download-console__submit
-    min-width: 10rem
-    border-radius: 0.9rem
+    position: relative
+    border-radius: 1.1rem
     display: inline-flex
     align-items: center
     justify-content: center
-    gap: 0.5rem
+    min-width: 11rem
+    padding: 0.9rem 1.6rem
+    gap: 0.65rem
+    border: none
+    color: inherit
+    background: transparent
+    overflow: hidden
+    isolation: isolate
     font-weight: 600
-    box-shadow: 0 16px 32px rgba(var(--bs-primary-rgb, 13,110,253), 0.35)
+    transition: transform 0.25s ease, filter 0.25s ease, box-shadow 0.25s ease
+    box-shadow: 0 22px 42px -22px rgba(59, 130, 246, 0.75)
+
+.download-console__submit::before
+    content: ''
+    position: absolute
+    inset: 0
+    border-radius: inherit
+    background: linear-gradient(130deg, rgba(56, 189, 248, 0.55), rgba(99, 102, 241, 0.7), rgba(244, 114, 182, 0.55))
+    z-index: -2
+    animation: download-button-pulse 7s ease-in-out infinite
+
+.download-console__submit::after
+    content: ''
+    position: absolute
+    inset: 2px
+    border-radius: inherit
+    background: linear-gradient(135deg, rgba(9, 13, 26, 0.92), rgba(17, 24, 39, 0.9))
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08)
+    z-index: -1
+
+.download-console__submit:not(:disabled):hover
+    transform: translateY(-2px) scale(1.01)
+    filter: brightness(1.08)
+    box-shadow: 0 28px 52px -18px rgba(59, 130, 246, 0.85)
+
+.download-console__submit:not(:disabled):active
+    transform: translateY(1px) scale(0.99)
+
+.download-console__submit:not(:disabled)::before
+    filter: drop-shadow(0 0 18px rgba(56, 189, 248, 0.35))
 
 .download-console__submit:disabled
     box-shadow: none
+    filter: grayscale(0.2)
+
+.download-console__submit:disabled::before
+    animation: none
+    background: rgba(148, 163, 184, 0.5)
+
+.download-console__submit:disabled::after
+    background: rgba(30, 41, 59, 0.85)
+
+.download-console__submit > *
+    position: relative
+    z-index: 1
+
+.download-console__submit .download-console__submit-label
+    position: relative
+    z-index: 1
 
 .download-console__submit-icon
-    font-size: 1.05rem
+    font-size: 1.1rem
+
+.download-console__submit:not(:disabled) .download-console__submit-label::after
+    content: ''
+    position: absolute
+    inset: -0.4rem -1rem
+    border-radius: 999px
+    background: linear-gradient(90deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 70%)
+    opacity: 0
+    transform: translateX(-120%) skewX(-15deg)
+    transition: opacity 0.4s ease
+
+.download-console__submit:not(:disabled):hover .download-console__submit-label::after
+    opacity: 0.9
+    animation: download-button-flare 0.9s ease forwards
+
+[data-bs-theme="light"] .download-console__submit
+    color: #0f172a
+
+[data-bs-theme="light"] .download-console__submit::after
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(226, 232, 240, 0.92))
+
+[data-bs-theme="light"] .download-console__submit:disabled::after
+    background: rgba(226, 232, 240, 0.92)
 
 @media (max-width: 767.98px)
     .download-console__submit

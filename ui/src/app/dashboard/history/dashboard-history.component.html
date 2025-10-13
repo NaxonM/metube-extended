@@ -139,7 +139,7 @@
                 </a>
                 <button type="button"
                         class="download-card__btn download-card__btn--danger"
-                        (click)="delDownload(key)"
+                        (click)="openDeleteModal(key, download)"
                         ngbTooltip="Remove entry">
                   <fa-icon [icon]="faTrashAlt"></fa-icon>
                 </button>
@@ -211,6 +211,47 @@
   </div>
 </div>
 
+<div class="modal fade delete-modal" tabindex="-1" role="dialog" [ngClass]="{'show': deleteModalOpen}" [ngStyle]="{'display': deleteModalOpen ? 'block' : 'none'}">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content modal-modern delete-modal__content">
+      <div class="delete-modal__header">
+        <div class="delete-modal__icon">
+          <fa-icon [icon]="faTrashAlt"></fa-icon>
+        </div>
+        <div class="delete-modal__title-group">
+          <h5 class="delete-modal__title">Remove download</h5>
+          <p class="delete-modal__subtitle">This removes the entry from history only. Files on disk are not deleted.</p>
+        </div>
+        <button type="button" class="btn-close" aria-label="Close" (click)="closeDeleteModal()" [disabled]="deleteWorking"></button>
+      </div>
+      <div class="delete-modal__body">
+        <dl class="delete-modal__details">
+          <div class="delete-modal__detail">
+            <dt>Title</dt>
+            <dd [title]="deleteTargetTitle">{{ deleteTargetTitle }}</dd>
+          </div>
+          <div class="delete-modal__detail" *ngIf="deleteTargetFilename">
+            <dt>Filename</dt>
+            <dd [title]="deleteTargetFilename">{{ deleteTargetFilename }}</dd>
+          </div>
+          <div class="delete-modal__detail" *ngIf="deleteTargetSize !== null">
+            <dt>Size</dt>
+            <dd>{{ deleteTargetSize | fileSize }}</dd>
+          </div>
+        </dl>
+        <div *ngIf="deleteError" class="delete-modal__error">{{ deleteError }}</div>
+      </div>
+      <div class="delete-modal__actions">
+        <button type="button" class="btn btn-outline-secondary" (click)="closeDeleteModal()" [disabled]="deleteWorking">Cancel</button>
+        <button type="button" class="btn btn-danger" (click)="confirmDelete()" [disabled]="deleteWorking">
+          <span *ngIf="deleteWorking" class="spinner-border spinner-border-sm me-2" role="status"></span>
+          Delete entry
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade stream-modal" tabindex="-1" role="dialog" [ngClass]="{'show': streamModalOpen, 'minimized': streamModalOpen && streamMinimized}" [ngStyle]="{'display': streamModalOpen ? 'block' : 'none'}">
   <div class="modal-dialog" role="document" [ngClass]="{
       'modal-lg': !streamMinimized,
@@ -234,20 +275,69 @@
           <button type="button" class="btn-close" aria-label="Close" (click)="closeStreamModal()"></button>
         </div>
       </div>
-      <div class="modal-body">
-        <div *ngIf="streamSource; else noStreamAvailable">
-          <video *ngIf="streamType === 'video'" #streamVideo controls class="w-100" preload="metadata" playsinline [src]="streamSource">
+      <div class="modal-body stream-modal__body">
+        <div class="stream-modal__player" [class.stream-modal__player--loading]="streamLoading">
+          <div class="stream-modal__loader" *ngIf="streamLoading">
+            <span class="spinner-border" role="status" aria-live="polite"></span>
+            <p class="mb-0">Preparing adaptive stream…</p>
+          </div>
+          <div class="stream-modal__error" *ngIf="streamError">
+            <fa-icon [icon]="faTimesCircle"></fa-icon>
+            <span>{{ streamError }}</span>
+          </div>
+          <video *ngIf="streamType === 'video'"
+                 #streamVideo
+                 controls
+                 class="stream-modal__media"
+                 preload="metadata"
+                 playsinline
+                 [attr.src]="streamSource || null">
             Your browser does not support the video tag.
           </video>
-          <audio *ngIf="streamType === 'audio'" #streamAudio controls class="w-100" preload="metadata" [src]="streamSource">
+          <audio *ngIf="streamType === 'audio'"
+                 #streamAudio
+                 controls
+                 class="stream-modal__media"
+                 preload="metadata"
+                 [attr.src]="streamSource || null">
             Your browser does not support the audio element.
           </audio>
         </div>
-        <ng-template #noStreamAvailable>
-          <p class="text-muted mb-0">No media available for streaming.</p>
-        </ng-template>
+        <aside class="stream-modal__meta" *ngIf="!streamMinimized">
+          <div class="stream-modal__details">
+            <div class="stream-modal__detail" *ngIf="streamFilename">
+              <span class="stream-modal__detail-label">Filename</span>
+              <span class="stream-modal__detail-value" [title]="streamFilename">{{ streamFilename }}</span>
+            </div>
+            <div class="stream-modal__detail" *ngIf="streamFilesize !== null">
+              <span class="stream-modal__detail-label">Size</span>
+              <span class="stream-modal__detail-value">{{ streamFilesize | fileSize }}</span>
+            </div>
+            <div class="stream-modal__detail" *ngIf="streamMimeType">
+              <span class="stream-modal__detail-label">Format</span>
+              <span class="stream-modal__detail-value">{{ streamMimeType }}</span>
+            </div>
+          </div>
+          <div class="stream-modal__links">
+            <a *ngIf="streamFallbackSource"
+               [href]="streamFallbackSource"
+               download
+               class="btn btn-outline-primary btn-sm">
+              <fa-icon [icon]="faDownload" class="me-1"></fa-icon>
+              Download original
+            </a>
+            <a *ngIf="streamFallbackSource"
+               [href]="streamFallbackSource"
+               target="_blank"
+               rel="noopener"
+               class="btn btn-outline-secondary btn-sm">
+              <fa-icon [icon]="faExternalLinkAlt" class="me-1"></fa-icon>
+              Open in new tab
+            </a>
+          </div>
+        </aside>
       </div>
-      <div class="modal-footer" [class.d-none]="streamMinimized">
+      <div class="modal-footer stream-modal__footer" [class.d-none]="streamMinimized">
         <button type="button" class="btn btn-secondary" (click)="closeStreamModal()">Close</button>
       </div>
     </div>

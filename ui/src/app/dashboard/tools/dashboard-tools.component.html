@@ -39,7 +39,7 @@
                     [disabled]="addInProgress || downloads.loading">
               <span class="spinner-border spinner-border-sm" role="status" id="add-spinner" *ngIf="addInProgress"></span>
               <fa-icon [icon]="faDownload" class="download-console__submit-icon"></fa-icon>
-              <span>{{ addInProgress ? 'Adding...' : 'Download' }}</span>
+              <span class="download-console__submit-label">{{ addInProgress ? 'Adding...' : 'Download' }}</span>
             </button>
           </div>
         </div>

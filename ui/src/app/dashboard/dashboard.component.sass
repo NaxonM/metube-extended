@@ -14,6 +14,50 @@
         transform: rotate(180deg) scale(1.05)
     100%
         transform: rotate(360deg) scale(1)
+
+@keyframes download-console-aurora
+    0%
+        transform: translate(-20%, -25%) rotate(0deg)
+    50%
+        transform: translate(25%, 20%) rotate(180deg)
+    100%
+        transform: translate(-20%, -25%) rotate(360deg)
+
+@keyframes download-console-flow
+    0%
+        background-position: 0% 50%
+    50%
+        background-position: 100% 50%
+    100%
+        background-position: 0% 50%
+
+@keyframes download-button-pulse
+    0%
+        transform: scale(1)
+        opacity: 0.65
+    50%
+        transform: scale(1.12)
+        opacity: 0.9
+    100%
+        transform: scale(1)
+        opacity: 0.65
+
+@keyframes download-button-flare
+    0%
+        transform: translateX(-120%) skewX(-15deg)
+        opacity: 0
+    45%
+        opacity: 0.8
+    60%
+        transform: translateX(60%) skewX(-15deg)
+        opacity: 0
+    100%
+        transform: translateX(100%) skewX(-15deg)
+        opacity: 0
+
+@keyframes download-card-gradient
+    to
+        transform: rotate(360deg)
 .supported-sites-modal .modal-body
     display: flex
     flex-direction: column
@@ -279,7 +323,7 @@
 
 .nav-theme
     position: relative
-    z-index: 5
+    z-index: 1200
 
 .nav-theme .dropdown-menu
     min-width: 10rem
@@ -289,6 +333,7 @@
     pointer-events: auto
     position: absolute
     inset: auto 0 auto auto
+    z-index: 1200
 
 .page-shell
     padding-bottom: clamp(3rem, 8vw, 4.5rem)
@@ -375,29 +420,36 @@
 
 .download-console__panel
     position: relative
-    background: linear-gradient(135deg, rgba(96, 165, 250, 0.12), rgba(15, 23, 42, 0.2))
-    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.12)
     border-radius: 1.5rem
     padding: clamp(1.5rem, 4vw, 2.5rem)
-    box-shadow: 0 24px 48px -26px rgba(0, 0, 0, 0.6)
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.16)
+    background: rgba(6, 12, 24, 0.75)
+    box-shadow: 0 32px 64px -36px rgba(3, 7, 18, 0.9)
     overflow: hidden
+    isolation: isolate
 
 .download-console__panel::before
     content: ''
     position: absolute
-    inset: -40%
-    background: radial-gradient(circle, rgba(96, 165, 250, 0.25), transparent 55%)
-    filter: blur(90px)
-    opacity: 0.65
-    animation: download-panel-wave 14s linear infinite
+    inset: -120%
+    background: conic-gradient(from 45deg, rgba(56, 189, 248, 0.55), rgba(99, 102, 241, 0.55), rgba(244, 114, 182, 0.55), rgba(56, 189, 248, 0.55))
+    filter: blur(140px)
+    opacity: 0.6
+    animation: download-console-aurora 18s linear infinite
+    z-index: 0
 
 .download-console__panel::after
     content: ''
     position: absolute
     inset: 1px
     border-radius: calc(1.5rem - 1px)
-    background: rgba(10, 15, 28, 0.82)
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.78), rgba(9, 13, 26, 0.92))
+    border: 1px solid rgba(59, 130, 246, 0.2)
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08)
     pointer-events: none
+    z-index: 0
+    background-size: 180% 180%
+    animation: download-console-flow 14s ease-in-out infinite
 
 .download-console__panel > *
     position: relative
@@ -411,6 +463,20 @@
 [data-bs-theme="light"] .download-console__panel::after
     background: rgba(248, 250, 252, 0.82)
     backdrop-filter: blur(12px)
+[data-bs-theme="light"] .download-console__panel
+    background: rgba(241, 245, 255, 0.82)
+    border-color: rgba(96, 165, 250, 0.35)
+    box-shadow: 0 36px 70px -32px rgba(59, 130, 246, 0.28)
+[data-bs-theme="light"] .download-console__panel::after
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(226, 232, 240, 0.9))
+    border-color: rgba(148, 163, 184, 0.28)
+    backdrop-filter: blur(18px)
+
+@media (prefers-reduced-motion: reduce)
+    .download-console__panel::before
+        animation: none
+    .download-console__panel::after
+        animation: none
 
 .download-console__input-row
     display: flex
@@ -497,20 +563,96 @@
     border-radius: 0.9rem
 
 .download-console__submit
-    min-width: 10rem
-    border-radius: 0.9rem
+    position: relative
+    border-radius: 1.1rem
     display: inline-flex
     align-items: center
     justify-content: center
-    gap: 0.5rem
+    min-width: 11rem
+    padding: 0.9rem 1.6rem
+    gap: 0.65rem
+    border: none
+    color: inherit
+    background: transparent
+    overflow: hidden
+    isolation: isolate
     font-weight: 600
-    box-shadow: 0 16px 32px rgba(var(--bs-primary-rgb, 13,110,253), 0.35)
+    transition: transform 0.25s ease, filter 0.25s ease, box-shadow 0.25s ease
+    box-shadow: 0 22px 42px -22px rgba(59, 130, 246, 0.75)
+
+.download-console__submit::before
+    content: ''
+    position: absolute
+    inset: 0
+    border-radius: inherit
+    background: linear-gradient(130deg, rgba(56, 189, 248, 0.55), rgba(99, 102, 241, 0.7), rgba(244, 114, 182, 0.55))
+    z-index: -2
+    animation: download-button-pulse 7s ease-in-out infinite
+
+.download-console__submit::after
+    content: ''
+    position: absolute
+    inset: 2px
+    border-radius: inherit
+    background: linear-gradient(135deg, rgba(9, 13, 26, 0.92), rgba(17, 24, 39, 0.9))
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08)
+    z-index: -1
+
+.download-console__submit:not(:disabled):hover
+    transform: translateY(-2px) scale(1.01)
+    filter: brightness(1.08)
+    box-shadow: 0 28px 52px -18px rgba(59, 130, 246, 0.85)
+
+.download-console__submit:not(:disabled):active
+    transform: translateY(1px) scale(0.99)
+
+.download-console__submit:not(:disabled)::before
+    filter: drop-shadow(0 0 18px rgba(56, 189, 248, 0.35))
 
 .download-console__submit:disabled
     box-shadow: none
+    filter: grayscale(0.2)
+
+.download-console__submit:disabled::before
+    animation: none
+    background: rgba(148, 163, 184, 0.5)
+
+.download-console__submit:disabled::after
+    background: rgba(30, 41, 59, 0.85)
+
+.download-console__submit > *
+    position: relative
+    z-index: 1
+
+.download-console__submit .download-console__submit-label
+    position: relative
+    z-index: 1
 
 .download-console__submit-icon
-    font-size: 1.05rem
+    font-size: 1.1rem
+
+.download-console__submit:not(:disabled) .download-console__submit-label::after
+    content: ''
+    position: absolute
+    inset: -0.4rem -1rem
+    border-radius: 999px
+    background: linear-gradient(90deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 70%)
+    opacity: 0
+    transform: translateX(-120%) skewX(-15deg)
+    transition: opacity 0.4s ease
+
+.download-console__submit:not(:disabled):hover .download-console__submit-label::after
+    opacity: 0.9
+    animation: download-button-flare 0.9s ease forwards
+
+[data-bs-theme="light"] .download-console__submit
+    color: #0f172a
+
+[data-bs-theme="light"] .download-console__submit::after
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(226, 232, 240, 0.92))
+
+[data-bs-theme="light"] .download-console__submit:disabled::after
+    background: rgba(226, 232, 240, 0.92)
 
 @media (max-width: 767.98px)
     .download-console__submit
@@ -1335,26 +1477,6 @@ button.add-url
     font-size: 0.8rem
     color: rgba(var(--bs-body-color-rgb), 0.6)
 
-.download-card
-    display: grid
-    grid-template-columns: auto 1fr auto
-    align-items: center
-    gap: 0.85rem
-    padding: 1rem
-    border-radius: 1rem
-    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.1)
-    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.03)
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease
-
-.download-card:hover
-    border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.28)
-    box-shadow: 0 16px 32px -20px rgba(15, 23, 42, 0.45)
-    transform: translateY(-2px)
-
-.download-card.is-disabled
-    opacity: 0.55
-    pointer-events: none
-
 .download-card__select
     display: flex
     align-items: center
@@ -1456,6 +1578,82 @@ button.add-url
 .download-card__btn--danger:hover
     background: rgba(var(--bs-danger-rgb, 220,53,69), 0.18)
     border-color: rgba(var(--bs-danger-rgb, 220,53,69), 0.3)
+
+.download-card
+    position: relative
+    display: grid
+    grid-template-columns: auto 1fr auto
+    align-items: center
+    gap: 0.85rem
+    padding: 1rem
+    border-radius: 1rem
+    border: 1px solid transparent
+    background: transparent
+    overflow: hidden
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, filter 0.2s ease
+    z-index: 0
+
+.download-card::before
+    content: ''
+    position: absolute
+    inset: -150%
+    border-radius: 50%
+    background: conic-gradient(from 0deg, rgba(34, 211, 238, 0.7), rgba(99, 102, 241, 0.7), rgba(236, 72, 153, 0.7), rgba(34, 211, 238, 0.7))
+    animation: download-card-gradient 8s linear infinite
+    opacity: 0.55
+    z-index: 0
+
+.download-card::after
+    content: ''
+    position: absolute
+    inset: 1px
+    border-radius: calc(1rem - 1px)
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.035)
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+    z-index: 0
+
+.download-card > *
+    position: relative
+    z-index: 1
+
+.download-card:hover
+    box-shadow: 0 16px 32px -20px rgba(15, 23, 42, 0.45)
+    transform: translateY(-2px)
+    filter: brightness(1.05)
+
+.download-card:hover::before
+    opacity: 0.85
+
+.download-card:hover::after
+    border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.32)
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.06)
+
+.download-card.is-disabled
+    opacity: 0.55
+    pointer-events: none
+
+.download-card.is-disabled::before
+    opacity: 0.2
+
+.download-card.is-disabled::after
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.045)
+    border-color: rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+
+[data-bs-theme="light"] .download-card
+    background: transparent
+    border-color: transparent
+
+[data-bs-theme="light"] .download-card::after
+    background: rgba(248, 250, 252, 0.9)
+    border-color: rgba(96, 165, 250, 0.35)
+
+[data-bs-theme="light"] .download-card:hover::after
+    background: rgba(248, 250, 252, 0.96)
+    border-color: rgba(37, 99, 235, 0.45)
+
+@media (prefers-reduced-motion: reduce)
+    .download-card::before
+        animation: none
 
 @media (max-width: 991.98px)
     .download-card

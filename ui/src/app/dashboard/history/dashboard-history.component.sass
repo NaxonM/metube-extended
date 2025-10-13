@@ -1,1 +1,230 @@
-// History component relies on shared dashboard styling.
+.stream-modal
+  &__body
+    display: flex
+    gap: 1.5rem
+    align-items: stretch
+    flex-wrap: wrap
+
+    @media (max-width: 992px)
+      flex-direction: column
+      gap: 1rem
+
+  &__player
+    position: relative
+    flex: 1 1 420px
+    display: flex
+    align-items: center
+    justify-content: center
+    border-radius: 1rem
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.85), rgba(30, 41, 59, 0.85))
+    overflow: hidden
+    min-height: 320px
+    padding: 1rem
+    box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.45)
+
+    @media (max-width: 576px)
+      min-height: 220px
+
+    &--loading
+      .stream-modal__media
+        opacity: 0.4
+      .stream-modal__loader
+        opacity: 1
+
+  &__media
+    width: 100%
+    max-height: 100%
+    border-radius: 0.75rem
+    background: #000
+    box-shadow: 0 20px 40px -20px rgba(15, 23, 42, 0.6)
+    object-fit: contain
+
+  &__loader
+    position: absolute
+    inset: 0
+    display: flex
+    flex-direction: column
+    align-items: center
+    justify-content: center
+    gap: 0.75rem
+    background: rgba(15, 23, 42, 0.75)
+    color: #e2e8f0
+    font-weight: 500
+    text-transform: uppercase
+    letter-spacing: 0.08em
+    transition: opacity 0.3s ease
+
+    .spinner-border
+      width: 2.5rem
+      height: 2.5rem
+      border-width: 0.25rem
+      color: #38bdf8
+
+  &__error
+    position: absolute
+    left: 1rem
+    right: 1rem
+    bottom: 1rem
+    display: flex
+    align-items: center
+    gap: 0.75rem
+    padding: 0.85rem 1rem
+    border-radius: 0.85rem
+    background: rgba(248, 113, 113, 0.16)
+    color: #fecaca
+    font-weight: 600
+    box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.35)
+    pointer-events: none
+
+    fa-icon
+      color: #f87171
+
+  &__meta
+    flex: 0 0 260px
+    display: flex
+    flex-direction: column
+    justify-content: space-between
+    gap: 1rem
+    padding: 1.25rem
+    border-radius: 1rem
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.85), rgba(30, 41, 59, 0.85))
+    color: #f8fafc
+    box-shadow: 0 25px 45px -18px rgba(15, 23, 42, 0.5)
+
+    @media (max-width: 992px)
+      flex: 1 1 auto
+      width: 100%
+
+    .btn
+      width: 100%
+      display: inline-flex
+      align-items: center
+      justify-content: center
+
+  &__details
+    display: grid
+    gap: 0.75rem
+
+  &__detail
+    display: flex
+    flex-direction: column
+    gap: 0.25rem
+
+  &__detail-label
+    font-size: 0.75rem
+    text-transform: uppercase
+    letter-spacing: 0.1em
+    font-weight: 600
+    color: rgba(248, 250, 252, 0.65)
+
+  &__detail-value
+    font-size: 0.95rem
+    word-break: break-word
+
+  &__links
+    display: grid
+    gap: 0.5rem
+
+  &__footer
+    border-top: none
+    padding-top: 0
+    padding-bottom: 1.5rem
+    display: flex
+    justify-content: flex-end
+
+  &.minimized
+    .stream-modal__body
+      flex-direction: row
+      gap: 0
+    .stream-modal__player
+      min-height: 180px
+      padding: 0.5rem
+    .stream-modal__footer
+      display: none !important
+
+.delete-modal
+  &__content
+    border: none
+    border-radius: 1.25rem
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.95))
+    color: #f8fafc
+    box-shadow: 0 30px 60px -20px rgba(15, 23, 42, 0.6)
+    overflow: hidden
+
+  &__header
+    display: flex
+    align-items: flex-start
+    gap: 1rem
+    padding: 1.75rem 1.75rem 1.25rem
+
+    .btn-close
+      margin-left: auto
+      filter: invert(1) grayscale(1)
+
+  &__icon
+    flex: 0 0 auto
+    display: flex
+    align-items: center
+    justify-content: center
+    width: 3.5rem
+    height: 3.5rem
+    border-radius: 1rem
+    background: rgba(248, 113, 113, 0.18)
+    color: #f87171
+    font-size: 1.5rem
+    box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.45)
+
+  &__title-group
+    flex: 1 1 auto
+    display: flex
+    flex-direction: column
+    gap: 0.4rem
+
+  &__title
+    margin: 0
+    font-size: 1.25rem
+    font-weight: 700
+
+  &__subtitle
+    margin: 0
+    font-size: 0.9rem
+    color: rgba(226, 232, 240, 0.75)
+
+  &__body
+    padding: 0 1.75rem 1.5rem
+
+  &__details
+    margin: 0
+    display: grid
+    gap: 0.85rem
+
+  &__detail
+    dt
+      margin: 0 0 0.15rem
+      font-size: 0.75rem
+      letter-spacing: 0.08em
+      text-transform: uppercase
+      color: rgba(226, 232, 240, 0.55)
+    dd
+      margin: 0
+      font-size: 1rem
+      font-weight: 600
+      word-break: break-word
+
+  &__error
+    margin-top: 1.25rem
+    padding: 0.85rem 1rem
+    border-radius: 0.85rem
+    background: rgba(248, 113, 113, 0.18)
+    color: #fecaca
+    font-weight: 600
+    box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.35)
+
+  &__actions
+    display: flex
+    justify-content: flex-end
+    gap: 0.75rem
+    padding: 0 1.75rem 1.75rem
+
+    .btn
+      min-width: 140px

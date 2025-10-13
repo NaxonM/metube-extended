@@ -11,6 +11,10 @@
 - Inline file management to rename completed downloads from the dashboard with immediate updates across connected clients.
 - Cookie upload console to paste, review, and clear Netscape-format cookies without touching the server.
 - Modernized UX touches such as a refreshed login screen, contextual metrics, and ready-to-use dark/auto theming.
+- Modularized dashboard and admin areas with lazy-loaded Angular routes for snappier first paint and clearer separation of tools.
+- Incremental download metrics, bounded queue/history rendering, and smarter websocket diffs to keep the dashboard responsive even with large workloads.
+- Adaptive HLS streaming pipeline with ffmpeg-generated playlists and an hls.js player that gracefully falls back to byte-range streaming when MSE is unavailable.
+- Per-user gallery-dl credential/cookie stores, download size limits, and history retention caps so long-running nodes stay tidy by default.
 
 Everything the upstream project offered—robust yt-dlp integration, playlist support, browser helpers, and Docker friendliness—remains available here.
 
@@ -126,12 +130,19 @@ All configuration knobs from upstream MeTube carry over. Set environment variabl
 - `ENABLE_ACCESSLOG`: toggle aiohttp access logging.
 - `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `SECRET_KEY`: bootstrap credentials; omitted values trigger secure defaults during first run.
 - `LOGIN_RATELIMIT`: throttle login attempts (`10/minute` by default).
+- `MAX_HISTORY_ITEMS`: cap retained queue/history entries per user to keep storage usage predictable (default `200`).
 
 ### yt-dlp tuning
 
 - `OUTPUT_TEMPLATE`, `OUTPUT_TEMPLATE_CHAPTER`, `OUTPUT_TEMPLATE_PLAYLIST` customize filenames.
 - `YTDL_OPTIONS`: JSON blob passed straight to yt-dlp.
 - `YTDL_OPTIONS_FILE`: path to a JSON file watched for live updates.
+
+### Streaming
+
+- `STREAM_TRANSCODE_ENABLED`: toggle adaptive HLS generation; when `false`, the player falls back to direct byte-range streaming.
+- `STREAM_TRANSCODE_TTL_SECONDS`: duration playlists and segments stay warm on disk before being re-generated (default `1200`).
+- `STREAM_TRANSCODE_FFMPEG`: path to the ffmpeg binary used for transcoding (default `ffmpeg` on `PATH`).
 
 ## Multi-user administration
 
