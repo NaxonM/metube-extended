@@ -2071,13 +2071,6 @@ async def stream_hls_playlist(request):
         )
         raise web.HTTPInternalServerError(text=str(exc))
 
-    log.debug(
-        'Adaptive streaming serving segment: user=%s download=%s segment=%s path=%s',
-        user_id,
-        download_id,
-        segment_name,
-        segment_path,
-    )
     headers = {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
     }
