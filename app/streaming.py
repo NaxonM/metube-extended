@@ -252,7 +252,13 @@ class HlsStreamManager:
             raise HlsUnavailableError(limit_message)
 
         if return_code != 0:
-            output = "\n".join(stdout_chunks[-10:])
+            output = "\n".join(stdout_chunks)
+            log.error(
+                "FFmpeg HLS generation failed for %s. Exit code: %s. Output:\n%s",
+                source_path,
+                return_code,
+                output,
+            )
             raise HlsGenerationError(
                 f"FFmpeg exited with code {return_code}. Output:\n{output}"
             )

@@ -565,6 +565,7 @@ class DownloadQueue:
             'ignore_no_formats_error': True,
             'noplaylist': playlist_strict_mode,
             'paths': {"home": self.config.DOWNLOAD_DIR, "temp": self.config.TEMP_DIR},
+            'restrictfilenames': True,
             **self.config.YTDL_OPTIONS,
         }
         if 'impersonate' in self.config.YTDL_OPTIONS:
