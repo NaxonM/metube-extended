@@ -602,6 +602,35 @@ async def resolve_stream_target(user_id: str, download_id: str) -> StreamTarget:
                 base_directory = os.path.abspath(directory)
                 if os.path.isfile(file_path) and _path_is_inside(file_path, base_directory):
                     return StreamTarget(file_path=file_path, base_directory=base_directory)
+                if not os.path.isfile(file_path):
+                    log.debug(
+                        'Adaptive streaming file missing (user=%s download=%s path=%s)',
+                        user_id,
+                        download_id,
+                        file_path,
+                    )
+                elif not _path_is_inside(file_path, base_directory):
+                    log.warning(
+                        'Adaptive streaming prevented by sandbox violation (user=%s download=%s path=%s base=%s)',
+                        user_id,
+                        download_id,
+                        file_path,
+                        base_directory,
+                    )
+            else:
+                log.debug(
+                    'Adaptive streaming directory could not be resolved (user=%s download=%s folder=%r)',
+                    user_id,
+                    download_id,
+                    getattr(info, 'folder', None),
+                )
+        log.debug(
+            'Adaptive streaming target unavailable for download=%s (user=%s): filename=%r directory=%r',
+            download_id,
+            user_id,
+            filename,
+            directory if 'directory' in locals() else None,
+        )
         raise web.HTTPNotFound(text='File not available for streaming')
 
     proxy_queue = await download_manager.get_proxy_queue(user_id)
@@ -620,6 +649,7 @@ async def resolve_stream_target(user_id: str, download_id: str) -> StreamTarget:
     if gallery_job and getattr(gallery_job, 'archive_path', None):
         raise web.HTTPNotFound(text='Streaming archives is not supported')
 
+    log.debug('Adaptive streaming target not found for download=%s (user=%s)', download_id, user_id)
     raise web.HTTPNotFound(text='Download not found')
 
 

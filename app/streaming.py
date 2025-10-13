@@ -43,13 +43,22 @@ class HlsStreamManager:
 
         os.makedirs(self.base_dir, exist_ok=True)
 
+        self._ffmpeg_exec = None
+
         if not self.enabled:
             self._disable("disabled_in_config")
-        elif not shutil.which(self.ffmpeg_path):
-            log.warning("FFmpeg executable '%s' not found; disabling HLS streaming", self.ffmpeg_path)
-            self._disable("ffmpeg_not_found")
+        else:
+            resolved = shutil.which(self.ffmpeg_path)
+            if not resolved:
+                log.warning("FFmpeg executable '%s' not found; disabling HLS streaming", self.ffmpeg_path)
+                self._disable("ffmpeg_not_found")
+            else:
+                self._ffmpeg_exec = resolved
+                log.info("Adaptive streaming enabled using ffmpeg binary at %s", resolved)
 
     def _disable(self, reason: str) -> None:
+        if self.enabled:
+            log.warning("Disabling adaptive streaming: %s", self._format_unavailable_reason(reason))
         self.enabled = False
         self._disabled_reason = reason
 
@@ -83,7 +92,14 @@ class HlsStreamManager:
 
     async def ensure_session(self, user_id: str, download_id: str, source_path: str) -> HlsSession:
         if not self.enabled:
-            raise HlsUnavailableError(self._format_unavailable_reason(self._disabled_reason))
+            message = self._format_unavailable_reason(self._disabled_reason)
+            log.debug(
+                "Adaptive streaming requested while disabled (user=%s, download=%s): %s",
+                user_id,
+                download_id,
+                message,
+            )
+            raise HlsUnavailableError(message)
 
         directory = self._stream_root(user_id, download_id)
         playlist_path = self._playlist_path(user_id, download_id)
@@ -130,8 +146,9 @@ class HlsStreamManager:
             raise HlsGenerationError(f"Failed to prepare HLS directory: {exc}")
 
         segment_pattern = os.path.join(directory, "segment-%05d.ts")
+        ffmpeg_exec = self._ffmpeg_exec or self.ffmpeg_path
         cmd = [
-            self.ffmpeg_path,
+            ffmpeg_exec,
             "-y",
             "-i",
             source_path,
