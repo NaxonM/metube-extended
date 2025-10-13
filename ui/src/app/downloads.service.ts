@@ -279,6 +279,9 @@ export class DownloadsService {
 
   configuration = {};
   customDirs = {};
+  private adaptiveStreamingEnabled = true;
+  private adaptiveStreamingStatus: string | null = null;
+  private adaptiveStreamingMessage = '';
 
   constructor(private http: HttpClient, private socket: MeTubeSocket) {
     socket.fromEvent('all').subscribe((strdata: string) => {
@@ -381,6 +384,7 @@ export class DownloadsService {
       let data = JSON.parse(strdata);
       console.debug("got configuration:", data);
       this.configuration = data;
+      this.updateAdaptiveStreamingFromConfig(data);
       this.configurationChanged.next(data);
       const configuredLimit = data?.MAX_HISTORY_ITEMS;
       if (configuredLimit !== undefined && configuredLimit !== null && configuredLimit !== '') {
@@ -540,6 +544,56 @@ export class DownloadsService {
 
   public buildApiUrl(path: string): string {
     return buildApiUrl(path);
+  }
+
+  private updateAdaptiveStreamingFromConfig(config: any): void {
+    const availableRaw = config?.STREAM_TRANSCODE_AVAILABLE;
+    const statusRaw = config?.STREAM_TRANSCODE_STATUS ?? null;
+    const messageRaw = config?.STREAM_TRANSCODE_MESSAGE ?? '';
+    const available = availableRaw === undefined ? true : Boolean(availableRaw);
+    this.adaptiveStreamingEnabled = available;
+    this.adaptiveStreamingStatus = available ? (statusRaw ?? 'available') : (statusRaw ?? 'unavailable');
+    this.adaptiveStreamingMessage = available
+      ? ''
+      : (typeof messageRaw === 'string' && messageRaw.trim().length > 0
+        ? messageRaw.trim()
+        : 'Adaptive streaming is not available on this server.');
+    if (config && typeof config === 'object') {
+      config.STREAM_TRANSCODE_AVAILABLE = this.adaptiveStreamingEnabled;
+      config.STREAM_TRANSCODE_STATUS = this.adaptiveStreamingStatus;
+      config.STREAM_TRANSCODE_MESSAGE = this.adaptiveStreamingMessage;
+    }
+  }
+
+  public isAdaptiveStreamingEnabled(): boolean {
+    return this.adaptiveStreamingEnabled;
+  }
+
+  public getAdaptiveStreamingStatus(): string | null {
+    return this.adaptiveStreamingStatus;
+  }
+
+  public getAdaptiveStreamingMessage(): string {
+    return this.adaptiveStreamingMessage;
+  }
+
+  public markAdaptiveStreamingUnavailable(message?: string | null): void {
+    const normalized = typeof message === 'string' ? message.trim() : '';
+    const finalMessage = normalized.length > 0 ? normalized : (this.adaptiveStreamingMessage || 'Adaptive streaming is not available on this server.');
+    const status = this.adaptiveStreamingStatus && this.adaptiveStreamingStatus !== 'available' ? this.adaptiveStreamingStatus : 'unavailable';
+    if (!this.adaptiveStreamingEnabled && this.adaptiveStreamingMessage === finalMessage) {
+      return;
+    }
+    this.adaptiveStreamingEnabled = false;
+    this.adaptiveStreamingStatus = status;
+    this.adaptiveStreamingMessage = finalMessage;
+    this.configuration = {
+      ...this.configuration,
+      STREAM_TRANSCODE_AVAILABLE: false,
+      STREAM_TRANSCODE_STATUS: status,
+      STREAM_TRANSCODE_MESSAGE: finalMessage,
+    };
+    this.configurationChanged.next(this.configuration);
   }
 
   public add(url: string, quality: string, format: string, folder: string, customNamePrefix: string, playlistStrictMode: boolean, playlistItemLimit: number, autoStart: boolean, preferredBackend?: 'ytdlp' | 'gallerydl') {

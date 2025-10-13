@@ -36,15 +36,39 @@ class HlsStreamManager:
         self.base_dir = os.path.abspath(base_dir)
         self.ffmpeg_path = ffmpeg_path or "ffmpeg"
         self.enabled = enabled
+        self._disabled_reason: Optional[str] = None
         self.ttl_seconds = max(ttl_seconds, 60)
         self._locks: Dict[str, asyncio.Lock] = {}
         self._last_cleanup = 0.0
 
         os.makedirs(self.base_dir, exist_ok=True)
 
-        if not shutil.which(self.ffmpeg_path):
+        if not self.enabled:
+            self._disable("disabled_in_config")
+        elif not shutil.which(self.ffmpeg_path):
             log.warning("FFmpeg executable '%s' not found; disabling HLS streaming", self.ffmpeg_path)
-            self.enabled = False
+            self._disable("ffmpeg_not_found")
+
+    def _disable(self, reason: str) -> None:
+        self.enabled = False
+        self._disabled_reason = reason
+
+    def status_code(self) -> str:
+        if self.enabled:
+            return "available"
+        return self._disabled_reason or "unavailable"
+
+    def status_message(self) -> str:
+        if self.enabled:
+            return ""
+        return self._format_unavailable_reason(self._disabled_reason)
+
+    def _format_unavailable_reason(self, reason: Optional[str]) -> str:
+        if reason == "disabled_in_config":
+            return "Adaptive streaming is disabled in server configuration."
+        if reason == "ffmpeg_not_found":
+            return f"Adaptive streaming requires '{self.ffmpeg_path}' to be installed on the server."
+        return "Adaptive streaming is currently unavailable."
 
     def _hash_component(self, value: str) -> str:
         return hashlib.sha1(value.encode("utf-8", "ignore")).hexdigest()
@@ -59,7 +83,7 @@ class HlsStreamManager:
 
     async def ensure_session(self, user_id: str, download_id: str, source_path: str) -> HlsSession:
         if not self.enabled:
-            raise HlsUnavailableError("Adaptive streaming is disabled")
+            raise HlsUnavailableError(self._format_unavailable_reason(self._disabled_reason))
 
         directory = self._stream_root(user_id, download_id)
         playlist_path = self._playlist_path(user_id, download_id)
@@ -138,8 +162,8 @@ class HlsStreamManager:
                 stderr=asyncio.subprocess.STDOUT,
             )
         except FileNotFoundError:
-            self.enabled = False
-            raise HlsUnavailableError("FFmpeg executable not available")
+            self._disable("ffmpeg_not_found")
+            raise HlsUnavailableError(self._format_unavailable_reason(self._disabled_reason))
         except Exception as exc:
             raise HlsGenerationError(f"Failed to spawn ffmpeg: {exc}")
 

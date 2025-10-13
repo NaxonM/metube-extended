@@ -537,6 +537,26 @@ stream_hls_manager = HlsStreamManager(
 )
 
 
+def refresh_stream_transcode_status() -> bool:
+    previous = (
+        getattr(config, 'STREAM_TRANSCODE_AVAILABLE', None),
+        getattr(config, 'STREAM_TRANSCODE_STATUS', None),
+        getattr(config, 'STREAM_TRANSCODE_MESSAGE', None),
+    )
+    config.STREAM_TRANSCODE_AVAILABLE = stream_hls_manager.enabled
+    config.STREAM_TRANSCODE_STATUS = stream_hls_manager.status_code()
+    config.STREAM_TRANSCODE_MESSAGE = stream_hls_manager.status_message()
+    current = (
+        config.STREAM_TRANSCODE_AVAILABLE,
+        config.STREAM_TRANSCODE_STATUS,
+        config.STREAM_TRANSCODE_MESSAGE,
+    )
+    return current != previous
+
+
+refresh_stream_transcode_status()
+
+
 class StreamTarget(NamedTuple):
     file_path: str
     base_directory: str
@@ -1981,8 +2001,12 @@ async def stream_hls_playlist(request):
 
     try:
         session = await stream_hls_manager.ensure_session(user_id, download_id, target.file_path)
-    except HlsUnavailableError:
-        raise web.HTTPNotFound(text='Adaptive streaming is not available')
+    except HlsUnavailableError as exc:
+        status_changed = refresh_stream_transcode_status()
+        if status_changed:
+            await sio.emit('configuration', serializer.encode(config), room=f'user:{user_id}')
+        message = str(exc) or 'Adaptive streaming is not available'
+        raise web.HTTPNotFound(text=message)
     except HlsGenerationError as exc:
         raise web.HTTPInternalServerError(text=str(exc))
 
@@ -2008,8 +2032,12 @@ async def stream_hls_segment(request):
     if not os.path.exists(segment_path):
         try:
             session = await stream_hls_manager.ensure_session(user_id, download_id, target.file_path)
-        except HlsUnavailableError:
-            raise web.HTTPNotFound(text='Adaptive streaming is not available')
+        except HlsUnavailableError as exc:
+            status_changed = refresh_stream_transcode_status()
+            if status_changed:
+                await sio.emit('configuration', serializer.encode(config), room=f'user:{user_id}')
+            message = str(exc) or 'Adaptive streaming is not available'
+            raise web.HTTPNotFound(text=message)
         except HlsGenerationError as exc:
             raise web.HTTPInternalServerError(text=str(exc))
         segment_path = os.path.join(session.directory, segment_name)

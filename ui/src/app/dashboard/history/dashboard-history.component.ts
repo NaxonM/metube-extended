@@ -504,6 +504,18 @@ export class DashboardHistoryComponent implements OnInit, AfterViewInit, OnDestr
     this.destroyHlsInstance();
     this.streamSource = null;
 
+    if (!this.downloads.isAdaptiveStreamingEnabled()) {
+      const message = this.downloads.getAdaptiveStreamingMessage();
+      if (message) {
+        this.downloads.markAdaptiveStreamingUnavailable(message);
+      } else {
+        this.downloads.markAdaptiveStreamingUnavailable();
+      }
+      this.streamError = message ? `${message} Playing original file.` : 'Adaptive streaming is unavailable. Playing original file.';
+      this.startFallbackVideoPlayback(videoEl, fallbackSource);
+      return;
+    }
+
     if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
       this.streamSource = hlsSource;
       this.attachVideoListeners(videoEl, fallbackSource);
@@ -628,6 +640,10 @@ export class DashboardHistoryComponent implements OnInit, AfterViewInit, OnDestr
 
   private buildAdaptiveError(status?: number, text?: string, includeFallbackNote: boolean = false): string {
     const message = this.formatAdaptiveError(status, text);
+    const normalized = message.toLowerCase();
+    if (status === 404 || normalized.includes('adaptive streaming is')) {
+      this.downloads.markAdaptiveStreamingUnavailable(message);
+    }
     return includeFallbackNote ? `${message} Falling back to original file.` : message;
   }
 
