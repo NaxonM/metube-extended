@@ -143,6 +143,7 @@ class Config:
         'PROXY_DOWNLOAD_LIMIT_ENABLED': 'false',
         'PROXY_DOWNLOAD_LIMIT_MB': '0',
         'GALLERY_DL_EXEC': '/usr/local/bin/gallery-dl',
+        'MAX_HISTORY_ITEMS': '200',
     }
 
     _BOOLEAN = ('DOWNLOAD_DIRS_INDEXABLE', 'CUSTOM_DIRS', 'CREATE_CUSTOM_DIRS', 'DELETE_FILE_ON_TRASHCAN', 'DEFAULT_OPTION_PLAYLIST_STRICT_MODE', 'HTTPS', 'ENABLE_ACCESSLOG', 'PROXY_DOWNLOAD_LIMIT_ENABLED')
@@ -406,6 +407,10 @@ class DownloadManager:
         self.credential_store = credential_store
         self.gallery_cookie_store = gallery_cookie_store
         self._lock = asyncio.Lock()
+        try:
+            self.max_history_items = max(0, int(getattr(self.config, 'MAX_HISTORY_ITEMS', 200)))
+        except (TypeError, ValueError):
+            self.max_history_items = 200
 
     def _state_dir_for(self, user_id: str) -> str:
         path = os.path.join(self.config.STATE_DIR, 'users', user_id)
@@ -431,11 +436,20 @@ class DownloadManager:
                 state_dir=self._state_dir_for(user_id),
                 user_id=user_id,
                 cookie_status_store=self.cookie_status_store,
+                max_history_items=self.max_history_items,
             )
             await queue.initialize()
             self._queues[user_id] = queue
 
-            proxy_queue = ProxyDownloadManager(self.config, notifier, queue, self._state_dir_for(user_id), user_id, self.proxy_settings)
+            proxy_queue = ProxyDownloadManager(
+                self.config,
+                notifier,
+                queue,
+                self._state_dir_for(user_id),
+                user_id,
+                self.proxy_settings,
+                max_history_items=self.max_history_items,
+            )
             self._proxy_queues[user_id] = proxy_queue
 
             gallery_queue = GalleryDlManager(
@@ -445,6 +459,7 @@ class DownloadManager:
                 executable_path=getattr(self.config, 'GALLERY_DL_EXEC', 'gallery-dl'),
                 credential_store=self.credential_store,
                 cookie_store=self.gallery_cookie_store,
+                max_history_items=self.max_history_items,
             )
             self._gallery_queues[user_id] = gallery_queue
 
@@ -713,7 +728,7 @@ async def add(request):
     playlist_item_limit = post.get('playlist_item_limit')
     auto_start = post.get('auto_start')
 
-    session, user_id, queue = await get_user_context(request)
+    _session, user_id, queue = await get_user_context(request)
     proxy_queue: Optional[ProxyDownloadManager] = None
 
     legacy_cookie_path = session.get('cookie_file')
@@ -1680,17 +1695,50 @@ async def admin_system_stats(request):
 
 @routes.get(config.URL_PREFIX + 'history')
 async def history(request):
-    _session, _, queue = await get_user_context(request)
-    history = {'done': [], 'queue': [], 'pending': []}
+    session, user_id, queue = await get_user_context(request)
+    proxy_queue = await download_manager.get_proxy_queue(user_id)
+    gallery_queue = await download_manager.get_gallery_queue(user_id)
+
+    try:
+        limit = int(request.query.get('limit', download_manager.max_history_items))
+    except (TypeError, ValueError):
+        limit = download_manager.max_history_items
+    try:
+        offset = int(request.query.get('offset', 0))
+    except (TypeError, ValueError):
+        offset = 0
+    limit = max(0, limit)
+    offset = max(0, offset)
+
+    history = {'done': [], 'queue': [], 'pending': [], 'proxy_done': [], 'gallery_done': [], 'limit': limit, 'offset': offset}
 
     for _, v in queue.queue.saved_items():
         history['queue'].append(v)
-    for _, v in queue.done.saved_items():
-        history['done'].append(v)
     for _, v in queue.pending.saved_items():
         history['pending'].append(v)
 
-    log.info("Sending download history")
+    done_items = list(queue.done.saved_items())
+    proxy_done = [(key, job.info) for key, job in proxy_queue.done.items()]
+    gallery_done = [(key, job.info) for key, job in gallery_queue.done.items()]
+
+    def collect_slice(items):
+        ordered = sorted(items, key=lambda item: getattr(item[1], 'timestamp', 0), reverse=True)
+        total = len(ordered)
+        if limit > 0:
+            sliced = ordered[offset: offset + limit]
+        else:
+            sliced = ordered[offset:]
+        return total, [info for _, info in sliced]
+
+    total_done, history['done'] = collect_slice(done_items)
+    total_proxy_done, history['proxy_done'] = collect_slice(proxy_done)
+    total_gallery_done, history['gallery_done'] = collect_slice(gallery_done)
+
+    history['done_total'] = total_done
+    history['proxy_done_total'] = total_proxy_done
+    history['gallery_done_total'] = total_gallery_done
+
+    log.info("Sending download history slice offset=%s limit=%s", offset, limit)
     return web.Response(text=serializer.encode(history))
 
 

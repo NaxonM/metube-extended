@@ -1,0 +1,170 @@
+.admin-user-hub
+    display: flex
+    flex-direction: column
+    gap: 1.5rem
+
+.admin-user-hub__header
+    display: flex
+    flex-wrap: wrap
+    gap: 1rem
+    justify-content: space-between
+    align-items: center
+
+.admin-user-hub__summary
+    display: flex
+    flex-direction: column
+    gap: 0.35rem
+
+.admin-user-hub__title
+    margin: 0
+    font-size: 1.1rem
+    font-weight: 600
+
+.admin-user-hub__subtitle
+    margin: 0
+    color: rgba(var(--bs-body-color-rgb), 0.6)
+    font-size: 0.9rem
+
+.admin-user-hub__loading
+    display: flex
+    align-items: center
+    gap: 0.5rem
+    padding: 0.75rem
+    border-radius: 0.75rem
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.05)
+
+.admin-user-hub__grid
+    display: grid
+    gap: 1rem
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr))
+
+.admin-user-card
+    border-radius: 1rem
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.12)
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.03)
+    display: flex
+    flex-direction: column
+    gap: 1rem
+    padding: 1.25rem
+    min-height: 180px
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease
+
+.admin-user-card:hover
+    transform: translateY(-3px)
+    border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.4)
+    box-shadow: 0 18px 36px -24px rgba(15, 23, 42, 0.55)
+
+.admin-user-card__header
+    display: flex
+    justify-content: space-between
+    align-items: flex-start
+    gap: 1rem
+
+.admin-user-card__identity
+    display: flex
+    align-items: center
+    gap: 0.85rem
+
+.admin-user-card__avatar
+    width: 44px
+    height: 44px
+    border-radius: 14px
+    display: grid
+    place-items: center
+    font-weight: 600
+    font-size: 1rem
+    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.18)
+    color: rgba(var(--bs-body-color-rgb), 0.9)
+
+.admin-user-card__avatar.is-admin
+    background: rgba(var(--bs-warning-rgb, 255,193,7), 0.25)
+    color: rgba(var(--bs-warning-rgb, 255,193,7), 0.95)
+
+.admin-user-card__name
+    font-weight: 600
+    display: inline-flex
+    align-items: center
+    gap: 0.5rem
+
+.admin-user-card__tag
+    border-radius: 999px
+    background: rgba(var(--bs-success-rgb, 25,135,84), 0.18)
+    color: rgba(var(--bs-success-rgb, 25,135,84), 0.95)
+    font-size: 0.7rem
+    padding: 0.25rem 0.5rem
+
+.admin-user-card__meta
+    display: inline-flex
+    gap: 0.4rem
+    flex-wrap: wrap
+    margin-top: 0.25rem
+
+.admin-user-card__menu
+    display: inline-flex
+    gap: 0.35rem
+
+.btn.btn-icon
+    width: 2rem
+    height: 2rem
+    border-radius: 0.65rem
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.16)
+    display: inline-flex
+    align-items: center
+    justify-content: center
+    color: inherit
+    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.04)
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease
+
+.btn.btn-icon:hover
+    background: rgba(var(--bs-primary-rgb, 13,110,253), 0.18)
+    border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.35)
+    transform: translateY(-1px)
+
+.btn.btn-icon.btn-danger:hover
+    background: rgba(var(--bs-danger-rgb, 220,53,69), 0.18)
+    border-color: rgba(var(--bs-danger-rgb, 220,53,69), 0.32)
+
+.admin-user-card__body
+    display: flex
+    gap: 1rem
+
+.admin-user-card__details
+    display: grid
+    gap: 0.5rem
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr))
+
+.admin-user-card__details dt
+    font-size: 0.75rem
+    text-transform: uppercase
+    letter-spacing: 0.08em
+    color: rgba(var(--bs-body-color-rgb), 0.6)
+
+.admin-user-card__details dd
+    margin: 0
+    font-weight: 500
+
+.admin-user-card__footer
+    display: flex
+    justify-content: flex-start
+    align-items: center
+
+.admin-user-card--empty
+    justify-content: center
+    align-items: center
+    text-align: center
+
+.admin-user-hub__footer
+    display: flex
+    justify-content: flex-end
+
+[data-bs-theme="light"] .admin-user-card
+    background: rgba(15, 23, 42, 0.03)
+    border-color: rgba(15, 23, 42, 0.12)
+
+[data-bs-theme="light"] .btn.btn-icon
+    border-color: rgba(15, 23, 42, 0.12)
+    background: rgba(15, 23, 42, 0.04)
+
+[data-bs-theme="light"] .btn.btn-icon:hover
+    background: rgba(37, 99, 235, 0.1)
+    border-color: rgba(37, 99, 235, 0.18)

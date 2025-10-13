@@ -1,0 +1,45 @@
+<div class="container py-4 admin-page">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h3 mb-1">
+        <fa-icon [icon]="faUserShield" class="me-2"></fa-icon>
+        Admin tools
+      </h1>
+      <p class="text-muted mb-0">Configure advanced features and monitor server health.</p>
+    </div>
+    <button type="button" class="btn btn-outline-secondary" (click)="navigateBack()">
+      Back to dashboard
+    </button>
+  </div>
+
+  <div *ngIf="loadingUser" class="alert alert-info" role="alert">
+    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+    Verifying administrator access…
+  </div>
+
+  <div *ngIf="!loadingUser && loadError" class="alert alert-danger" role="alert">
+    {{ loadError }}
+  </div>
+
+  <ng-container *ngIf="!loadingUser && !loadError">
+    <nav class="admin-nav mb-4">
+      <a *ngFor="let link of navLinks"
+         class="admin-nav__item"
+         [routerLink]="link.link"
+         routerLinkActive="is-active"
+         [routerLinkActiveOptions]="{ exact: true }">
+        <div class="admin-nav__icon">
+          <fa-icon [icon]="link.icon"></fa-icon>
+        </div>
+        <div class="admin-nav__meta">
+          <span class="admin-nav__label">{{ link.label }}</span>
+          <span class="admin-nav__description">{{ link.description }}</span>
+        </div>
+      </a>
+    </nav>
+
+    <div class="admin-content">
+      <router-outlet></router-outlet>
+    </div>
+  </ng-container>
+</div>

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Observable, of, Subject } from 'rxjs';
+import { Observable, of, Subject, BehaviorSubject } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
 import { MeTubeSocket } from './metube-socket';
 
@@ -240,6 +240,21 @@ export interface ManagedUser extends CurrentUser {
   password_updated?: boolean;
 }
 
+export interface DownloadMetrics {
+  active: number;
+  queued: number;
+  completed: number;
+  failed: number;
+  totalSpeed: number;
+  queueSize: number;
+  doneSize: number;
+}
+
+export interface DownloadUpdateEvent {
+  url: string;
+  location: 'queue' | 'done';
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -247,12 +262,17 @@ export class DownloadsService {
   loading = true;
   queue = new Map<string, Download>();
   done = new Map<string, Download>();
-  queueChanged = new Subject();
-  doneChanged = new Subject();
-  customDirsChanged = new Subject();
-  ytdlOptionsChanged = new Subject();
-  configurationChanged = new Subject();
-  updated = new Subject();
+  queueChanged = new Subject<void>();
+  doneChanged = new Subject<void>();
+  customDirsChanged = new Subject<any>();
+  ytdlOptionsChanged = new Subject<any>();
+  configurationChanged = new Subject<any>();
+  updated = new Subject<DownloadUpdateEvent>();
+
+  private metricsState: DownloadMetrics = this.createEmptyMetrics();
+  private metricsSubject = new BehaviorSubject<DownloadMetrics>(this.createEmptyMetrics());
+  readonly metrics$ = this.metricsSubject.asObservable();
+  private maxHistoryItems = 200;
 
   configuration = {};
   customDirs = {};
@@ -262,41 +282,78 @@ export class DownloadsService {
       this.loading = false;
       let data: [[[string, Download]], [[string, Download]]] = JSON.parse(strdata);
       this.queue.clear();
-      data[0].forEach(entry => this.queue.set(...entry));
       this.done.clear();
-      data[1].forEach(entry => this.done.set(...entry));
-      this.queueChanged.next(null);
-      this.doneChanged.next(null);
+      this.resetMetricsState();
+
+      data[0].forEach(entry => {
+        this.queue.set(entry[0], entry[1]);
+        this.applyQueueMetrics(undefined, entry[1]);
+      });
+
+      data[1].forEach(entry => {
+        this.done.set(entry[0], entry[1]);
+        this.applyDoneMetrics(undefined, entry[1]);
+      });
+
+      this.trimDoneHistory();
+      this.emitMetrics();
+      this.queueChanged.next();
+      this.doneChanged.next();
     });
     socket.fromEvent('added').subscribe((strdata: string) => {
       let data: Download = JSON.parse(strdata);
+      const previous = this.queue.get(data.url);
       this.queue.set(data.url, data);
-      this.queueChanged.next(null);
+      this.applyQueueMetrics(previous, data);
+      this.emitMetrics();
+      this.queueChanged.next();
     });
     socket.fromEvent('updated').subscribe((strdata: string) => {
       let data: Download = JSON.parse(strdata);
-      let dl: Download = this.queue.get(data.url);
-      data.checked = dl.checked;
-      data.deleting = dl.deleting;
+      const existing = this.queue.get(data.url);
+      if (existing) {
+        data.checked = existing.checked;
+        data.deleting = existing.deleting;
+      }
       this.queue.set(data.url, data);
-      this.updated.next(null);
+      this.applyQueueMetrics(existing, data);
+      this.emitMetrics();
+      this.updated.next({ url: data.url, location: 'queue' });
     });
     socket.fromEvent('completed').subscribe((strdata: string) => {
       let data: Download = JSON.parse(strdata);
-      this.queue.delete(data.url);
+      const existing = this.queue.get(data.url);
+      if (existing) {
+        this.queue.delete(data.url);
+        this.applyQueueMetrics(existing, undefined);
+      }
       this.done.set(data.url, data);
-      this.queueChanged.next(null);
-      this.doneChanged.next(null);
+      this.applyDoneMetrics(undefined, data);
+      this.trimDoneHistory();
+      this.emitMetrics();
+      this.queueChanged.next();
+      this.doneChanged.next();
+      this.updated.next({ url: data.url, location: 'done' });
     });
     socket.fromEvent('canceled').subscribe((strdata: string) => {
       let data: string = JSON.parse(strdata);
-      this.queue.delete(data);
-      this.queueChanged.next(null);
+      const existing = this.queue.get(data);
+      if (existing) {
+        this.queue.delete(data);
+        this.applyQueueMetrics(existing, undefined);
+        this.emitMetrics();
+        this.queueChanged.next();
+      }
     });
     socket.fromEvent('cleared').subscribe((strdata: string) => {
       let data: string = JSON.parse(strdata);
-      this.done.delete(data);
-      this.doneChanged.next(null);
+      const existing = this.done.get(data);
+      if (existing) {
+        this.done.delete(data);
+        this.applyDoneMetrics(existing, undefined);
+        this.emitMetrics();
+        this.doneChanged.next();
+      }
     });
     socket.fromEvent('renamed').subscribe((strdata: string) => {
       let data: Download = JSON.parse(strdata);
@@ -304,7 +361,7 @@ export class DownloadsService {
       if (!existing) {
         return;
       }
-      existing = {
+      const updatedEntry: Download = {
         ...existing,
         filename: data.filename ?? data.title ?? existing.filename,
         title: data.title ?? existing.title,
@@ -312,14 +369,27 @@ export class DownloadsService {
         error: data.error ?? existing.error,
         size: data.size ?? existing.size
       };
-      this.done.set(data.url, existing);
-      this.doneChanged.next(null);
+      this.done.set(data.url, updatedEntry);
+      this.applyDoneMetrics(existing, updatedEntry);
+      this.emitMetrics();
+      this.doneChanged.next();
     });
     socket.fromEvent('configuration').subscribe((strdata: string) => {
       let data = JSON.parse(strdata);
       console.debug("got configuration:", data);
       this.configuration = data;
       this.configurationChanged.next(data);
+      const configuredLimit = data?.MAX_HISTORY_ITEMS;
+      if (configuredLimit !== undefined && configuredLimit !== null && configuredLimit !== '') {
+        const rawLimit = Number(configuredLimit);
+        if (!Number.isNaN(rawLimit)) {
+          this.maxHistoryItems = Math.max(0, Math.floor(rawLimit));
+          if (this.trimDoneHistory()) {
+            this.emitMetrics();
+            this.doneChanged.next();
+          }
+        }
+      }
     });
     socket.fromEvent('custom_dirs').subscribe((strdata: string) => {
       let data = JSON.parse(strdata);
@@ -331,6 +401,133 @@ export class DownloadsService {
       let data = JSON.parse(strdata);
       this.ytdlOptionsChanged.next(data);
     });
+  }
+
+  private createEmptyMetrics(): DownloadMetrics {
+    return {
+      active: 0,
+      queued: 0,
+      completed: 0,
+      failed: 0,
+      totalSpeed: 0,
+      queueSize: 0,
+      doneSize: 0
+    };
+  }
+
+  private resetMetricsState(): void {
+    this.metricsState = this.createEmptyMetrics();
+  }
+
+  private emitMetrics(): void {
+    this.metricsSubject.next({ ...this.metricsState });
+  }
+
+  private applyQueueMetrics(oldEntry?: Download, newEntry?: Download): void {
+    if (oldEntry) {
+      this.decrementQueueSizeIfRemoved(oldEntry, newEntry);
+      this.adjustQueueCounters(oldEntry, -1);
+    }
+    if (newEntry) {
+      this.incrementQueueSizeIfAdded(oldEntry, newEntry);
+      this.adjustQueueCounters(newEntry, 1);
+    }
+  }
+
+  private applyDoneMetrics(oldEntry?: Download, newEntry?: Download): void {
+    if (oldEntry) {
+      this.decrementDoneSizeIfRemoved(oldEntry, newEntry);
+      this.adjustDoneCounters(oldEntry, -1);
+    }
+    if (newEntry) {
+      this.incrementDoneSizeIfAdded(oldEntry, newEntry);
+      this.adjustDoneCounters(newEntry, 1);
+    }
+  }
+
+  private decrementQueueSizeIfRemoved(oldEntry: Download, newEntry?: Download): void {
+    if (!newEntry) {
+      this.metricsState.queueSize = Math.max(0, this.metricsState.queueSize - 1);
+    }
+  }
+
+  private incrementQueueSizeIfAdded(oldEntry: Download | undefined, newEntry: Download): void {
+    if (!oldEntry) {
+      this.metricsState.queueSize += 1;
+    }
+  }
+
+  private decrementDoneSizeIfRemoved(oldEntry: Download, newEntry?: Download): void {
+    if (!newEntry) {
+      this.metricsState.doneSize = Math.max(0, this.metricsState.doneSize - 1);
+    }
+  }
+
+  private incrementDoneSizeIfAdded(oldEntry: Download | undefined, newEntry: Download): void {
+    if (!oldEntry) {
+      this.metricsState.doneSize += 1;
+    }
+  }
+
+  private adjustQueueCounters(entry: Download, delta: number): void {
+    if (this.isActiveQueueStatus(entry.status)) {
+      this.metricsState.active = this.clampNonNegative(this.metricsState.active + delta);
+      const speedContribution = entry.status === 'downloading' ? (entry.speed || 0) : 0;
+      if (speedContribution !== 0) {
+        this.metricsState.totalSpeed += delta * speedContribution;
+        if (this.metricsState.totalSpeed < 0) {
+          this.metricsState.totalSpeed = 0;
+        }
+      }
+    } else if (entry.status === 'pending') {
+      this.metricsState.queued = this.clampNonNegative(this.metricsState.queued + delta);
+    }
+  }
+
+  private adjustDoneCounters(entry: Download, delta: number): void {
+    if (entry.status === 'finished') {
+      this.metricsState.completed = this.clampNonNegative(this.metricsState.completed + delta);
+    } else if (entry.status === 'error') {
+      this.metricsState.failed = this.clampNonNegative(this.metricsState.failed + delta);
+    }
+  }
+
+  private trimDoneHistory(): boolean {
+    const limit = Number.isFinite(this.maxHistoryItems) ? this.maxHistoryItems : 200;
+    let changed = false;
+    if (limit <= 0) {
+      if (this.done.size > 0) {
+        for (const entry of this.done.values()) {
+          this.applyDoneMetrics(entry, undefined);
+        }
+        this.done.clear();
+        changed = true;
+      }
+      return changed;
+    }
+
+    while (this.done.size > limit) {
+      const iterator = this.done.keys().next();
+      if (iterator.done) {
+        break;
+      }
+      const key = iterator.value as string;
+      const entry = this.done.get(key);
+      this.done.delete(key);
+      if (entry) {
+        this.applyDoneMetrics(entry, undefined);
+      }
+      changed = true;
+    }
+    return changed;
+  }
+
+  private isActiveQueueStatus(status: string | undefined): boolean {
+    return status === 'downloading' || status === 'preparing';
+  }
+
+  private clampNonNegative(value: number): number {
+    return value < 0 ? 0 : value;
   }
 
   handleHTTPError(error: HttpErrorResponse) {
@@ -601,7 +798,7 @@ export class DownloadsService {
     );
   }
 
-  public updateUser(userId: string, payload: Partial<{password: string; role: 'admin' | 'user'; disabled: boolean;}>) {
+  public updateUser(userId: string, payload: Partial<{password: string; role: 'admin' | 'user'; disabled: boolean; username: string;}>) {
     return this.http.patch<ManagedUser>(`admin/users/${userId}`, payload).pipe(
       catchError(this.handleHTTPError)
     );

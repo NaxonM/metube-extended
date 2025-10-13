@@ -1,0 +1,647 @@
+<form #f="ngForm">
+  <div class="container add-url-box">
+    <div class="download-console">
+      <div class="download-console__panel">
+        <div class="download-console__input-row">
+          <div class="download-console__input-wrapper" [class.is-disabled]="addInProgress || downloads.loading">
+            <fa-icon [icon]="faLink" class="download-console__input-icon"></fa-icon>
+            <input type="text"
+                   autocomplete="off"
+                   spellcheck="false"
+                   class="download-console__input"
+                   placeholder="Enter video or playlist URL"
+                   name="addUrl"
+                   [(ngModel)]="addUrl"
+                   [disabled]="addInProgress || downloads.loading">
+            <button *ngIf="addUrl?.length"
+                    type="button"
+                    class="download-console__clear"
+                    (click)="clearAddUrl()"
+                    [disabled]="addInProgress || downloads.loading"
+                    aria-label="Clear URL">
+              <fa-icon [icon]="faXmark"></fa-icon>
+            </button>
+          </div>
+          <div class="download-console__actions">
+            <button *ngIf="shouldShowCookieIndicator"
+                    type="button"
+                    class="btn btn-lg cookie-status-button download-console__cookie"
+                    [ngClass]="cookieStatusVariantClass"
+                    (click)="openCookiesModal()"
+                    [ngbTooltip]="cookieStatusTooltip"
+                    container="body"
+                    aria-label="Manage YouTube cookies">
+              <fa-icon [icon]="cookieStatusIcon"></fa-icon>
+            </button>
+            <button class="btn btn-primary btn-lg download-console__submit"
+                    type="submit"
+                    (click)="addDownload()"
+                    [disabled]="addInProgress || downloads.loading">
+              <span class="spinner-border spinner-border-sm" role="status" id="add-spinner" *ngIf="addInProgress"></span>
+              <fa-icon [icon]="faDownload" class="download-console__submit-icon"></fa-icon>
+              <span>{{ addInProgress ? 'Adding...' : 'Download' }}</span>
+            </button>
+          </div>
+        </div>
+        <div class="download-console__options">
+          <div class="download-console__option">
+            <span class="download-console__label">Quality</span>
+            <select class="form-select form-select-lg"
+                    name="quality"
+                    [(ngModel)]="quality"
+                    (change)="qualityChanged()"
+                    [disabled]="addInProgress || downloads.loading">
+              <option *ngFor="let q of qualities" [ngValue]="q.id">{{ q.text }}</option>
+            </select>
+          </div>
+          <div class="download-console__option">
+            <span class="download-console__label">Format</span>
+            <select class="form-select form-select-lg"
+                    name="format"
+                    [(ngModel)]="format"
+                    (change)="formatChanged()"
+                    [disabled]="addInProgress || downloads.loading">
+              <option *ngFor="let f of formats" [ngValue]="f.id">{{ f.text }}</option>
+            </select>
+          </div>
+          <div class="download-console__option download-console__option--compact">
+            <span class="download-console__label">Options</span>
+            <button type="button"
+                    class="download-console__advanced-trigger"
+                    (click)="toggleAdvanced()"
+                    [attr.aria-expanded]="isAdvancedOpen"
+                    aria-controls="advancedOptions">
+              <span class="download-console__advanced-icon">
+                <fa-icon [icon]="faSliders"></fa-icon>
+              </span>
+              <span>{{ isAdvancedOpen ? 'Hide advanced options' : 'Advanced options' }}</span>
+              <fa-icon [icon]="isAdvancedOpen ? faChevronUp : faChevronDown" class="download-console__advanced-chevron"></fa-icon>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="download-console__advanced-panel">
+        <div class="collapse show" id="advancedOptions" [ngbCollapse]="!isAdvancedOpen">
+          <div class="card card-body advanced-card">
+            <div class="advanced-dashboard">
+              <section class="advanced-tile">
+                <header class="advanced-tile__header">
+                  <span class="advanced-tile__icon">
+                    <fa-icon [icon]="faDownload"></fa-icon>
+                  </span>
+                  <div>
+                    <h6 class="advanced-tile__title">Download behavior</h6>
+                    <p class="advanced-tile__meta">Control how MeTubeEX kicks off newly added jobs.</p>
+                  </div>
+                </header>
+                <div class="advanced-tile__body">
+                  <div class="advanced-field">
+                    <label class="advanced-field__label">Auto start new downloads</label>
+                    <select class="form-select"
+                            name="autoStart"
+                            [(ngModel)]="autoStart"
+                            (change)="autoStartChanged()"
+                            [disabled]="addInProgress || downloads.loading"
+                            ngbTooltip="Automatically start downloads when added">
+                      <option [ngValue]="true">Yes</option>
+                      <option [ngValue]="false">No</option>
+                    </select>
+                  </div>
+                  <div class="advanced-toggle">
+                    <div class="advanced-toggle__control">
+                      <div class="form-check form-switch">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               role="switch"
+                               name="playlistStrictMode"
+                               [(ngModel)]="playlistStrictMode"
+                               [disabled]="addInProgress || downloads.loading"
+                               ngbTooltip="Only download playlists when the URL explicitly points to one">
+                        <label class="form-check-label">Strict playlist mode</label>
+                      </div>
+                    </div>
+                    <p class="advanced-toggle__hint">Keeps singles from sneaking into playlist downloads.</p>
+                  </div>
+                </div>
+              </section>
+
+              <section class="advanced-tile">
+                <header class="advanced-tile__header">
+                  <span class="advanced-tile__icon">
+                    <fa-icon [icon]="faLayerGroup"></fa-icon>
+                  </span>
+                  <div>
+                    <h6 class="advanced-tile__title">Naming & limits</h6>
+                    <p class="advanced-tile__meta">Adjust filenames and playlist depth per submission.</p>
+                  </div>
+                </header>
+                <div class="advanced-tile__body">
+                  <div class="advanced-field">
+                    <label class="advanced-field__label">Custom name prefix</label>
+                    <input type="text"
+                           class="form-control"
+                           placeholder="Default"
+                           name="customNamePrefix"
+                           [(ngModel)]="customNamePrefix"
+                           [disabled]="addInProgress || downloads.loading"
+                           ngbTooltip="Add a prefix to downloaded filenames">
+                  </div>
+                  <div class="advanced-field">
+                    <label class="advanced-field__label">Items limit</label>
+                    <input type="number"
+                           min="0"
+                           class="form-control"
+                           placeholder="Default"
+                           name="playlistItemLimit"
+                           (keydown)="isNumber($event)"
+                           [(ngModel)]="playlistItemLimit"
+                           [disabled]="addInProgress || downloads.loading"
+                           ngbTooltip="Maximum number of items to download from a playlist (0 = no limit)">
+                    <span class="advanced-field__hint">Set to 0 to keep the playlist default.</span>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <div class="advanced-action-bar">
+              <button type="button"
+                      class="advanced-chip"
+                      (click)="openBatchImportModal()">
+                <span class="advanced-chip__icon"><fa-icon [icon]="faFileImport"></fa-icon></span>
+                <span class="advanced-chip__label">Import URLs</span>
+              </button>
+              <button type="button"
+                      class="advanced-chip"
+                      (click)="exportBatchUrls('all')">
+                <span class="advanced-chip__icon"><fa-icon [icon]="faFileExport"></fa-icon></span>
+                <span class="advanced-chip__label">Export URLs</span>
+              </button>
+              <button type="button"
+                      class="advanced-chip"
+                      (click)="copyBatchUrls('all')">
+                <span class="advanced-chip__icon"><fa-icon [icon]="faCopy"></fa-icon></span>
+                <span class="advanced-chip__label">Copy URLs</span>
+              </button>
+              <button type="button"
+                      class="advanced-chip"
+                      (click)="openCookiesModal()">
+                <span class="advanced-chip__icon"><fa-icon [icon]="faCookieBite"></fa-icon></span>
+                <span class="advanced-chip__label">YT-DLP cookies</span>
+              </button>
+              <a *ngIf="isAdmin"
+                 class="advanced-chip"
+                 [routerLink]="['/admin']">
+                <span class="advanced-chip__icon"><fa-icon [icon]="faKey"></fa-icon></span>
+                <span class="advanced-chip__label">Gallery-dl settings</span>
+              </a>
+              <button type="button"
+                      class="advanced-chip"
+                      (click)="openSupportedSitesModal()">
+                <span class="advanced-chip__icon"><fa-icon [icon]="faCircleInfo"></fa-icon></span>
+                <span class="advanced-chip__label">Supported sites</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>
+
+<!-- Batch Import Modal -->
+<div class="modal fade" tabindex="-1" role="dialog" [ngClass]="{'show': batchImportModalOpen}" [ngStyle]="{'display': batchImportModalOpen ? 'block' : 'none'}">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content modal-modern">
+      <div class="modal-header">
+        <h5 class="modal-title">Batch Import URLs</h5>
+        <button type="button" class="btn-close" aria-label="Close" (click)="closeBatchImportModal()"></button>
+      </div>
+      <div class="modal-body">
+        <textarea [(ngModel)]="batchImportText" class="form-control" rows="6"
+          placeholder="Paste one video URL per line"></textarea>
+        <div class="mt-2">
+          <small *ngIf="batchImportStatus">{{ batchImportStatus }}</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-danger me-auto" *ngIf="importInProgress" (click)="cancelBatchImport()">
+          Cancel Import
+        </button>
+        <button type="button" class="btn btn-secondary" (click)="closeBatchImportModal()">Close</button>
+        <button type="button" class="btn btn-primary" (click)="startBatchImport()" [disabled]="importInProgress">
+          Import URLs
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Cookies Modal -->
+<div class="modal fade" tabindex="-1" role="dialog" [ngClass]="{'show': cookiesModalOpen}" [ngStyle]="{'display': cookiesModalOpen ? 'block' : 'none'}">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content modal-modern">
+      <div class="modal-header">
+        <h5 class="modal-title">Manage yt-dlp cookies</h5>
+        <button type="button" class="btn-close" aria-label="Close" (click)="closeCookiesModal()" [disabled]="cookiesWorking || cookieProfilesLoading"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-3">
+          Paste Netscape-format cookies to create or update profiles. Profiles are matched automatically by URL host and tags, so downloads use the right cookies without manual selection.
+        </p>
+
+        <div class="small text-muted mb-3">
+          {{ cookieStatusSummary }}
+        </div>
+
+        <div *ngIf="cookieMessage" class="alert alert-success py-2" role="alert">
+          {{ cookieMessage }}
+        </div>
+        <div *ngIf="cookieError" class="alert alert-warning py-2" role="alert">
+          {{ cookieError }}
+        </div>
+
+        <div class="cookie-form__grid">
+          <div class="cookie-form__field">
+            <label for="cookieProfileName" class="form-label">Profile name</label>
+            <input id="cookieProfileName" class="form-control" type="text" [(ngModel)]="cookieForm.name" [disabled]="cookiesWorking">
+          </div>
+          <div class="cookie-form__field">
+            <label for="cookieProfileHosts" class="form-label">Hosts <span class="text-muted small">(comma separated)</span></label>
+            <input id="cookieProfileHosts" class="form-control" type="text" [(ngModel)]="cookieForm.hosts" placeholder="instagram.com, .tumblr.com" [disabled]="cookiesWorking">
+          </div>
+          <div class="cookie-form__field">
+            <label for="cookieProfileTags" class="form-label">Tags <span class="text-muted small">(optional)</span></label>
+            <input id="cookieProfileTags" class="form-control" type="text" [(ngModel)]="cookieForm.tags" placeholder="youtube, music" [disabled]="cookiesWorking">
+          </div>
+        </div>
+
+        <div class="cookie-form__toggle">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="cookieProfileDefault" [(ngModel)]="cookieForm.default" [disabled]="cookiesWorking">
+            <label class="form-check-label" for="cookieProfileDefault">Set as default profile</label>
+          </div>
+        </div>
+
+        <div class="cookie-form__textarea">
+          <label for="cookieProfileData" class="form-label">Cookie data</label>
+          <textarea id="cookieProfileData" class="form-control" rows="5" [(ngModel)]="cookieForm.cookies" placeholder="Paste cookies here. Leave blank to keep existing cookies for this profile." [disabled]="cookiesWorking"></textarea>
+        </div>
+
+        <div class="cookie-form__actions">
+          <button type="button" class="btn btn-outline-secondary" (click)="handleCookieSmartAction()" [disabled]="cookiesWorking">
+            Paste cookies from clipboard
+          </button>
+          <button type="button" class="btn btn-outline-primary" (click)="prefillYoutubeProfile()" [disabled]="cookiesWorking">
+            Prefill YouTube defaults
+          </button>
+          <button type="button" class="btn btn-outline-secondary" (click)="startNewCookieProfile()" [disabled]="cookiesWorking">
+            New profile
+          </button>
+          <button type="button" class="btn btn-primary ms-auto" (click)="saveCookieProfile()" [disabled]="cookiesWorking">
+            <span *ngIf="cookiesWorking" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            {{ cookieForm.id ? 'Update profile' : 'Save profile' }}
+          </button>
+        </div>
+
+        <h6 class="mb-2">Existing profiles</h6>
+
+        <div *ngIf="cookieProfilesLoading" class="text-center py-3">
+          <div class="spinner-border" role="status" aria-hidden="true"></div>
+        </div>
+        <div *ngIf="!cookieProfilesLoading && cookieProfilesError" class="alert alert-warning" role="alert">
+          {{ cookieProfilesError }}
+        </div>
+        <div *ngIf="!cookieProfilesLoading && !cookieProfilesError && cookieProfiles.length === 0" class="alert alert-info" role="alert">
+          No cookie profiles yet. Save one using the form above.
+        </div>
+
+        <div *ngIf="cookieProfiles.length" class="list-group">
+          <div class="list-group-item" *ngFor="let profile of cookieProfiles">
+            <div class="d-flex justify-content-between align-items-start">
+              <div class="me-3">
+                <div class="fw-semibold">
+                  {{ profile.name }}
+                  <span *ngIf="profile.default" class="badge bg-primary ms-2">Default</span>
+                </div>
+                <div class="small text-muted">Hosts: {{ profile.hosts.join(', ') || '—' }}</div>
+                <div class="small text-muted" *ngIf="profile.tags?.length">Tags: {{ profile.tags.join(', ') }}</div>
+                <div class="small text-muted" *ngIf="profile.last_used_at">Last used {{ formatCookieTimestamp(profile.last_used_at) }}</div>
+              </div>
+              <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-secondary" (click)="editCookieProfile(profile)" [disabled]="cookiesWorking">Edit</button>
+                <button type="button" class="btn btn-outline-primary" (click)="makeCookieProfileDefault(profile)" [disabled]="profile.default || cookiesWorking">Make default</button>
+                <button type="button" class="btn btn-outline-danger" (click)="deleteCookieProfile(profile)" [disabled]="cookiesWorking">Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeCookiesModal()" [disabled]="cookiesWorking || cookieProfilesLoading">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Proxy Modal -->
+<div class="modal fade proxy-modal" tabindex="-1" role="dialog" [ngClass]="{'show': proxyPromptOpen}" [ngStyle]="{'display': proxyPromptOpen ? 'block' : 'none'}">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content modal-modern">
+      <div class="modal-header">
+        <h5 class="modal-title">Direct download required</h5>
+        <button type="button" class="btn-close" aria-label="Close" (click)="closeProxyPrompt()" [disabled]="proxyConfirmInProgress"></button>
+      </div>
+      <div class="modal-body">
+        <p>{{ proxyPromptMessage }}</p>
+
+        <div *ngIf="proxyPromptData">
+          <dl class="file-details">
+            <dt>URL</dt>
+            <dd class="text-break">{{ proxyPromptData.url }}</dd>
+            <ng-container *ngIf="proxyPromptData.folder">
+              <dt>Target folder</dt>
+              <dd class="text-break">{{ proxyPromptData.folder }}</dd>
+            </ng-container>
+          </dl>
+        </div>
+
+        <div *ngIf="proxyProbeLoading" class="text-center py-3">
+          <div class="spinner-border" role="status" aria-hidden="true"></div>
+        </div>
+
+        <div *ngIf="!proxyProbeLoading && proxyProbeError" class="alert alert-warning" role="alert">
+          {{ proxyProbeError }}
+        </div>
+
+        <div *ngIf="!proxyProbeLoading && proxyProbeResult && proxyProbeResult.status === 'ok'">
+          <dl class="file-details">
+            <dt>File name</dt>
+            <dd class="text-break">{{ proxyProbeResult.filename || proxySuggestedTitle }}</dd>
+            <ng-container *ngIf="proxyProbeResult.size !== undefined && proxyProbeResult.size !== null">
+              <dt>File size</dt>
+              <dd>{{ formatBytes(proxyProbeResult.size) }}</dd>
+            </ng-container>
+            <ng-container *ngIf="proxyProbeResult.content_type">
+              <dt>Content type</dt>
+              <dd>{{ proxyProbeResult.content_type }}</dd>
+            </ng-container>
+          </dl>
+
+          <div *ngIf="proxyPromptData?.limit_enabled && proxyProbeResult.limit_exceeded" class="alert alert-danger" role="alert">
+            This file exceeds the configured size limit ({{ proxyPromptData.size_limit_mb }} MB).
+          </div>
+        </div>
+
+        <div *ngIf="proxyPromptData?.limit_enabled" class="mt-3">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="proxyOverrideToggle" [(ngModel)]="proxyOverrideEnabled">
+            <label class="form-check-label" for="proxyOverrideToggle">Override size limit</label>
+          </div>
+          <div class="mt-2" *ngIf="proxyOverrideEnabled">
+            <label class="form-label" for="proxyOverrideValue">Allow up to (MB)</label>
+            <input id="proxyOverrideValue" class="form-control" type="number" min="0" [(ngModel)]="proxyOverrideMb" [disabled]="proxyConfirmInProgress">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeProxyPrompt()" [disabled]="proxyConfirmInProgress">Cancel</button>
+        <button type="button" class="btn btn-primary" (click)="confirmProxyDownload()" [disabled]="proxyDownloadDisabled">
+          <span *ngIf="proxyConfirmInProgress" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+          Download
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Gallery Modal -->
+<div class="modal fade gallerydl-modal" tabindex="-1" role="dialog" [ngClass]="{'show': galleryPromptOpen}" [ngStyle]="{'display': galleryPromptOpen ? 'block' : 'none'}">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content modal-modern">
+      <div class="modal-header">
+        <h5 class="modal-title">Gallery download</h5>
+        <button type="button" class="btn-close" aria-label="Close" (click)="closeGalleryPrompt()" [disabled]="galleryConfirmInProgress"></button>
+      </div>
+      <div class="modal-body">
+        <p>This URL is better handled by gallery-dl. Proceed to download all resources and bundle them into a zip archive?</p>
+
+        <div *ngIf="galleryPromptData">
+          <dl class="file-details">
+            <dt>URL</dt>
+            <dd class="text-break">{{ galleryPromptData.url }}</dd>
+          </dl>
+        </div>
+
+        <div class="row g-3" *ngIf="galleryCredentials.length > 0 || galleryCookies.length > 0">
+          <div class="col-md-6" *ngIf="galleryCredentials.length > 0">
+            <label class="form-label" for="galleryCredentialSelect">Credential profile</label>
+            <select id="galleryCredentialSelect" name="galleryCredentialSelect" class="form-select" [(ngModel)]="gallerySelectedCredential">
+              <option [ngValue]="null">None</option>
+              <option *ngFor="let cred of galleryCredentials" [ngValue]="cred.id">
+                {{ cred.name }}<span *ngIf="cred.username"> &mdash; {{ cred.username }}</span>
+              </option>
+            </select>
+            <small class="text-muted">Use saved credentials for sites that require authentication.</small>
+          </div>
+
+          <div class="col-md-6" *ngIf="galleryCookies.length > 0">
+            <label class="form-label" for="galleryCookieSelect">Cookie file</label>
+            <select id="galleryCookieSelect" name="galleryCookieSelect" class="form-select" [(ngModel)]="gallerySelectedCookie">
+              <option [ngValue]="null">None</option>
+              <option *ngFor="let cookie of galleryCookies" [ngValue]="cookie.name">{{ cookie.name }}</option>
+            </select>
+            <small class="text-muted">Cookies are stored in the server state directory and passed via <code>--cookies</code>.</small>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label" for="galleryRangeInput">Range (optional)</label>
+          <input id="galleryRangeInput" name="galleryRange" type="text" class="form-control" [(ngModel)]="galleryRange" placeholder="e.g. 1-20 or ::5">
+          <small class="text-muted">Maps to the <code>--range</code> argument. Leave blank to download the full gallery.</small>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0">Advanced options</h6>
+          <button type="button" class="btn btn-sm btn-outline-secondary" (click)="galleryAdvancedOpen = !galleryAdvancedOpen" [attr.aria-expanded]="galleryAdvancedOpen" aria-controls="galleryAdvancedOptions">
+            {{ galleryAdvancedOpen ? 'Hide' : 'Show' }}
+          </button>
+        </div>
+
+        <div id="galleryAdvancedOptions" class="advanced-options border-top mt-3 pt-3" [ngbCollapse]="!galleryAdvancedOpen">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label" for="galleryProxyInput">Proxy</label>
+              <input id="galleryProxyInput" name="galleryProxy" type="text" class="form-control" [(ngModel)]="galleryProxy" placeholder="http://user:pass@host:port">
+              <small class="text-muted">Applies the <code>--proxy</code> argument.</small>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" for="galleryRetriesInput">Retries</label>
+              <input id="galleryRetriesInput" name="galleryRetries" type="number" min="0" class="form-control" [(ngModel)]="galleryRetries">
+              <small class="text-muted">Maximum retry count (<code>--retries</code>).</small>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" for="gallerySleepRequestInput">Sleep/request</label>
+              <input id="gallerySleepRequestInput" name="gallerySleepRequest" type="text" class="form-control" [(ngModel)]="gallerySleepRequest" placeholder="e.g. 1.5 or 2-3">
+              <small class="text-muted">Delay between requests (<code>--sleep-request</code>).</small>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-1">
+            <div class="col-md-3">
+              <label class="form-label" for="gallerySleep429Input">Sleep 429</label>
+              <input id="gallerySleep429Input" name="gallerySleep429" type="text" class="form-control" [(ngModel)]="gallerySleep429" placeholder="e.g. 30">
+              <small class="text-muted">Backoff after HTTP 429 (<code>--sleep-429</code>).</small>
+            </div>
+            <div class="col-md-9 d-flex align-items-end">
+              <small class="text-muted">Leave blank to use gallery-dl defaults.</small>
+            </div>
+          </div>
+
+          <div class="form-check form-switch mb-2 mt-3">
+            <input class="form-check-input" type="checkbox" id="galleryWriteMetadataToggle" name="galleryWriteMetadata" [(ngModel)]="galleryWriteMetadata">
+            <label class="form-check-label" for="galleryWriteMetadataToggle">Write metadata files (<code>--write-metadata</code>)</label>
+          </div>
+
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="galleryWriteInfoJsonToggle" name="galleryWriteInfoJson" [(ngModel)]="galleryWriteInfoJson">
+            <label class="form-check-label" for="galleryWriteInfoJsonToggle">Write info JSON (<code>--write-info-json</code>)</label>
+          </div>
+
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="galleryWriteTagsToggle" name="galleryWriteTags" [(ngModel)]="galleryWriteTags">
+            <label class="form-check-label" for="galleryWriteTagsToggle">Write tag files (<code>--write-tags</code>)</label>
+          </div>
+
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="galleryDownloadArchiveToggle" name="galleryDownloadArchive" [(ngModel)]="galleryDownloadArchive">
+            <label class="form-check-label" for="galleryDownloadArchiveToggle">Track downloaded items (<code>--download-archive</code>)</label>
+          </div>
+
+          <div *ngIf="galleryDownloadArchive" class="mb-3">
+            <label class="form-label" for="galleryArchiveIdInput">Archive identifier</label>
+            <input id="galleryArchiveIdInput" name="galleryArchiveId" type="text" class="form-control" [(ngModel)]="galleryArchiveId" placeholder="default or custom-slug">
+            <small class="text-muted">Archive entries are stored under the server state path <code>gallerydl/archives</code>.</small>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="galleryExtraArgs">Additional gallery-dl options</label>
+            <textarea id="galleryExtraArgs" name="galleryExtraArgs" class="form-control" rows="4" [(ngModel)]="galleryExtraArgs" placeholder="One argument per line, e.g.&#10;--cookies-from-browser chrome&#10;-o extractor.some_option=value"></textarea>
+            <small class="text-muted">
+              Lines are tokenized like a shell command; quotes are supported. Refer to
+              <a href="https://github.com/mikf/gallery-dl/blob/master/docs/options.md" target="_blank" rel="noopener">gallery-dl documentation</a>
+              for available flags.
+            </small>
+          </div>
+        </div>
+
+        <div *ngIf="galleryPromptMessage" class="alert alert-warning" role="alert">
+          {{ galleryPromptMessage }}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeGalleryPrompt()" [disabled]="galleryConfirmInProgress">Cancel</button>
+        <button type="button" class="btn btn-primary" (click)="confirmGalleryDownload()" [disabled]="galleryConfirmInProgress">
+          <span *ngIf="galleryConfirmInProgress" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+          Download
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Backend Choice Modal -->
+<div class="modal fade backend-choice-modal" tabindex="-1" role="dialog" [ngClass]="{'show': backendChoiceModalOpen}" [ngStyle]="{'display': backendChoiceModalOpen ? 'block' : 'none'}">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content modal-modern" *ngIf="backendChoiceData as choice">
+      <div class="modal-header">
+        <h5 class="modal-title">Choose download backend</h5>
+        <button type="button" class="btn-close" aria-label="Close" (click)="closeBackendChoiceModal(true)" [disabled]="backendChoiceSubmitting"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-3">
+          The site
+          <strong>{{ choice.url }}</strong>
+          is supported by both yt-dlp and gallery-dl. Select which backend you want to use for this download.
+        </p>
+        <div class="d-grid gap-2">
+          <button type="button" class="btn btn-primary" (click)="chooseBackendOption('ytdlp')" [disabled]="backendChoiceSubmitting">
+            <span *ngIf="backendChoiceSubmitting" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            Use yt-dlp (quick start)
+          </button>
+          <button type="button" class="btn btn-outline-primary" (click)="chooseBackendOption('gallerydl')" [disabled]="backendChoiceSubmitting">
+            Configure gallery-dl options
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeBackendChoiceModal(true)" [disabled]="backendChoiceSubmitting">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Supported Sites Modal -->
+<div class="modal fade supported-sites-modal" tabindex="-1" role="dialog" [ngClass]="{'show': supportedSitesModalOpen}" [ngStyle]="{'display': supportedSitesModalOpen ? 'block' : 'none'}">
+  <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+    <div class="modal-content modal-modern">
+      <div class="modal-header">
+        <h5 class="modal-title">Supported sites</h5>
+        <button type="button" class="btn-close" aria-label="Close" (click)="closeSupportedSitesModal()"></button>
+      </div>
+      <div class="modal-body">
+        <div *ngIf="supportedSitesLoading" class="text-center py-3">
+          <div class="spinner-border" role="status" aria-hidden="true"></div>
+        </div>
+
+        <div *ngIf="!supportedSitesLoading && supportedSitesError" class="alert alert-danger" role="alert">
+          {{ supportedSitesError }}
+        </div>
+
+        <ng-container *ngIf="!supportedSitesLoading && !supportedSitesError">
+          <div class="supported-sites-modal__controls">
+            <div class="input-group">
+              <span class="input-group-text"><fa-icon [icon]="faTableColumns"></fa-icon></span>
+              <input type="search" class="form-control" placeholder="Filter sites" [(ngModel)]="supportedSitesFilter">
+            </div>
+            <div class="supported-sites-modal__tabs" *ngIf="supportedProviderMatches.length > 0; else noMatches">
+              <button type="button"
+                      class="supported-sites-modal__tab"
+                      *ngFor="let provider of supportedProviderMatches"
+                      [class.is-active]="provider.index === activeSupportedProviderIndex"
+                      (click)="setActiveSupportedProvider(provider.index)">
+                <span class="supported-sites-modal__tab-label">{{ provider.provider }}</span>
+                <span class="supported-sites-modal__tab-count">{{ provider.count }}</span>
+              </button>
+            </div>
+            <ng-template #noMatches>
+              <span class="text-muted small">No providers match your filter.</span>
+            </ng-template>
+          </div>
+
+          <div *ngIf="supportedSites.length === 0" class="text-muted">No provider data available.</div>
+
+          <div class="supported-sites-modal__content" *ngIf="supportedSites.length > 0 && activeSupportedProvider">
+            <header class="supported-sites-modal__header">
+              <div class="supported-sites-modal__title">
+                <fa-icon [icon]="faGrip"></fa-icon>
+                <span>{{ activeSupportedProvider.provider }}</span>
+              </div>
+              <div class="supported-sites-modal__meta">
+                {{ activeSupportedSites.length }} site{{ activeSupportedSites.length === 1 ? '' : 's' }}
+              </div>
+            </header>
+            <div class="supported-sites-modal__empty" *ngIf="activeSupportedSites.length === 0">
+              <p class="text-muted mb-0">No sites match this filter for {{ activeSupportedProvider.provider }}.</p>
+            </div>
+            <div class="supported-sites-modal__grid" *ngIf="activeSupportedSites.length > 0">
+              <span class="supported-sites-modal__tag" *ngFor="let site of activeSupportedSites">{{ site }}</span>
+            </div>
+          </div>
+        </ng-container>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeSupportedSitesModal()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,255 @@
+<section class="dashboard-section" aria-labelledby="completedHeading">
+  <header class="dashboard-section__header">
+    <div class="dashboard-section__title">
+      <span class="dashboard-section__icon dashboard-section__icon--success">
+        <fa-icon [icon]="faCheckCircle"></fa-icon>
+      </span>
+      <div>
+        <h2 id="completedHeading" class="dashboard-section__heading">Completed</h2>
+        <p class="dashboard-section__subtitle">
+          {{ downloads.done.size || 0 }} finished item{{ downloads.done.size === 1 ? '' : 's' }} ready to review.
+        </p>
+      </div>
+    </div>
+    <div class="dashboard-section__actions">
+      <button type="button"
+              class="dashboard-action"
+              disabled
+              #doneDelSelected
+              (click)="clearSelectedDownloads()">
+        <fa-icon [icon]="faTrashAlt"></fa-icon>
+        <span>Clear selected</span>
+      </button>
+      <button type="button"
+              class="dashboard-action"
+              disabled
+              #doneClearCompleted
+              (click)="clearCompletedDownloads()">
+        <fa-icon [icon]="faCheckCircle"></fa-icon>
+        <span>Clear completed</span>
+      </button>
+      <button type="button"
+              class="dashboard-action"
+              disabled
+              #doneClearFailed
+              (click)="clearFailedDownloads()">
+        <fa-icon [icon]="faTimesCircle"></fa-icon>
+        <span>Clear failed</span>
+      </button>
+      <button type="button"
+              class="dashboard-action"
+              disabled
+              #doneRetryFailed
+              (click)="retryFailedDownloads()">
+        <fa-icon [icon]="faRedoAlt"></fa-icon>
+        <span>Retry failed</span>
+      </button>
+      <button type="button"
+              class="dashboard-action"
+              disabled
+              #doneDownloadSelected
+              (click)="downloadSelectedFiles()">
+        <fa-icon [icon]="faDownload"></fa-icon>
+        <span>Download selected</span>
+      </button>
+    </div>
+  </header>
+  <div class="dashboard-section__body">
+    <ng-container *ngIf="visibleDoneKeys.length > 0; else completedEmptyState">
+      <div class="download-list__toolbar">
+        <div class="download-list__bulk">
+          <app-master-checkbox
+            #doneMasterCheckbox
+            [id]="'done'"
+            [list]="downloads.done"
+            (changed)="doneSelectionChanged($event)"></app-master-checkbox>
+          <span>Select all</span>
+        </div>
+        <div class="download-list__meta">
+          {{ downloads.done.size }} total
+        </div>
+      </div>
+      <div class="download-list">
+        <ng-container *ngFor="let key of visibleDoneKeys; trackBy: trackByKey">
+          <ng-container *ngIf="downloads.done.get(key) as download">
+            <article class="download-card"
+                     [class.is-disabled]="download.deleting">
+              <div class="download-card__select">
+                <app-slave-checkbox [id]="key" [master]="doneMasterCheckbox" [checkable]="download"></app-slave-checkbox>
+              </div>
+              <div class="download-card__body">
+                <div class="download-card__title">
+                  <span class="download-card__icon" [class.download-card__icon--success]="download.status === 'finished'" [class.download-card__icon--error]="download.status === 'error'">
+                    <fa-icon *ngIf="download.status == 'finished'" [icon]="faCheckCircle"></fa-icon>
+                    <fa-icon *ngIf="download.status == 'error'" [icon]="faTimesCircle"></fa-icon>
+                  </span>
+                  <div class="download-card__info">
+                    <a *ngIf="download.filename; else completedNoLink"
+                       [href]="buildDownloadLink(download)"
+                       target="_blank"
+                       class="download-card__name"
+                       [ngbTooltip]="buildDownloadTooltip(download) || null">
+                      {{ download.title }}
+                    </a>
+                    <ng-template #completedNoLink>
+                      <span class="download-card__name" [ngbTooltip]="buildDownloadTooltip(download) || null">{{ download.title }}</span>
+                    </ng-template>
+                    <div class="download-card__meta-group">
+                      <span class="download-card__meta" *ngIf="download.size !== undefined && download.size !== null">{{ download.size | fileSize }}</span>
+                      <span class="download-card__meta" *ngIf="download.msg && download.status !== 'error'">{{ download.msg }}</span>
+                      <span class="download-card__meta download-card__meta--error" *ngIf="download.status == 'error' && download.error">Error: {{ download.error }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="download-card__actions">
+                <button *ngIf="download.status == 'error'"
+                        type="button"
+                        class="download-card__btn"
+                        (click)="retryDownload(key, download)"
+                        ngbTooltip="Retry">
+                  <fa-icon [icon]="faRedoAlt"></fa-icon>
+                </button>
+                <button *ngIf="download.filename"
+                        type="button"
+                        class="download-card__btn"
+                        (click)="renameDownload(key, download)"
+                        ngbTooltip="Rename">
+                  <fa-icon [icon]="faPen"></fa-icon>
+                </button>
+                <button *ngIf="download.filename && download.status == 'finished'"
+                        type="button"
+                        class="download-card__btn"
+                        (click)="openStream(key, download)"
+                        ngbTooltip="Stream">
+                  <fa-icon [icon]="faPlay"></fa-icon>
+                </button>
+                <a *ngIf="download.filename"
+                   [href]="buildDownloadLink(download)"
+                   download
+                   class="download-card__btn"
+                   ngbTooltip="Download file">
+                  <fa-icon [icon]="faDownload"></fa-icon>
+                </a>
+                <a [href]="download.original_url || download.url"
+                   target="_blank"
+                   class="download-card__btn"
+                   ngbTooltip="Open source URL">
+                  <fa-icon [icon]="faExternalLinkAlt"></fa-icon>
+                </a>
+                <button type="button"
+                        class="download-card__btn download-card__btn--danger"
+                        (click)="delDownload(key)"
+                        ngbTooltip="Remove entry">
+                  <fa-icon [icon]="faTrashAlt"></fa-icon>
+                </button>
+              </div>
+            </article>
+          </ng-container>
+        </ng-container>
+      </div>
+      <div class="download-list__footer" *ngIf="hiddenDoneCount > 0">
+        <button type="button" class="btn btn-link btn-sm" (click)="showAllDone()">
+          Show {{ hiddenDoneCount }} more
+        </button>
+      </div>
+      <div class="download-list__footer" *ngIf="doneExpanded && downloads.done.size > doneDisplayLimit">
+        <button type="button" class="btn btn-link btn-sm" (click)="showLessDone()">
+          Show less
+        </button>
+      </div>
+    </ng-container>
+    <ng-template #completedEmptyState>
+      <div class="dashboard-empty">
+        <span class="dashboard-empty__icon">
+          <fa-icon [icon]="faCheckCircle"></fa-icon>
+        </span>
+        <div class="dashboard-empty__title">No completed downloads yet</div>
+        <p class="dashboard-empty__meta">Finished jobs will appear here with quick actions.</p>
+      </div>
+    </ng-template>
+  </div>
+</section>
+
+<div class="modal fade rename-modal" tabindex="-1" role="dialog" [ngClass]="{'show': renameModalOpen}" [ngStyle]="{'display': renameModalOpen ? 'block' : 'none'}">
+  <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
+    <div class="modal-content modal-modern">
+      <form (submit)="submitRename($event)">
+        <div class="modal-header">
+          <h5 class="modal-title">Rename file</h5>
+          <button type="button" class="btn-close" aria-label="Close" (click)="closeRenameModal()" [disabled]="renameSaving"></button>
+        </div>
+        <div class="modal-body">
+          <div class="rename-modal__context" *ngIf="renameTargetTitle">
+            <span class="rename-modal__label">Current title</span>
+            <div class="rename-modal__value" [title]="renameTargetTitle">{{ renameTargetTitle }}</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="renameInputField">New filename</label>
+            <input id="renameInputField"
+                   #renameInput
+                   name="renameInputField"
+                   type="text"
+                   class="form-control"
+                   autocomplete="off"
+                   [(ngModel)]="renameFormValue"
+                   [disabled]="renameSaving">
+          </div>
+          <div *ngIf="renameError" class="rename-modal__error">
+            {{ renameError }}
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" (click)="closeRenameModal()" [disabled]="renameSaving">Cancel</button>
+          <button type="submit" class="btn btn-primary" [disabled]="renameSaving || !(renameFormValue?.trim())">
+            <span *ngIf="renameSaving" class="spinner-border spinner-border-sm me-2" role="status"></span>
+            Save
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade stream-modal" tabindex="-1" role="dialog" [ngClass]="{'show': streamModalOpen, 'minimized': streamModalOpen && streamMinimized}" [ngStyle]="{'display': streamModalOpen ? 'block' : 'none'}">
+  <div class="modal-dialog" role="document" [ngClass]="{
+      'modal-lg': !streamMinimized,
+      'minimized': streamMinimized,
+      'dock-left': streamMinimized && streamDockSide === 'left',
+      'dock-right': streamMinimized && streamDockSide === 'right'
+    }">
+    <div class="modal-content modal-modern">
+      <div class="modal-header align-items-center">
+        <h5 class="modal-title mb-0 flex-grow-1">{{ streamTitle || 'Stream media' }}</h5>
+        <div class="modal-actions">
+          <button *ngIf="!streamMinimized" type="button" class="btn btn-link btn-sm p-0 me-2" (click)="minimizeStream()" title="Minimize player">
+            <fa-icon [icon]="faWindowMinimize"></fa-icon>
+          </button>
+          <button *ngIf="streamMinimized" type="button" class="btn btn-link btn-sm p-0 me-2" (click)="toggleStreamDock()" title="Switch side">
+            <fa-icon [icon]="faArrowsLeftRight"></fa-icon>
+          </button>
+          <button *ngIf="streamMinimized" type="button" class="btn btn-link btn-sm p-0 me-2" (click)="restoreStream()" title="Restore player">
+            <fa-icon [icon]="faWindowRestore"></fa-icon>
+          </button>
+          <button type="button" class="btn-close" aria-label="Close" (click)="closeStreamModal()"></button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div *ngIf="streamSource; else noStreamAvailable">
+          <video *ngIf="streamType === 'video'" #streamVideo controls class="w-100" preload="metadata" playsinline [src]="streamSource">
+            Your browser does not support the video tag.
+          </video>
+          <audio *ngIf="streamType === 'audio'" #streamAudio controls class="w-100" preload="metadata" [src]="streamSource">
+            Your browser does not support the audio element.
+          </audio>
+        </div>
+        <ng-template #noStreamAvailable>
+          <p class="text-muted mb-0">No media available for streaming.</p>
+        </ng-template>
+      </div>
+      <div class="modal-footer" [class.d-none]="streamMinimized">
+        <button type="button" class="btn btn-secondary" (click)="closeStreamModal()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>

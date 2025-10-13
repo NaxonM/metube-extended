@@ -268,8 +268,28 @@ class PersistentQueue:
     def empty(self):
         return not bool(self.dict)
 
+    def truncate(self, max_items: int):
+        if max_items is None:
+            return
+        if max_items <= 0:
+            if self.dict:
+                self.dict.clear()
+                with shelve.open(self.path, 'n'):
+                    pass
+            return
+        if len(self.dict) <= max_items:
+            return
+        removed_keys = []
+        while len(self.dict) > max_items:
+            key, _ = self.dict.popitem(last=False)
+            removed_keys.append(key)
+        if removed_keys:
+            with shelve.open(self.path, 'w') as shelf:
+                for key in removed_keys:
+                    shelf.pop(key, None)
+
 class DownloadQueue:
-    def __init__(self, config, notifier, state_dir=None, user_id=None, cookie_status_store=None):
+    def __init__(self, config, notifier, state_dir=None, user_id=None, cookie_status_store=None, max_history_items: int = 200):
         self.config = config
         self.notifier = notifier
         self.user_id = user_id
@@ -281,6 +301,7 @@ class DownloadQueue:
         self.active_downloads = set()
         self.semaphore = None
         self.cookie_status_store = cookie_status_store
+        self.max_history_items = max_history_items if max_history_items is not None else 200
         # For sequential mode, use an asyncio lock to ensure one-at-a-time execution.
         if self.config.DOWNLOAD_MODE == 'sequential':
             self.seq_lock = asyncio.Lock()
@@ -288,6 +309,8 @@ class DownloadQueue:
             self.semaphore = asyncio.Semaphore(int(self.config.MAX_CONCURRENT_DOWNLOADS))
         
         self.done.load()
+        if self.max_history_items >= 0:
+            self.done.truncate(self.max_history_items)
 
     async def __import_queue(self):
         for k, v in self.queue.saved_items():
@@ -377,6 +400,8 @@ class DownloadQueue:
                 asyncio.create_task(self.notifier.canceled(download.info.url))
             else:
                 self.done.put(download)
+                if self.max_history_items >= 0:
+                    self.done.truncate(self.max_history_items)
                 asyncio.create_task(self.notifier.completed(download.info))
 
     def __extract_info(self, url, playlist_strict_mode, cookie_path=None):

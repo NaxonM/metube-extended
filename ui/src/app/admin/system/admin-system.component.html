@@ -1,0 +1,70 @@
+<div class="admin-section-content admin-system">
+  <div *ngIf="systemStatsLoading" class="d-flex align-items-center gap-2 py-2">
+    <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+    <span>Fetching system statistics…</span>
+  </div>
+
+  <div *ngIf="systemStatsError" class="alert alert-danger py-2" role="alert">
+    {{ systemStatsError }}
+    <button type="button" class="btn btn-link btn-sm ms-2" (click)="refreshSystemStats()">Retry</button>
+  </div>
+
+  <div *ngIf="systemStats && !systemStatsLoading" class="small">
+    <div class="admin-stats-grid">
+      <div class="stat-tile">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span class="text-muted text-uppercase small">CPU</span>
+          <span class="fw-semibold">{{ systemStats.cpu.percent | number:'1.0-1' }}%</span>
+        </div>
+        <div class="text-muted">Cores: {{ systemStats.cpu.cores }}, Threads: {{ systemStats.cpu.threads }}</div>
+      </div>
+
+      <div class="stat-tile">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span class="text-muted text-uppercase small">Memory</span>
+          <span class="fw-semibold">{{ systemStats.memory.percent | number:'1.0-1' }}%</span>
+        </div>
+        <div class="text-muted">{{ formatBytes(systemStats.memory.used) }} / {{ formatBytes(systemStats.memory.total) }}</div>
+        <div class="text-muted">Free: {{ formatBytes(systemStats.memory.available) }}</div>
+      </div>
+
+      <div class="stat-tile" *ngIf="systemStats.swap.total > 0">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span class="text-muted text-uppercase small">Swap</span>
+          <span class="fw-semibold">{{ systemStats.swap.percent | number:'1.0-1' }}%</span>
+        </div>
+        <div class="text-muted">{{ formatBytes(systemStats.swap.used) }} / {{ formatBytes(systemStats.swap.total) }}</div>
+      </div>
+
+      <div class="stat-tile" *ngIf="systemStats.swap.total === 0">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span class="text-muted text-uppercase small">Swap</span>
+          <span class="badge bg-secondary">Off</span>
+        </div>
+        <div class="text-muted">Swap disabled</div>
+      </div>
+
+      <div class="stat-tile">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span class="text-muted text-uppercase small">Uptime</span>
+          <span class="fw-semibold">{{ formatDuration(systemStats.uptime_seconds) }}</span>
+        </div>
+        <div class="text-muted">Since {{ formatTimestampLocal(systemStats.timestamp - systemStats.uptime_seconds) }}</div>
+      </div>
+
+      <div class="stat-tile stat-wide">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span class="text-muted text-uppercase small">Network</span>
+          <span class="fw-semibold">TX {{ formatRate(systemStatsRates.sentPerSec) }} · RX {{ formatRate(systemStatsRates.recvPerSec) }}</span>
+        </div>
+        <div class="text-muted">Total sent {{ formatBytes(systemStats.network.bytes_sent) }}, received {{ formatBytes(systemStats.network.bytes_recv) }}</div>
+      </div>
+    </div>
+    <div class="d-flex justify-content-between align-items-center mt-3 small text-muted">
+      <span>Last update: {{ formatTimestampLocal(systemStats?.timestamp) }}</span>
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="refreshSystemStats()">
+        Refresh
+      </button>
+    </div>
+  </div>
+</div>

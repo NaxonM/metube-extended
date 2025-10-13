@@ -374,6 +374,7 @@ class GalleryDlManager:
         executable_path: Optional[str] = None,
         credential_store: Optional["CredentialStore"] = None,
         cookie_store: Optional["CookieStore"] = None,
+        max_history_items: int = 200,
     ):
         self.config = config
         self.notifier = notifier
@@ -388,6 +389,7 @@ class GalleryDlManager:
         self.queue: "OrderedDict[str, GalleryDlJob]" = OrderedDict()
         self.pending: "OrderedDict[str, GalleryDlJob]" = OrderedDict()
         self.done: "OrderedDict[str, GalleryDlJob]" = OrderedDict()
+        self.max_history_items = max_history_items if max_history_items is not None else 200
 
         self._semaphore: Optional[asyncio.Semaphore] = None
         if getattr(self.config, "DOWNLOAD_MODE", "limited") == "limited":
@@ -1020,8 +1022,11 @@ class GalleryDlManager:
             )
             job.archive_path = record.get("archive_path")
             self.done[storage_key] = job
+        if self._enforce_history_limit():
+            self._persist_completed()
 
     def _persist_completed(self) -> None:
+        self._enforce_history_limit()
         data = []
         for storage_key, job in self.done.items():
             info = job.info
@@ -1059,3 +1064,18 @@ class GalleryDlManager:
                 json.dump(data, fp)
         except OSError as exc:
             log.error("Failed to persist gallery-dl history: %s", exc)
+
+    def _enforce_history_limit(self) -> bool:
+        limit = self.max_history_items
+        if limit is None:
+            return False
+        changed = False
+        if limit <= 0:
+            if self.done:
+                self.done.clear()
+                changed = True
+        else:
+            while len(self.done) > limit:
+                self.done.popitem(last=False)
+                changed = True
+        return changed

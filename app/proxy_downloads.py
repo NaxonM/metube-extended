@@ -116,7 +116,7 @@ class ProxyDownloadJob:
 
 
 class ProxyDownloadManager:
-    def __init__(self, config, notifier, base_queue, state_dir: str, user_id: str, settings_store: ProxySettingsStore):
+    def __init__(self, config, notifier, base_queue, state_dir: str, user_id: str, settings_store: ProxySettingsStore, max_history_items: int = 200):
         self.config = config
         self.notifier = notifier
         self.base_queue = base_queue
@@ -130,6 +130,7 @@ class ProxyDownloadManager:
         self.queue: 'OrderedDict[str, ProxyDownloadJob]' = OrderedDict()
         self.pending: 'OrderedDict[str, ProxyDownloadJob]' = OrderedDict()
         self.done: 'OrderedDict[str, ProxyDownloadJob]' = OrderedDict()
+        self.max_history_items = max_history_items if max_history_items is not None else 200
 
         self._semaphore = None
         if self.config.DOWNLOAD_MODE == 'limited':
@@ -184,8 +185,11 @@ class ProxyDownloadManager:
             job.file_path = record.get('file_path')
             job.total_bytes = record.get('size')
             self.done[info.url] = job
+        if self._enforce_history_limit():
+            self._persist_completed()
 
     def _persist_completed(self):
+        self._enforce_history_limit()
         data = []
         for job in self.done.values():
             info = job.info
@@ -212,6 +216,21 @@ class ProxyDownloadManager:
                 json.dump(data, fp)
         except OSError as exc:
             log.error(f'Failed to persist proxy history for user {self.user_id}: {exc!r}')
+
+    def _enforce_history_limit(self) -> bool:
+        limit = self.max_history_items
+        if limit is None:
+            return False
+        changed = False
+        if limit <= 0:
+            if self.done:
+                self.done.clear()
+                changed = True
+        else:
+            while len(self.done) > limit:
+                self.done.popitem(last=False)
+                changed = True
+        return changed
 
     # ------------------------------------------------------------------
     # Public helpers

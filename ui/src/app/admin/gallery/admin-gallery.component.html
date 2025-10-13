@@ -1,0 +1,131 @@
+<div class="admin-gallery">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h2 class="h4 mb-1">Gallery-dl settings</h2>
+      <p class="text-muted mb-0">Manage credential profiles and cookie files used for gallery downloads.</p>
+    </div>
+    <button type="button" class="btn btn-outline-secondary" (click)="refreshGallerydlSettings()" [disabled]="gallerySettingsLoading">
+      <span *ngIf="gallerySettingsLoading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+      Refresh
+    </button>
+  </div>
+
+  <div *ngIf="gallerySettingsError" class="alert alert-danger" role="alert">
+    {{ gallerySettingsError }}
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-6">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h5 class="mb-0">Credentials</h5>
+        <button type="button" class="btn btn-outline-secondary btn-sm" (click)="newGalleryCredential()">
+          New credential
+        </button>
+      </div>
+
+      <div *ngIf="galleryCredentialMessage" class="alert alert-info py-2" role="alert">
+        {{ galleryCredentialMessage }}
+      </div>
+
+      <div class="list-group mb-3">
+        <button type="button"
+                class="list-group-item list-group-item-action"
+                *ngFor="let credential of galleryCredentials"
+                (click)="selectGalleryCredential(credential)"
+                [class.active]="galleryCredentialForm.id === credential.id">
+          <div class="d-flex justify-content-between">
+            <span>{{ credential.name }}</span>
+            <small class="text-muted">Updated {{ credential.updated_at * 1000 | date:'medium' }}</small>
+          </div>
+        </button>
+        <div *ngIf="galleryCredentials.length === 0" class="list-group-item text-muted">
+          No credentials available.
+        </div>
+      </div>
+
+      <form class="gallery-credential-form" (submit)="$event.preventDefault()">
+        <div class="mb-3">
+          <label class="form-label">Name</label>
+          <input class="form-control" [(ngModel)]="galleryCredentialForm.name" name="credName">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Extractor</label>
+          <input class="form-control" [(ngModel)]="galleryCredentialForm.extractor" name="credExtractor" placeholder="instagram, reddit, …">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Username</label>
+          <input class="form-control" [(ngModel)]="galleryCredentialForm.username" name="credUsername">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Password</label>
+          <input class="form-control" type="password" [(ngModel)]="galleryCredentialForm.password" name="credPassword" (input)="onGalleryCredentialPasswordChange()">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Two-factor token</label>
+          <input class="form-control" [(ngModel)]="galleryCredentialForm.twofactor" name="credTwofactor">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Extra arguments</label>
+          <textarea class="form-control" rows="4" [(ngModel)]="galleryCredentialForm.extraArgs" name="credExtraArgs" placeholder="One argument per line"></textarea>
+        </div>
+        <div class="d-flex justify-content-between">
+          <button type="button" class="btn btn-outline-danger" (click)="deleteGalleryCredential()" [disabled]="!galleryCredentialForm.id">
+            Delete
+          </button>
+          <button type="button" class="btn btn-primary" (click)="saveGalleryCredential()" [disabled]="galleryCredentialSaving">
+            <span *ngIf="galleryCredentialSaving" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            {{ galleryCredentialForm.id ? 'Update credential' : 'Create credential' }}
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h5 class="mb-0">Cookie files</h5>
+        <button type="button" class="btn btn-outline-secondary btn-sm" (click)="resetGalleryCookieForm()">
+          New cookie
+        </button>
+      </div>
+
+      <div *ngIf="galleryCookieMessage" class="alert alert-info py-2" role="alert">
+        {{ galleryCookieMessage }}
+      </div>
+
+      <div class="list-group mb-3">
+        <button type="button"
+                class="list-group-item list-group-item-action"
+                *ngFor="let cookie of galleryCookies"
+                (click)="editGalleryCookie(cookie)">
+          <div class="d-flex justify-content-between">
+            <span>{{ cookie.name }}</span>
+            <small class="text-muted">Updated {{ cookie.updated_at * 1000 | date:'medium' }}</small>
+          </div>
+        </button>
+        <div *ngIf="galleryCookies.length === 0" class="list-group-item text-muted">
+          No cookie files uploaded.
+        </div>
+      </div>
+
+      <form class="gallery-cookie-form" (submit)="$event.preventDefault()">
+        <div class="mb-3">
+          <label class="form-label">Cookie name</label>
+          <input class="form-control" [(ngModel)]="galleryCookieForm.name" name="cookieName">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Content</label>
+          <textarea class="form-control" rows="6" [(ngModel)]="galleryCookieForm.content" name="cookieContent"></textarea>
+        </div>
+        <div class="d-flex justify-content-between">
+          <button type="button" class="btn btn-outline-danger" (click)="deleteGalleryCookie(galleryCookieForm.name)" [disabled]="!galleryCookieForm.name">
+            Delete
+          </button>
+          <button type="button" class="btn btn-primary" (click)="saveGalleryCookie()" [disabled]="galleryCookieSaving">
+            <span *ngIf="galleryCookieSaving" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            Save cookie
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

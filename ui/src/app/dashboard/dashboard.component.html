@@ -1,0 +1,77 @@
+<nav class="navbar navbar-expand-md navbar-dark">
+  <div class="container-fluid navbar-inner">
+    <div class="nav-branding">
+      <a class="navbar-brand" href="#">
+        <img src="assets/icons/android-chrome-192x192.png" alt="MeTubeEX Logo" height="32">
+        <span>MeTubeEX</span>
+      </a>
+      <div class="nav-stats" *ngIf="activeDownloads || queuedDownloads || completedDownloads || failedDownloads || (totalSpeed | speed)">
+        <div class="nav-stat" *ngIf="activeDownloads > 0">
+          <fa-icon [icon]="faDownload"></fa-icon>
+          <span>{{ activeDownloads }} downloading</span>
+        </div>
+        <div class="nav-stat" *ngIf="queuedDownloads > 0">
+          <fa-icon [icon]="faClock"></fa-icon>
+          <span>{{ queuedDownloads }} queued</span>
+        </div>
+        <div class="nav-stat" *ngIf="completedDownloads > 0">
+          <fa-icon [icon]="faCheck"></fa-icon>
+          <span>{{ completedDownloads }} completed</span>
+        </div>
+        <div class="nav-stat" *ngIf="failedDownloads > 0">
+          <fa-icon [icon]="faTimesCircle"></fa-icon>
+          <span>{{ failedDownloads }} failed</span>
+        </div>
+        <div class="nav-stat" *ngIf="(totalSpeed | speed) !== ''">
+          <fa-icon [icon]="faTachometerAlt"></fa-icon>
+          <span>{{ totalSpeed | speed }}</span>
+        </div>
+      </div>
+    </div>
+    <div class="nav-actions">
+      <div class="nav-session" *ngIf="currentUser">
+        <span class="nav-session__label">Signed in as</span>
+        <span class="nav-session__user">
+          <fa-icon *ngIf="currentUser?.role === 'admin'" [icon]="faUserShield"></fa-icon>
+          {{ currentUser?.username }}
+        </span>
+      </div>
+      <a class="btn btn-outline-light btn-sm nav-logout" href="logout" *ngIf="currentUser">
+        <fa-icon [icon]="faRightFromBracket"></fa-icon>
+        Logout
+      </a>
+      <div class="nav-theme">
+        <button class="btn btn-link nav-link dropdown-toggle" id="theme-select" type="button" aria-expanded="false" data-bs-toggle="dropdown" data-bs-display="static">
+          <fa-icon [icon]="activeTheme.icon"></fa-icon>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="theme-select">
+          <li *ngFor="let theme of themes">
+            <button type="button" class="dropdown-item d-flex align-items-center" [ngClass]="{'active' : activeTheme == theme}" (click)="onThemeSelected(theme)">
+              <span class="me-2 opacity-50">
+                <fa-icon [icon]="theme.icon"></fa-icon>
+              </span>
+              {{ theme.displayName }}
+              <span class="ms-auto" [ngClass]="{'d-none' : activeTheme != theme}">
+                <fa-icon [icon]="faCheck"></fa-icon>
+              </span>
+            </button>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<main role="main" class="container container-xl page-shell">
+  <app-dashboard-tools
+    #tools
+    [isAdmin]="isAdmin"
+    (optionsUpdateTimeChange)="onOptionsUpdateChange($event)"
+    (versionInfoChange)="onVersionInfoChange($event)"
+    (userChange)="onUserChange($event)">
+  </app-dashboard-tools>
+
+  <app-dashboard-queue></app-dashboard-queue>
+
+  <app-dashboard-history [tools]="tools"></app-dashboard-history>
+</main>

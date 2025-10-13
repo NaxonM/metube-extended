@@ -1,0 +1,106 @@
+<div class="admin-user-hub">
+  <div class="admin-user-hub__header">
+    <div class="admin-user-hub__summary">
+      <h3 class="admin-user-hub__title">Team overview</h3>
+      <p class="admin-user-hub__subtitle">
+        {{ adminUsers.length }} user{{ adminUsers.length === 1 ? '' : 's' }}
+        • {{ activeAdminCount() }} admin{{ activeAdminCount() === 1 ? '' : 's' }}
+      </p>
+    </div>
+    <button type="button" class="btn btn-primary" (click)="promptCreateUser()">
+      <fa-icon [icon]="faUserPlus" class="me-2"></fa-icon>
+      Invite user
+    </button>
+  </div>
+
+  <div class="alert alert-danger" role="alert" *ngIf="adminError">
+    {{ adminError }}
+    <button type="button" class="btn btn-link btn-sm ms-2" (click)="refreshUsers()">Retry</button>
+  </div>
+
+  <div class="admin-user-hub__loading" *ngIf="adminLoading">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-3 mb-0">Loading users...</p>
+  </div>
+
+  <div class="admin-user-hub__grid" *ngIf="!adminLoading">
+    <article class="admin-user-card" *ngFor="let user of adminUsers">
+      <header class="admin-user-card__header">
+        <div class="admin-user-card__identity">
+          <div class="admin-user-card__avatar" [class.is-admin]="user.role === 'admin'">
+            <fa-icon [icon]="faUserShield" *ngIf="user.role === 'admin'"></fa-icon>
+            <span *ngIf="user.role !== 'admin'">{{ user.username.charAt(0).toUpperCase() }}</span>
+          </div>
+          <div>
+            <div class="admin-user-card__name">{{ user.username }}</div>
+            <div class="admin-user-card__meta">
+              <span class="badge" [ngClass]="user.role === 'admin' ? 'bg-info' : 'bg-secondary'">
+                {{ user.role === 'admin' ? 'Admin' : 'User' }}
+              </span>
+              <span class="badge bg-outline" [ngClass]="user.disabled ? 'bg-danger-subtle text-danger' : 'bg-success-subtle text-success'">
+                {{ user.disabled ? 'Disabled' : 'Active' }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="admin-user-card__actions">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="promptUpdateUser(user)">
+            <fa-icon [icon]="faPen"></fa-icon>
+          </button>
+          <button type="button"
+                  class="btn btn-outline-secondary btn-sm"
+                  [ngClass]="user.disabled ? 'btn-outline-success' : 'btn-outline-warning'"
+                  (click)="toggleUserDisabled(user)">
+            <fa-icon [icon]="faUserSlash" *ngIf="!user.disabled"></fa-icon>
+            <fa-icon [icon]="faUserPlus" *ngIf="user.disabled"></fa-icon>
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="resetUserPassword(user)">
+            <fa-icon [icon]="faKey"></fa-icon>
+          </button>
+          <button type="button" class="btn btn-outline-danger btn-sm" (click)="deleteUser(user)">
+            <fa-icon [icon]="faTrashAlt"></fa-icon>
+          </button>
+        </div>
+      </header>
+      <div class="admin-user-card__body">
+        <dl class="admin-user-card__details">
+          <div>
+            <dt>Status</dt>
+            <dd>{{ user.disabled ? 'Temporarily disabled' : 'Enabled' }}</dd>
+          </div>
+          <div>
+            <dt>Role</dt>
+            <dd>{{ user.role }}</dd>
+          </div>
+          <div>
+            <dt>Created</dt>
+            <dd>
+              <ng-container *ngIf="user.created_at; else createdUnknown">
+                {{ (user.created_at * 1000) | date:'medium' }}
+              </ng-container>
+              <ng-template #createdUnknown>Unknown</ng-template>
+            </dd>
+          </div>
+          <div>
+            <dt>Last login</dt>
+            <dd>
+              <ng-container *ngIf="user.last_login_at; else lastLoginNever">
+                {{ (user.last_login_at * 1000) | date:'medium' }}
+              </ng-container>
+              <ng-template #lastLoginNever>Never</ng-template>
+            </dd>
+          </div>
+        </dl>
+        <div class="admin-user-card__footer">
+          <span class="badge bg-secondary" *ngIf="isSelf(user)">This is you</span>
+        </div>
+      </div>
+    </article>
+
+    <div class="admin-user-card admin-user-card--empty" *ngIf="adminUsers.length === 0">
+      <p class="mb-0 text-muted">No users available. Invite your first collaborator to get started.</p>
+    </div>
+  </div>
+</div>
