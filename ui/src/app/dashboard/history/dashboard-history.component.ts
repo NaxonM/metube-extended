@@ -483,7 +483,10 @@ export class DashboardHistoryComponent implements OnInit, AfterViewInit, OnDestr
 
   private encodeStreamToken(value: string): string {
     const utf8 = encodeURIComponent(value).replace(/%([0-9A-F]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-    return btoa(utf8).replace(/=+$/, '');
+    return btoa(utf8)
+      .replace(/=+$/, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
   }
 
   private async initializeVideoStream(): Promise<void> {
