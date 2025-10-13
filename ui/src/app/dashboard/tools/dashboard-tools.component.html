@@ -196,7 +196,9 @@
               </button>
               <a *ngIf="isAdmin"
                  class="advanced-chip"
-                 [routerLink]="['/admin']">
+                 [routerLink]="['/admin']"
+                 role="button"
+                 tabindex="0">
                 <span class="advanced-chip__icon"><fa-icon [icon]="faLayerGroup"></fa-icon></span>
                 <span class="advanced-chip__label">Admin tools</span>
               </a>
