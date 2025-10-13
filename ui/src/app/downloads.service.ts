@@ -273,6 +273,8 @@ export class DownloadsService {
   private metricsSubject = new BehaviorSubject<DownloadMetrics>(this.createEmptyMetrics());
   readonly metrics$ = this.metricsSubject.asObservable();
   private maxHistoryItems = 200;
+  private currentUserCache: CurrentUser | null = null;
+  private currentUserInitialized = false;
 
   configuration = {};
   customDirs = {};
@@ -780,10 +782,28 @@ export class DownloadsService {
     );
   }
 
-  public getCurrentUser() {
+  public getCurrentUser(forceRefresh = false) {
+    if (!forceRefresh && this.currentUserInitialized) {
+      return of(this.currentUserCache);
+    }
+
     return this.http.get<CurrentUser>('me').pipe(
-      catchError(() => of(null as CurrentUser | null))
+      tap(user => {
+        this.currentUserCache = user;
+        this.currentUserInitialized = true;
+      }),
+      map(user => user ?? null),
+      catchError(() => {
+        this.currentUserCache = null;
+        this.currentUserInitialized = true;
+        return of(null as CurrentUser | null);
+      })
     );
+  }
+
+  public setCurrentUser(user: CurrentUser | null): void {
+    this.currentUserCache = user;
+    this.currentUserInitialized = true;
   }
 
   public listUsers() {

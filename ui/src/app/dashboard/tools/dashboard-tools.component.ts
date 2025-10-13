@@ -177,9 +177,9 @@ export class DashboardToolsComponent implements OnInit {
   }
 
   private loadCurrentUser(): void {
-    this.downloads.getCurrentUser().subscribe({
-      next: user => this.userChange.emit(user),
-      error: () => this.userChange.emit(null)
+    this.downloads.getCurrentUser().subscribe(user => {
+      this.downloads.setCurrentUser(user);
+      this.userChange.emit(user);
     });
   }
 

@@ -79,6 +79,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   onUserChange(user: CurrentUser | null): void {
     this.currentUser = user;
     this.isAdmin = user?.role === 'admin';
+    this.downloads.setCurrentUser(user);
   }
 
   onThemeSelected(theme: Theme): void {
