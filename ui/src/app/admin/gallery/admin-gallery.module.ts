@@ -8,6 +8,7 @@ import { AdminGalleryRoutingModule } from './admin-gallery-routing.module';
 
 @NgModule({
   declarations: [AdminGalleryComponent],
-  imports: [CommonModule, FormsModule, NgbModule, AdminGalleryRoutingModule]
+  imports: [CommonModule, FormsModule, NgbModule, AdminGalleryRoutingModule],
+  exports: [AdminGalleryComponent]
 })
 export class AdminGalleryModule {}

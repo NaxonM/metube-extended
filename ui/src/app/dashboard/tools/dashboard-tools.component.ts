@@ -73,6 +73,7 @@ export class DashboardToolsComponent implements OnInit {
   isAdvancedOpen = false;
 
   cookiesModalOpen = false;
+  gallerySettingsModalOpen = false;
   cookieStatus: CookieStatusResponse = { has_cookies: false, state: 'missing' };
   cookieMessage = '';
   cookieError = '';
@@ -473,12 +474,20 @@ export class DashboardToolsComponent implements OnInit {
     this.loadCookieProfiles(true);
   }
 
+  openGallerySettingsModal(): void {
+    this.gallerySettingsModalOpen = true;
+  }
+
   closeCookiesModal(): void {
     this.cookiesModalOpen = false;
     this.cookiesWorking = false;
     this.cookieMessage = '';
     this.cookieError = '';
     this.cookieProfilesError = '';
+  }
+
+  closeGallerySettingsModal(): void {
+    this.gallerySettingsModalOpen = false;
   }
 
   refreshCookiesStatus(): void {

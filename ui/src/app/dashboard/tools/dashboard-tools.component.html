@@ -188,11 +188,17 @@
                 <span class="advanced-chip__icon"><fa-icon [icon]="faCookieBite"></fa-icon></span>
                 <span class="advanced-chip__label">YT-DLP cookies</span>
               </button>
+              <button type="button"
+                      class="advanced-chip"
+                      (click)="openGallerySettingsModal()">
+                <span class="advanced-chip__icon"><fa-icon [icon]="faKey"></fa-icon></span>
+                <span class="advanced-chip__label">Gallery-dl settings</span>
+              </button>
               <a *ngIf="isAdmin"
                  class="advanced-chip"
                  [routerLink]="['/admin']">
-                <span class="advanced-chip__icon"><fa-icon [icon]="faKey"></fa-icon></span>
-                <span class="advanced-chip__label">Gallery-dl settings</span>
+                <span class="advanced-chip__icon"><fa-icon [icon]="faLayerGroup"></fa-icon></span>
+                <span class="advanced-chip__label">Admin tools</span>
               </a>
               <button type="button"
                       class="advanced-chip"
@@ -231,6 +237,21 @@
         <button type="button" class="btn btn-primary" (click)="startBatchImport()" [disabled]="importInProgress">
           Import URLs
         </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Gallery Settings Modal -->
+<div class="modal fade" tabindex="-1" role="dialog" [ngClass]="{'show': gallerySettingsModalOpen}" [ngStyle]="{'display': gallerySettingsModalOpen ? 'block' : 'none'}">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable" role="document">
+    <div class="modal-content modal-modern">
+      <div class="modal-header">
+        <h5 class="modal-title">Gallery-dl settings</h5>
+        <button type="button" class="btn-close" aria-label="Close" (click)="closeGallerySettingsModal()"></button>
+      </div>
+      <div class="modal-body">
+        <app-admin-gallery *ngIf="gallerySettingsModalOpen"></app-admin-gallery>
       </div>
     </div>
   </div>
