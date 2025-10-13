@@ -220,7 +220,7 @@
         </div>
         <div class="delete-modal__title-group">
           <h5 class="delete-modal__title">Remove download</h5>
-          <p class="delete-modal__subtitle">This removes the entry from history only. Files on disk are not deleted.</p>
+          <p class="delete-modal__subtitle">This removes the entry and deletes the file from disk.</p>
         </div>
         <button type="button" class="btn-close" aria-label="Close" (click)="closeDeleteModal()" [disabled]="deleteWorking"></button>
       </div>
@@ -245,7 +245,7 @@
         <button type="button" class="btn btn-outline-secondary" (click)="closeDeleteModal()" [disabled]="deleteWorking">Cancel</button>
         <button type="button" class="btn btn-danger" (click)="confirmDelete()" [disabled]="deleteWorking">
           <span *ngIf="deleteWorking" class="spinner-border spinner-border-sm me-2" role="status"></span>
-          Delete entry
+          Delete file
         </button>
       </div>
     </div>
@@ -253,8 +253,9 @@
 </div>
 
 <div class="modal fade stream-modal" tabindex="-1" role="dialog" [ngClass]="{'show': streamModalOpen, 'minimized': streamModalOpen && streamMinimized}" [ngStyle]="{'display': streamModalOpen ? 'block' : 'none'}">
-  <div class="modal-dialog" role="document" [ngClass]="{
-      'modal-lg': !streamMinimized,
+  <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down" role="document" [ngClass]="{
+      'modal-xl': !streamMinimized,
+      'modal-sm': streamMinimized,
       'minimized': streamMinimized,
       'dock-left': streamMinimized && streamDockSide === 'left',
       'dock-right': streamMinimized && streamDockSide === 'right'

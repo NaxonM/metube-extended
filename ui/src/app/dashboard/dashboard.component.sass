@@ -55,9 +55,22 @@
         transform: translateX(100%) skewX(-15deg)
         opacity: 0
 
-@keyframes download-card-gradient
-    to
-        transform: rotate(360deg)
+@keyframes download-card-aurora
+    0%
+        transform: translate3d(-38%, -28%, 0) scale(1)
+    50%
+        transform: translate3d(32%, 26%, 0) scale(1.05)
+    100%
+        transform: translate3d(-38%, -28%, 0) scale(1)
+
+@keyframes download-card-sheen
+    0%
+        transform: translateX(-130%) skewX(-12deg)
+    55%
+        opacity: 0.75
+    100%
+        transform: translateX(150%) skewX(-12deg)
+        opacity: 0
 .supported-sites-modal .modal-body
     display: flex
     flex-direction: column
@@ -1587,72 +1600,88 @@ button.add-url
     gap: 0.85rem
     padding: 1rem
     border-radius: 1rem
-    border: 1px solid transparent
-    background: transparent
+    background: linear-gradient(135deg, rgba(8, 14, 28, 0.94), rgba(3, 7, 18, 0.88))
+    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 24px 48px -30px rgba(3, 7, 18, 0.9)
     overflow: hidden
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, filter 0.2s ease
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease, filter 0.3s ease
     z-index: 0
 
 .download-card::before
     content: ''
     position: absolute
-    inset: -150%
-    border-radius: 50%
-    background: conic-gradient(from 0deg, rgba(34, 211, 238, 0.7), rgba(99, 102, 241, 0.7), rgba(236, 72, 153, 0.7), rgba(34, 211, 238, 0.7))
-    animation: download-card-gradient 8s linear infinite
-    opacity: 0.55
+    inset: -60%
+    background: radial-gradient(circle at 20% 20%, rgba(56, 189, 248, 0.55), transparent 55%), radial-gradient(circle at 80% 30%, rgba(244, 114, 182, 0.45), transparent 60%), radial-gradient(circle at 40% 80%, rgba(99, 102, 241, 0.5), transparent 55%)
+    filter: blur(120px)
+    opacity: 0.5
+    animation: download-card-aurora 22s ease-in-out infinite
+    transition: opacity 0.5s ease
+    pointer-events: none
     z-index: 0
 
 .download-card::after
     content: ''
     position: absolute
-    inset: 1px
-    border-radius: calc(1rem - 1px)
-    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.035)
-    border: 1px solid rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
-    z-index: 0
+    top: -25%
+    bottom: -25%
+    left: -20%
+    width: 60%
+    background: linear-gradient(120deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.05))
+    opacity: 0
+    transform: translateX(-130%) skewX(-12deg)
+    transition: opacity 0.45s ease
+    mix-blend-mode: screen
+    pointer-events: none
+    z-index: 1
 
 .download-card > *
     position: relative
-    z-index: 1
+    z-index: 2
 
 .download-card:hover
-    box-shadow: 0 16px 32px -20px rgba(15, 23, 42, 0.45)
-    transform: translateY(-2px)
-    filter: brightness(1.05)
+    transform: translateY(-4px)
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 32px 56px -28px rgba(12, 19, 45, 0.9)
+    border-color: rgba(59, 130, 246, 0.35)
+    filter: brightness(1.04)
 
 .download-card:hover::before
-    opacity: 0.85
+    opacity: 0.75
 
 .download-card:hover::after
-    border-color: rgba(var(--bs-primary-rgb, 13,110,253), 0.32)
-    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.06)
+    opacity: 0.45
+    animation: download-card-sheen 1.4s ease forwards
 
 .download-card.is-disabled
-    opacity: 0.55
+    opacity: 0.65
+    filter: grayscale(0.15)
     pointer-events: none
 
 .download-card.is-disabled::before
     opacity: 0.2
 
 .download-card.is-disabled::after
-    background: rgba(var(--bs-body-color-rgb, 255,255,255), 0.045)
-    border-color: rgba(var(--bs-body-color-rgb, 255,255,255), 0.08)
+    opacity: 0
 
 [data-bs-theme="light"] .download-card
-    background: transparent
-    border-color: transparent
+    background: linear-gradient(135deg, rgba(248, 250, 252, 0.95), rgba(226, 232, 240, 0.92))
+    border-color: rgba(148, 163, 184, 0.28)
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 22px 48px -28px rgba(148, 163, 184, 0.35)
+
+[data-bs-theme="light"] .download-card::before
+    opacity: 0.45
+
+[data-bs-theme="light"] .download-card:hover
+    border-color: rgba(59, 130, 246, 0.45)
 
 [data-bs-theme="light"] .download-card::after
-    background: rgba(248, 250, 252, 0.9)
-    border-color: rgba(96, 165, 250, 0.35)
-
-[data-bs-theme="light"] .download-card:hover::after
-    background: rgba(248, 250, 252, 0.96)
-    border-color: rgba(37, 99, 235, 0.45)
+    background: linear-gradient(120deg, rgba(255, 255, 255, 0.9), rgba(148, 163, 184, 0.15))
 
 @media (prefers-reduced-motion: reduce)
     .download-card::before
+        animation: none
+    .download-card:hover::after
+        animation: none
+    .download-card:hover::after
         animation: none
 
 @media (max-width: 991.98px)

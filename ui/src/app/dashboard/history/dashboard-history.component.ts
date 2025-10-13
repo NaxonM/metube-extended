@@ -472,21 +472,13 @@ export class DashboardHistoryComponent implements OnInit, AfterViewInit, OnDestr
   private buildStreamFallbackLink(id: string): string {
     const encoded = encodeURIComponent(id);
     const relative = `stream?id=${encoded}`;
-    try {
-      return new URL(relative, window.location.href).toString();
-    } catch {
-      return relative;
-    }
+    return this.downloads.buildApiUrl(relative);
   }
 
   private buildHlsLink(id: string): string {
     const token = this.encodeStreamToken(id);
     const relative = `stream/hls/${token}/index.m3u8`;
-    try {
-      return new URL(relative, window.location.href).toString();
-    } catch {
-      return relative;
-    }
+    return this.downloads.buildApiUrl(relative);
   }
 
   private encodeStreamToken(value: string): string {
@@ -542,15 +534,18 @@ export class DashboardHistoryComponent implements OnInit, AfterViewInit, OnDestr
         this.streamLoading = false;
         videoEl.play().catch(() => undefined);
       });
-      instance.on(Hls.Events.ERROR, (_event, data) => {
+      instance.on(Hls.Events.ERROR, (_event: unknown, data: any) => {
         if (!data?.fatal) {
           return;
         }
-        this.streamError = 'Adaptive stream encountered an error. Falling back to original file.';
+        const status = typeof data?.response?.code === 'number' ? data.response.code : undefined;
+        const text = typeof data?.response?.text === 'string' ? data.response.text : undefined;
+        this.streamError = this.buildAdaptiveError(status, text, true);
         this.startFallbackVideoPlayback(videoEl, fallbackSource);
       });
-    } catch {
-      this.streamError = 'Adaptive stream is unavailable. Playing original file.';
+    } catch (error) {
+      const message = error instanceof Error ? error.message : undefined;
+      this.streamError = this.buildAdaptiveError(undefined, message, true);
       this.startFallbackVideoPlayback(videoEl, fallbackSource);
     }
   }
@@ -569,7 +564,7 @@ export class DashboardHistoryComponent implements OnInit, AfterViewInit, OnDestr
     const onError = () => {
       this.streamLoading = false;
       if (!this.streamError) {
-        this.streamError = 'Unable to load audio stream. Please download the file instead.';
+        this.streamError = this.buildAdaptiveError(undefined, 'Unable to load audio stream. Please download the file instead.');
       }
     };
     audioEl.addEventListener('canplay', onReady, { once: true });
@@ -586,7 +581,8 @@ export class DashboardHistoryComponent implements OnInit, AfterViewInit, OnDestr
     };
     const onError = () => {
       if (!this.streamError) {
-        this.streamError = 'Unable to play adaptive stream. Falling back to original file.';
+        const mediaMessage = videoEl.error?.message || undefined;
+        this.streamError = this.buildAdaptiveError(undefined, mediaMessage, true);
       }
       this.startFallbackVideoPlayback(videoEl, fallbackSource);
     };
@@ -628,6 +624,22 @@ export class DashboardHistoryComponent implements OnInit, AfterViewInit, OnDestr
       return;
     }
     this.hlsInstance = null;
+  }
+
+  private buildAdaptiveError(status?: number, text?: string, includeFallbackNote: boolean = false): string {
+    const message = this.formatAdaptiveError(status, text);
+    return includeFallbackNote ? `${message} Falling back to original file.` : message;
+  }
+
+  private formatAdaptiveError(status?: number, text?: string): string {
+    const trimmed = text?.toString().trim();
+    if (trimmed) {
+      return trimmed;
+    }
+    if (status) {
+      return `Adaptive streaming failed (HTTP ${status}).`;
+    }
+    return 'Adaptive streaming is unavailable.';
   }
 
 }

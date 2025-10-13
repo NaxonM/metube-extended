@@ -3,6 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, of, Subject, BehaviorSubject } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
 import { MeTubeSocket } from './metube-socket';
+import { buildApiUrl } from './api-base.util';
 
 export interface GalleryDlPrompt {
   url: string;
@@ -535,6 +536,10 @@ export class DownloadsService {
   handleHTTPError(error: HttpErrorResponse) {
     var msg = error.error instanceof ErrorEvent ? error.error.message : error.error;
     return of({status: 'error', msg: msg})
+  }
+
+  public buildApiUrl(path: string): string {
+    return buildApiUrl(path);
   }
 
   public add(url: string, quality: string, format: string, folder: string, customNamePrefix: string, playlistStrictMode: boolean, playlistItemLimit: number, autoStart: boolean, preferredBackend?: 'ytdlp' | 'gallerydl') {

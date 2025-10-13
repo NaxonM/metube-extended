@@ -1,4 +1,22 @@
 .stream-modal
+  .modal-dialog
+    width: 100%
+    max-width: min(100%, 960px)
+    margin-left: auto
+    margin-right: auto
+  .modal-dialog.minimized
+    max-width: 420px
+  @media (max-width: 576px)
+    .modal-dialog
+      max-width: none
+      margin: 0
+    .modal-content
+      border-radius: 0
+    &__body
+      padding: 1rem
+    &__meta
+      padding: 1rem
+
   &__body
     display: flex
     gap: 1.5rem
