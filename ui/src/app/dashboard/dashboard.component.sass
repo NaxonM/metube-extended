@@ -236,9 +236,6 @@
     border-radius: 999px
     border: 1px solid rgba(248, 250, 252, 0.18)
 
-.nav-theme .dropdown-menu
-    min-width: 10rem
-
 @media (max-width: 991.98px)
     .navbar-inner
         flex-direction: column
@@ -279,6 +276,16 @@
     .nav-theme .nav-link
         width: 100%
         justify-content: center
+
+.nav-theme
+    position: relative
+    z-index: 5
+
+.nav-theme .dropdown-menu
+    min-width: 10rem
+    margin-top: 0.35rem
+    border-radius: 0.75rem
+    box-shadow: 0 12px 28px -18px rgba(15, 23, 42, 0.45)
 
 .page-shell
     padding-bottom: clamp(3rem, 8vw, 4.5rem)
