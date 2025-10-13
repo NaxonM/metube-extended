@@ -153,6 +153,8 @@ class Config:
         'STREAM_TRANSCODE_ENABLED': 'true',
         'STREAM_TRANSCODE_TTL_SECONDS': '1200',
         'STREAM_TRANSCODE_FFMPEG': 'ffmpeg',
+        'STREAM_TRANSCODE_CPU_LIMIT_PERCENT': '30',
+        'STREAM_TRANSCODE_MEMORY_LIMIT_PERCENT': '40',
     }
 
     _BOOLEAN = ('DOWNLOAD_DIRS_INDEXABLE', 'CUSTOM_DIRS', 'CREATE_CUSTOM_DIRS', 'DELETE_FILE_ON_TRASHCAN', 'DEFAULT_OPTION_PLAYLIST_STRICT_MODE', 'HTTPS', 'ENABLE_ACCESSLOG', 'PROXY_DOWNLOAD_LIMIT_ENABLED', 'STREAM_TRANSCODE_ENABLED')
@@ -529,11 +531,28 @@ try:
     ttl_seconds = int(getattr(config, 'STREAM_TRANSCODE_TTL_SECONDS', 1200))
 except (TypeError, ValueError):
     ttl_seconds = 1200
+
+def _coerce_percent(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return None
+    if num <= 0:
+        return None
+    return num
+
+cpu_limit_percent = _coerce_percent(getattr(config, 'STREAM_TRANSCODE_CPU_LIMIT_PERCENT', None))
+memory_limit_percent = _coerce_percent(getattr(config, 'STREAM_TRANSCODE_MEMORY_LIMIT_PERCENT', None))
+
 stream_hls_manager = HlsStreamManager(
     os.path.join(config.STATE_DIR, 'hls'),
     ffmpeg_path=getattr(config, 'STREAM_TRANSCODE_FFMPEG', 'ffmpeg'),
     enabled=bool(getattr(config, 'STREAM_TRANSCODE_ENABLED', True)),
     ttl_seconds=max(ttl_seconds, 300),
+    cpu_limit_percent=cpu_limit_percent,
+    memory_limit_percent=memory_limit_percent,
 )
 
 
@@ -2036,13 +2055,38 @@ async def stream_hls_playlist(request):
         if status_changed:
             await sio.emit('configuration', serializer.encode(config), room=f'user:{user_id}')
         message = str(exc) or 'Adaptive streaming is not available'
+        log.info(
+            'Adaptive streaming unavailable (playlist): user=%s download=%s reason=%s',
+            user_id,
+            download_id,
+            message,
+        )
         raise web.HTTPNotFound(text=message)
     except HlsGenerationError as exc:
+        log.error(
+            'Adaptive streaming failed during generation (playlist): user=%s download=%s error=%s',
+            user_id,
+            download_id,
+            exc,
+        )
         raise web.HTTPInternalServerError(text=str(exc))
 
+    log.debug(
+        'Adaptive streaming serving segment: user=%s download=%s segment=%s path=%s',
+        user_id,
+        download_id,
+        segment_name,
+        segment_path,
+    )
     headers = {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
     }
+    log.info(
+        'Adaptive streaming playlist ready: user=%s download=%s manifest=%s',
+        user_id,
+        download_id,
+        session.playlist_path,
+    )
     response = web.FileResponse(session.playlist_path, headers=headers)
     response.content_type = 'application/vnd.apple.mpegurl'
     return response
@@ -2067,8 +2111,22 @@ async def stream_hls_segment(request):
             if status_changed:
                 await sio.emit('configuration', serializer.encode(config), room=f'user:{user_id}')
             message = str(exc) or 'Adaptive streaming is not available'
+            log.info(
+                'Adaptive streaming unavailable (segment): user=%s download=%s segment=%s reason=%s',
+                user_id,
+                download_id,
+                segment_name,
+                message,
+            )
             raise web.HTTPNotFound(text=message)
         except HlsGenerationError as exc:
+            log.error(
+                'Adaptive streaming failed during generation (segment): user=%s download=%s segment=%s error=%s',
+                user_id,
+                download_id,
+                segment_name,
+                exc,
+            )
             raise web.HTTPInternalServerError(text=str(exc))
         segment_path = os.path.join(session.directory, segment_name)
         if not os.path.exists(segment_path):
