@@ -596,7 +596,7 @@ export class DownloadsService {
     this.configurationChanged.next(this.configuration);
   }
 
-  public add(url: string, quality: string, format: string, folder: string, customNamePrefix: string, playlistStrictMode: boolean, playlistItemLimit: number, autoStart: boolean, preferredBackend?: 'ytdlp' | 'gallerydl') {
+  public add(url: string, quality: string, format: string, folder: string, customNamePrefix: string, playlistStrictMode: boolean, playlistItemLimit: number, autoStart: boolean, preferredBackend?: 'ytdlp' | 'gallerydl', ytdlpOptions?: any) {
     const payload: any = {
       url: url,
       quality: quality,
@@ -605,7 +605,8 @@ export class DownloadsService {
       custom_name_prefix: customNamePrefix,
       playlist_strict_mode: playlistStrictMode,
       playlist_item_limit: playlistItemLimit,
-      auto_start: autoStart
+      auto_start: autoStart,
+      ytdlp_options: ytdlpOptions
     };
     if (preferredBackend) {
       payload.preferred_backend = preferredBackend;

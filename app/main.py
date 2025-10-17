@@ -909,6 +909,7 @@ async def add(request):
     playlist_strict_mode = post.get('playlist_strict_mode')
     playlist_item_limit = post.get('playlist_item_limit')
     auto_start = post.get('auto_start')
+    ytdlp_options = post.get('ytdlp_options', {})
 
     session, user_id, queue = await get_user_context(request)
     proxy_queue: Optional[ProxyDownloadManager] = None
@@ -1051,6 +1052,7 @@ async def add(request):
             auto_start,
             cookie_path=cookie_path,
             cookie_profile_id=cookie_profile_id,
+            ytdlp_options=ytdlp_options,
         )
         if cookie_profile_id:
             ytdlp_cookie_store.touch_profile(cookie_profile_id)
