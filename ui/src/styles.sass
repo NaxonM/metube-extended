@@ -8,3 +8,36 @@
 
     [data-bs-theme="dark"] &
         background-color: var(--bs-dark-bg-subtle) !important
+
+.footer
+  padding: 1rem
+  text-align: center
+  font-size: 0.875rem
+  color: var(--bs-secondary-color)
+  background-color: var(--bs-tertiary-bg)
+  border-top: 1px solid var(--bs-border-color)
+
+  .container-fluid
+    display: flex
+    flex-wrap: wrap
+    justify-content: center
+    align-items: center
+    gap: 1rem
+
+  .footer-links
+    display: flex;
+    gap: 1rem;
+
+  .footer-links a
+    color: var(--bs-secondary-color)
+    text-decoration: none
+
+    &:hover
+      color: var(--bs-primary)
+      text-decoration: underline
+
+  .version-info
+    display: flex
+    flex-wrap: wrap
+    gap: 1.5rem
+    justify-content: center

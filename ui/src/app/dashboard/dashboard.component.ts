@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { CookieService } from 'ngx-cookie-service';
 
-import { faDownload, faClock, faCheck, faTimesCircle, faTachometerAlt, faSun, faMoon, faCircleHalfStroke, faRightFromBracket, faUserShield, faTools } from '@fortawesome/free-solid-svg-icons';
+import { faDownload, faClock, faCheck, faTimesCircle, faTachometerAlt, faSun, faMoon, faCircleHalfStroke, faRightFromBracket, faUserShield } from '@fortawesome/free-solid-svg-icons';
 
 import { DownloadsService, CurrentUser, DownloadMetrics } from '../downloads.service';
 import { Theme, Themes } from '../theme';
@@ -42,7 +42,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
   faCircleHalfStroke = faCircleHalfStroke;
   faRightFromBracket = faRightFromBracket;
   faUserShield = faUserShield;
-  faTools = faTools;
 
   private metricsSubscription?: Subscription;
   private themeMediaQuery?: MediaQueryList;
