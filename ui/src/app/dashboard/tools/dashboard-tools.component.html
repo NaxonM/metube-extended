@@ -124,133 +124,6 @@
                   </div>
                 </div>
               </section>
-              <section class="advanced-tile">
-                <header class="advanced-tile__header">
-                  <span class="advanced-tile__icon">
-                    <fa-icon [icon]="faClosedCaptioning"></fa-icon>
-                  </span>
-                  <div>
-                    <h6 class="advanced-tile__title">Subtitles</h6>
-                    <p class="advanced-tile__meta">Configure subtitle downloads.</p>
-                  </div>
-                </header>
-                <div class="advanced-tile__body">
-                  <div class="advanced-toggle">
-                    <div class="advanced-toggle__control">
-                      <div class="form-check form-switch">
-                        <input class="form-check-input"
-                               type="checkbox"
-                               role="switch"
-                               name="writeSubs"
-                               [(ngModel)]="writeSubs"
-                               [disabled]="addInProgress || downloads.loading"
-                               ngbTooltip="Download subtitles">
-                        <label class="form-check-label">Write subtitles</label>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="advanced-toggle">
-                    <div class="advanced-toggle__control">
-                      <div class="form-check form-switch">
-                        <input class="form-check-input"
-                               type="checkbox"
-                               role="switch"
-                               name="writeAutoSubs"
-                               [(ngModel)]="writeAutoSubs"
-                               [disabled]="addInProgress || downloads.loading"
-                               ngbTooltip="Download automatic subtitles">
-                        <label class="form-check-label">Write automatic subtitles</label>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="advanced-field">
-                    <label class="advanced-field__label">Subtitle languages</label>
-                    <input type="text"
-                           class="form-control"
-                           placeholder="en,es"
-                           name="subLangs"
-                           [(ngModel)]="subLangs"
-                           [disabled]="addInProgress || downloads.loading"
-                           ngbTooltip="Comma-separated list of language codes">
-                  </div>
-                </div>
-              </section>
-              <section class="advanced-tile">
-                <header class="advanced-tile__header">
-                  <span class="advanced-tile__icon">
-                    <fa-icon [icon]="faTags"></fa-icon>
-                  </span>
-                  <div>
-                    <h6 class="advanced-tile__title">Metadata &amp; Thumbnails</h6>
-                    <p class="advanced-tile__meta">Control how metadata is handled.</p>
-                  </div>
-                </header>
-                <div class="advanced-tile__body">
-                  <div class="advanced-toggle">
-                    <div class="advanced-toggle__control">
-                      <div class="form-check form-switch">
-                        <input class="form-check-input"
-                               type="checkbox"
-                               role="switch"
-                               name="embedThumbnail"
-                               [(ngModel)]="embedThumbnail"
-                               [disabled]="addInProgress || downloads.loading"
-                               ngbTooltip="Embed thumbnail in the video as cover art">
-                        <label class="form-check-label">Embed thumbnail</label>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="advanced-toggle">
-                    <div class="advanced-toggle__control">
-                      <div class="form-check form-switch">
-                        <input class="form-check-input"
-                               type="checkbox"
-                               role="switch"
-                               name="embedMetadata"
-                               [(ngModel)]="embedMetadata"
-                               [disabled]="addInProgress || downloads.loading"
-                               ngbTooltip="Embed metadata to the video file">
-                        <label class="form-check-label">Embed metadata</label>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-              <section class="advanced-tile">
-                <header class="advanced-tile__header">
-                  <span class="advanced-tile__icon">
-                    <fa-icon [icon]="faCog"></fa-icon>
-                  </span>
-                  <div>
-                    <h6 class="advanced-tile__title">Download Control</h6>
-                    <p class="advanced-tile__meta">Fine-tune the download process.</p>
-                  </div>
-                </header>
-                <div class="advanced-tile__body">
-                  <div class="advanced-field">
-                    <label class="advanced-field__label">Limit rate</label>
-                    <input type="text"
-                           class="form-control"
-                           placeholder="50K or 4.2M"
-                           name="limitRate"
-                           [(ngModel)]="limitRate"
-                           [disabled]="addInProgress || downloads.loading"
-                           ngbTooltip="Maximum download rate in bytes per second">
-                  </div>
-                  <div class="advanced-field">
-                    <label class="advanced-field__label">Retries</label>
-                    <input type="number"
-                           min="0"
-                           class="form-control"
-                           placeholder="10"
-                           name="retries"
-                           (keydown)="isNumber($event)"
-                           [(ngModel)]="retries"
-                           [disabled]="addInProgress || downloads.loading"
-                           ngbTooltip="Number of retries for a failed download">
-                  </div>
-                </div>
-              </section>
 
               <section class="advanced-tile">
                 <header class="advanced-tile__header">
@@ -273,7 +146,7 @@
                            [disabled]="addInProgress || downloads.loading"
                            ngbTooltip="Add a prefix to downloaded filenames">
                   </div>
-                  <div class="advanced-field">
+                  <div class.advanced-field>
                     <label class="advanced-field__label">Items limit</label>
                     <input type="number"
                            min="0"
@@ -285,6 +158,99 @@
                            [disabled]="addInProgress || downloads.loading"
                            ngbTooltip="Maximum number of items to download from a playlist (0 = no limit)">
                     <span class="advanced-field__hint">Set to 0 to keep the playlist default.</span>
+                  </div>
+                </div>
+              </section>
+
+              <section class="advanced-tile">
+                <header class="advanced-tile__header">
+                  <span class="advanced-tile__icon">
+                    <fa-icon [icon]="faClosedCaptioning"></fa-icon>
+                  </span>
+                  <div>
+                    <h6 class="advanced-tile__title">Subtitles</h6>
+                    <p class="advanced-tile__meta">Configure subtitle and metadata embedding.</p>
+                  </div>
+                </header>
+                <div class="advanced-tile__body">
+                  <div class="advanced-toggle">
+                    <div class="advanced-toggle__control">
+                      <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" name="writeSubs" [(ngModel)]="ytdlpOptions['write-subs']">
+                        <label class="form-check-label">Download subtitles</label>
+                      </div>
+                    </div>
+                    <p class="advanced-toggle__hint">Downloads available subtitles from the source.</p>
+                  </div>
+                  <div class="advanced-toggle">
+                    <div class="advanced-toggle__control">
+                      <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" name="writeAutoSubs" [(ngModel)]="ytdlpOptions['write-auto-subs']">
+                        <label class="form-check-label">Download automatic subtitles</label>
+                      </div>
+                    </div>
+                    <p class="advanced-toggle__hint">Downloads auto-generated subtitles if available.</p>
+                  </div>
+                  <div class="advanced-field">
+                    <label class="advanced-field__label">Subtitle languages</label>
+                    <input type="text" class="form-control" name="subLangs" [(ngModel)]="ytdlpOptions['sub-langs']" placeholder="en,es,fr">
+                    <span class="advanced-field__hint">e.g., en,es (defaults to all if empty)</span>
+                  </div>
+                </div>
+              </section>
+
+              <section class="advanced-tile">
+                <header class="advanced-tile__header">
+                  <span class="advanced-tile__icon">
+                    <fa-icon [icon]="faTags"></fa-icon>
+                  </span>
+                  <div>
+                    <h6 class="advanced-tile__title">Metadata</h6>
+                    <p class="advanced-tile__meta">Control how metadata is handled for downloads.</p>
+                  </div>
+                </header>
+                <div class="advanced-tile__body">
+                  <div class="advanced-toggle">
+                    <div class="advanced-toggle__control">
+                      <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" name="embedThumbnail" [(ngModel)]="ytdlpOptions['embed-thumbnail']">
+                        <label class="form-check-label">Embed thumbnail</label>
+                      </div>
+                    </div>
+                    <p class="advanced-toggle__hint">Embeds thumbnail as cover art.</p>
+                  </div>
+                  <div class="advanced-toggle">
+                    <div class="advanced-toggle__control">
+                      <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" name="embedMetadata" [(ngModel)]="ytdlpOptions['embed-metadata']">
+                        <label class="form-check-label">Embed metadata</label>
+                      </div>
+                    </div>
+                    <p class="advanced-toggle__hint">Writes media metadata to the file.</p>
+                  </div>
+                </div>
+              </section>
+
+              <section class="advanced-tile">
+                <header class="advanced-tile__header">
+                  <span class="advanced-tile__icon">
+                    <fa-icon [icon]="faGaugeHigh"></fa-icon>
+                  </span>
+                  <div>
+                    <h6 class="advanced-tile__title">Performance</h6>
+                    <p class="advanced-tile__meta">Adjust network and retry settings.</p>
+                  </div>
+                </header>
+                <div class="advanced-tile__body">
+                  <div class="advanced-field">
+                    <label class="advanced-field__label">Download rate limit</label>
+                    <input type="text" class="form-control" name="limitRate" [(ngModel)]="ytdlpOptions['limit-rate']" placeholder="50K or 4.2M">
+                    <span class="advanced-field__hint">e.g., 50K, 4.2M (no limit if empty)</span>
+                  </div>
+                  <div class="advanced-field">
+                    <label class="advanced-field__label">Download retries</label>
+                    <input type="text" class="form-control" name="retries" [(ngModel)]="ytdlpOptions['retries']" placeholder="10 or infinite">
+                    <span class="advanced-field__hint">e.g., 10, infinite (default is 10)</span>
                   </div>
                 </div>
               </section>

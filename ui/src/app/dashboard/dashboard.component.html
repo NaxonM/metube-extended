@@ -29,14 +29,6 @@
       </div>
     </div>
     <div class="nav-actions">
-      <button class="btn btn-link nav-link"
-              type="button"
-              *ngIf="isAdmin"
-              (click)="navigateToAdmin()"
-              ngbTooltip="Admin Tools"
-              container="body">
-        <fa-icon [icon]="faTools"></fa-icon>
-      </button>
       <div class="nav-session" *ngIf="currentUser">
         <span class="nav-session__label">Signed in as</span>
         <span class="nav-session__user">
@@ -44,6 +36,13 @@
           {{ currentUser?.username }}
         </span>
       </div>
+      <button *ngIf="isAdmin"
+              type="button"
+              class="btn btn-sm btn-outline-light nav-admin"
+              (click)="tools.navigateToAdmin()">
+        <fa-icon [icon]="faUserShield"></fa-icon>
+        Admin
+      </button>
       <a class="btn btn-outline-light btn-sm nav-logout" href="logout" *ngIf="currentUser">
         <fa-icon [icon]="faRightFromBracket"></fa-icon>
         Logout
@@ -85,18 +84,29 @@
   <app-dashboard-queue></app-dashboard-queue>
 
   <app-dashboard-history [tools]="tools"></app-dashboard-history>
-</main>
 
-<footer class="footer">
-  <div class="container-fluid">
-    <div class="footer-links">
-      <a href="https://github.com/NaxonM/metube-extended/" target="_blank" rel="noopener noreferrer">GitHub</a>
+  <footer class="footer">
+    <div class="footer__versions">
+      <div class="footer__version" *ngIf="metubeVersion">
+        <span class="footer__version-label">MeTube</span>
+        <span class="footer__version-value">{{ metubeVersion }}</span>
+      </div>
+      <div class="footer__version" *ngIf="ytdlpVersion">
+        <span class="footer__version-label">yt-dlp</span>
+        <span class="footer__version-value">{{ ytdlpVersion }}</span>
+      </div>
+      <div class="footer__version" *ngIf="galleryDlVersion">
+        <span class="footer__version-label">gallery-dl</span>
+        <span class="footer__version-value">{{ galleryDlVersion }}</span>
+      </div>
+      <div class="footer__version" *ngIf="ytdlpOptionsUpdateTime">
+        <span class="footer__version-label">Options updated</span>
+        <span class="footer__version-value">{{ ytdlpOptionsUpdateTime }}</span>
+      </div>
     </div>
-    <div class="version-info">
-      <span *ngIf="ytDlpVersion">yt-dlp version: {{ ytDlpVersion }}</span>
-      <span *ngIf="galleryDlVersion">gallery-dl version: {{ galleryDlVersion }}</span>
-      <span *ngIf="metubeVersion">MeTube version: {{ metubeVersion }}</span>
-      <span *ngIf="ytDlpOptionsUpdateTime">yt-dlp options updated: {{ ytDlpOptionsUpdateTime | date:'short' }}</span>
+    <div class="footer__links">
+      <a href="https://github.com/alexta69/metube" target="_blank" rel="noopener noreferrer" class="footer__link">GitHub</a>
+      <a href="https://github.com/alexta69/metube/wiki" target="_blank" rel="noopener noreferrer" class="footer__link">Docs</a>
     </div>
-  </div>
-</footer>
+  </footer>
+</main>

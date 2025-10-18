@@ -184,29 +184,26 @@ def _resolve_domains(executable_path: Optional[str]) -> Tuple[str, ...]:
 
 
 def is_gallerydl_supported(url: str, executable_path: Optional[str] = None) -> bool:
-    if not url:
-        return False
-    for candidate in _candidate_executables(executable_path):
+    module = _ensure_gallerydl_module()
+    if module:
         try:
-            # Use --simulate to check if gallery-dl can handle the URL without downloading.
-            # This is more reliable than matching against a static list of domains.
-            subprocess.run(
-                [candidate, "--simulate", url],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            # If the command succeeds (doesn't raise), the URL is supported.
-            return True
-        except FileNotFoundError:
-            continue  # Try the next candidate if this one isn't found
-        except subprocess.CalledProcessError:
-            # A non-zero exit code means the URL is not supported
-            return False
-        except Exception as exc:
-            log.warning("Failed to check gallery-dl support for %s: %s", url, exc)
-            return False
-    return False
+            from gallery_dl.extractor import find  # type: ignore
+
+            return find(url) is not None
+        except Exception:  # pragma: no cover - defensive
+            pass
+
+    host = _extract_host(url)
+    if not host:
+        return False
+
+    domains = _resolve_domains(executable_path)
+    if not domains:
+        log.info("gallery-dl support check: no domains resolved for executable %s", executable_path)
+        return False
+    result = any(host == domain or host.endswith(f".{domain}") for domain in domains)
+    log.info("gallery-dl support check: host=%s match=%s", host, result)
+    return result
 
 
 def list_gallerydl_sites(executable_path: Optional[str] = None) -> List[str]:
@@ -409,10 +406,10 @@ class GalleryDlManager:
     # Public API
     # ------------------------------------------------------------------
     def get(self) -> Tuple[List[Tuple[str, DownloadInfo]], List[Tuple[str, DownloadInfo]]]:
-        queue_items = [(job.info.uid, job.info) for job in self.queue.values()] + [
-            (job.info.uid, job.info) for job in self.pending.values()
+        queue_items = [(key, job.info) for key, job in self.queue.items()] + [
+            (key, job.info) for key, job in self.pending.items()
         ]
-        done_items = [(job.info.uid, job.info) for job in self.done.values()]
+        done_items = [(key, job.info) for key, job in self.done.items()]
         return queue_items, done_items
 
     async def add_job(
@@ -434,12 +431,14 @@ class GalleryDlManager:
         download_archive: bool = False,
         archive_id: Optional[str] = None,
     ) -> Dict[str, Any]:
+        job_id = uuid.uuid4().hex
+        storage_key = f"gallerydl:{job_id}"
         display_title = title or url
 
         info = DownloadInfo(
+            job_id,
             display_title,
-            display_title,
-            url,
+            storage_key,
             "gallery",
             "zip",
             folder="",
@@ -473,38 +472,38 @@ class GalleryDlManager:
             download_archive=download_archive,
             archive_id=archive_id,
         )
-        self.pending[info.uid] = job
+        self.pending[storage_key] = job
         await self.notifier.added(info)
 
         if auto_start:
-            await self.start_jobs([info.uid])
-        return {"status": "ok", "id": info.uid}
+            await self.start_jobs([storage_key])
+        return {"status": "ok", "id": storage_key}
 
     async def start_jobs(self, ids: Iterable[str]) -> Dict[str, Any]:
-        for uid in ids:
-            job = self.pending.pop(uid, None)
+        for storage_key in ids:
+            job = self.pending.pop(storage_key, None)
             if not job:
                 continue
-            self.queue[uid] = job
-            await self._start_download(uid, job)
+            self.queue[storage_key] = job
+            await self._start_download(storage_key, job)
         return {"status": "ok"}
 
     async def cancel(self, ids: Iterable[str]) -> Dict[str, Any]:
-        for uid in ids:
-            if uid in self.pending:
-                job = self.pending.pop(uid)
+        for storage_key in ids:
+            if storage_key in self.pending:
+                job = self.pending.pop(storage_key)
                 job.info.status = "canceled"
-                await self.notifier.canceled(uid)
+                await self.notifier.canceled(storage_key)
                 continue
-            job = self.queue.get(uid)
+            job = self.queue.get(storage_key)
             if job:
                 job.cancel()
         return {"status": "ok"}
 
     async def clear(self, ids: Iterable[str]) -> Dict[str, Any]:
         deleted, missing, errors = [], [], {}
-        for uid in ids:
-            job = self.done.get(uid)
+        for storage_key in ids:
+            job = self.done.get(storage_key)
             if not job:
                 continue
             file_path = job.archive_path
@@ -513,20 +512,20 @@ class GalleryDlManager:
                     os.remove(file_path)
                     deleted.append(job.info.filename or job.info.title)
                 except OSError as exc:
-                    errors[uid] = str(exc)
+                    errors[storage_key] = str(exc)
                     continue
             else:
                 missing.append(job.info.filename or job.info.title)
-            self.done.pop(uid, None)
-            await self.notifier.cleared(uid)
+            self.done.pop(storage_key, None)
+            await self.notifier.cleared(storage_key)
         self._persist_completed()
         status = {"status": "ok", "deleted": deleted, "missing": missing}
         if errors:
             status.update({"status": "error", "errors": errors, "msg": "Some files could not be removed from disk."})
         return status
 
-    async def rename(self, uid: str, new_name: str) -> Dict[str, Any]:
-        job = self.done.get(uid)
+    async def rename(self, storage_key: str, new_name: str) -> Dict[str, Any]:
+        job = self.done.get(storage_key)
         if not job:
             return {"status": "error", "msg": "Download not found."}
         if not new_name or any(sep in new_name for sep in ("/", "\\")):
@@ -558,20 +557,20 @@ class GalleryDlManager:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-    async def _start_download(self, uid: str, job: GalleryDlJob) -> None:
+    async def _start_download(self, storage_key: str, job: GalleryDlJob) -> None:
         job.info.status = "preparing"
         await self.notifier.updated(job.info)
 
         async def runner():
             if self._semaphore:
                 async with self._semaphore:
-                    await self._run_job(uid, job)
+                    await self._run_job(storage_key, job)
             else:
-                await self._run_job(uid, job)
+                await self._run_job(storage_key, job)
 
         job._task = asyncio.create_task(runner())
 
-    async def _run_job(self, uid: str, job: GalleryDlJob) -> None:
+    async def _run_job(self, storage_key: str, job: GalleryDlJob) -> None:
         job.temp_dir = tempfile.mkdtemp(prefix="gallerydl-", dir=getattr(self.config, "TEMP_DIR", None))
         base_directory = job.temp_dir
         job._temp_dir_prefix = os.path.normpath(job.temp_dir) + os.sep
@@ -582,11 +581,11 @@ class GalleryDlManager:
         except Exception as exc:
             job.info.status = "error"
             job.info.msg = str(exc)
-            await self._finalize_failure(uid, job)
+            await self._finalize_failure(storage_key, job)
             self._cleanup_temp(job)
             return
 
-        log.info("Starting gallery-dl job %s: %s", uid, cmd)
+        log.info("Starting gallery-dl job %s: %s", storage_key, cmd)
         try:
             job.info.status = "preparing"
             job.info.msg = "Analyzing gallery"
@@ -598,7 +597,7 @@ class GalleryDlManager:
                 job.info.status = "canceled"
                 job.info.msg = "Download canceled"
                 await self.notifier.updated(job.info)
-                self.queue.pop(uid, None)
+                self.queue.pop(storage_key, None)
                 self._cleanup_temp(job)
                 return
 
@@ -631,14 +630,14 @@ class GalleryDlManager:
                 job.info.status = "canceled"
                 job.info.msg = "Download canceled"
                 await self.notifier.updated(job.info)
-                self.queue.pop(uid, None)
+                self.queue.pop(storage_key, None)
                 self._cleanup_temp(job)
                 return
 
             if returncode != 0:
                 log.error(
                     "gallery-dl job %s failed with exit code %s\nCommand: %s\nOutput:\n%s",
-                    uid,
+                    storage_key,
                     returncode,
                     cmd,
                     "\n".join(stdout_chunks),
@@ -646,14 +645,14 @@ class GalleryDlManager:
                 job.info.status = "error"
                 job.info.msg = f"gallery-dl exited with code {returncode}"
                 job.info.log = "\n".join(stdout_chunks)
-                await self._finalize_failure(uid, job)
+                await self._finalize_failure(storage_key, job)
                 return
 
             archive_path = await asyncio.get_running_loop().run_in_executor(None, self._archive_results, job)
             if not archive_path:
                 job.info.status = "error"
                 job.info.msg = "Failed to package gallery-dl results"
-                await self._finalize_failure(uid, job)
+                await self._finalize_failure(storage_key, job)
                 return
 
             job.archive_path = archive_path
@@ -667,15 +666,15 @@ class GalleryDlManager:
             job.info.percent = 100.0
             job.info.timestamp = time.time_ns()
 
-            self.queue.pop(uid, None)
-            self.done[uid] = job
+            self.queue.pop(storage_key, None)
+            self.done[storage_key] = job
             self._persist_completed()
             await self.notifier.completed(job.info)
         except Exception as exc:
             log.error("gallery-dl job failed: %s", exc)
             job.info.status = "error"
             job.info.msg = str(exc)
-            await self._finalize_failure(uid, job)
+            await self._finalize_failure(storage_key, job)
         finally:
             self._cleanup_temp(job)
 
@@ -924,11 +923,11 @@ class GalleryDlManager:
             return exec_path
         return exec_path
 
-    async def _finalize_failure(self, uid: str, job: GalleryDlJob) -> None:
+    async def _finalize_failure(self, storage_key: str, job: GalleryDlJob) -> None:
         await self.notifier.updated(job.info)
-        self.queue.pop(uid, None)
+        self.queue.pop(storage_key, None)
         job.info.timestamp = time.time_ns()
-        self.done[uid] = job
+        self.done[storage_key] = job
         self._persist_completed()
         await self.notifier.completed(job.info)
 
@@ -978,13 +977,14 @@ class GalleryDlManager:
             return
 
         for record in data:
-            uid = record.get("uid")
-            if not uid:
+            job_id = record.get("id")
+            storage_key = record.get("storage_key")
+            if not job_id or not storage_key:
                 continue
             info = DownloadInfo(
-                record.get("id"),
-                record.get("title") or record.get("id"),
-                record.get("url"),
+                job_id,
+                record.get("title") or job_id,
+                storage_key,
                 record.get("quality", "gallery"),
                 record.get("format", "zip"),
                 folder="",
@@ -996,7 +996,6 @@ class GalleryDlManager:
                 user_id=None,
                 original_url=record.get("original_url"),
                 provider="gallerydl",
-                uid=uid
             )
             info.status = record.get("status", "finished")
             info.filename = record.get("filename")
@@ -1022,19 +1021,19 @@ class GalleryDlManager:
                 archive_id=record.get("archive_id"),
             )
             job.archive_path = record.get("archive_path")
-            self.done[uid] = job
+            self.done[storage_key] = job
         if self._enforce_history_limit():
             self._persist_completed()
 
     def _persist_completed(self) -> None:
         self._enforce_history_limit()
         data = []
-        for uid, job in self.done.items():
+        for storage_key, job in self.done.items():
             info = job.info
             data.append(
                 {
-                    "uid": uid,
                     "id": info.id,
+                    "storage_key": storage_key,
                     "title": info.title,
                     "filename": info.filename,
                     "size": info.size,

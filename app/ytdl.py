@@ -669,7 +669,7 @@ class DownloadQueue:
 
         if etype.startswith('url'):
             log.debug('Processing as an url')
-            return await self.add(entry['url'], quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already, cookie_path, cookie_profile_id, ytdlp_options)
+            return await self.add(entry['url'], quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already, cookie_path, cookie_profile_id)
         elif etype == 'playlist':
             log.debug('Processing as a playlist')
             entries = entry['entries']
@@ -789,9 +789,9 @@ class DownloadQueue:
         return response
 
     def get(self):
-        return (list((k, v.info) for k, v in self.queue.items()) +
-                list((k, v.info) for k, v in self.pending.items()),
-                list((k, v.info) for k, v in self.done.items()))
+        return (list((v.info.uid, v.info) for k, v in self.queue.items()) +
+                list((v.info.uid, v.info) for k, v in self.pending.items()),
+                list((v.info.uid, v.info) for k, v in self.done.items()))
 
     async def rename(self, id, new_name):
         if not new_name or not new_name.strip():

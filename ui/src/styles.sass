@@ -1,43 +1,43 @@
-@use "app/dashboard/dashboard.component" as *
-@use "app/admin/admin.component" as *
-
 /* You can add global styles to this file, and also import other style files */
+@import 'bootstrap/scss/bootstrap';
 
-.navbar
-    background-color: var(--bs-dark) !important
+.page-shell {
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+}
 
-    [data-bs-theme="dark"] &
-        background-color: var(--bs-dark-bg-subtle) !important
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 1rem;
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--bs-border-color);
+  font-size: 0.8rem;
+  color: var(--bs-secondary-color);
+}
 
-.footer
-  padding: 1rem
-  text-align: center
-  font-size: 0.875rem
-  color: var(--bs-secondary-color)
-  background-color: var(--bs-tertiary-bg)
-  border-top: 1px solid var(--bs-border-color)
+.footer__versions {
+  display: flex;
+  gap: 1rem;
+}
 
-  .container-fluid
-    display: flex
-    flex-wrap: wrap
-    justify-content: center
-    align-items: center
-    gap: 1rem
+.footer__version-label {
+  font-weight: 600;
+  margin-right: 0.3rem;
+}
 
-  .footer-links
-    display: flex;
-    gap: 1rem;
+.footer__links {
+  display: flex;
+  gap: 1rem;
+}
 
-  .footer-links a
-    color: var(--bs-secondary-color)
-    text-decoration: none
+.footer__link {
+  color: var(--bs-secondary-color);
+  text-decoration: none;
 
-    &:hover
-      color: var(--bs-primary)
-      text-decoration: underline
-
-  .version-info
-    display: flex
-    flex-wrap: wrap
-    gap: 1.5rem
-    justify-content: center
+  &:hover {
+    color: var(--bs-primary);
+    text-decoration: underline;
+  }
+}
