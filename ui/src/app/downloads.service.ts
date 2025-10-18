@@ -293,12 +293,12 @@ export class DownloadsService {
       this.resetMetricsState();
 
       data[0].forEach(entry => {
-        this.queue.set(entry[1].uid, entry[1]);
+        this.queue.set(entry[0], entry[1]);
         this.applyQueueMetrics(undefined, entry[1]);
       });
 
       data[1].forEach(entry => {
-        this.done.set(entry[1].uid, entry[1]);
+        this.done.set(entry[0], entry[1]);
         this.applyDoneMetrics(undefined, entry[1]);
       });
 
