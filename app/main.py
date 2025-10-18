@@ -511,17 +511,13 @@ class DownloadManager:
         queue = await self.get_queue(user_id)
         proxy_queue = await self.get_proxy_queue(user_id)
         gallery_queue = await self.get_gallery_queue(user_id)
-
-        # The .get() methods now return lists of (uid, info) tuples
         primary_queue, primary_done = queue.get()
         proxy_queue_items, proxy_done_items = proxy_queue.get()
         gallery_queue_items, gallery_done_items = gallery_queue.get()
-
-        # Combine the lists
-        combined_queue = primary_queue + proxy_queue_items + gallery_queue_items
-        combined_done = primary_done + proxy_done_items + gallery_done_items
-
-        return (combined_queue, combined_done)
+        return (
+            primary_queue + proxy_queue_items + gallery_queue_items,
+            primary_done + proxy_done_items + gallery_done_items,
+        )
 
 
 download_manager = DownloadManager(

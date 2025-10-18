@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 
-import { faLink, faXmark, faDownload, faSliders, faChevronDown, faChevronUp, faCookieBite, faTriangleExclamation, faCircleInfo, faFileImport, faFileExport, faCopy, faKey, faLayerGroup, faTableColumns, faGrip, faCheckCircle, faClosedCaptioning, faTags, faGaugeHigh } from '@fortawesome/free-solid-svg-icons';
+import { faLink, faXmark, faDownload, faSliders, faChevronDown, faChevronUp, faCookieBite, faTriangleExclamation, faCircleInfo, faFileImport, faFileExport, faCopy, faKey, faLayerGroup, faTableColumns, faGrip, faCheckCircle, faClosedCaptioning, faTags, faCog } from '@fortawesome/free-solid-svg-icons';
 
 import { CookieService } from 'ngx-cookie-service';
 
@@ -52,9 +52,16 @@ export class DashboardToolsComponent implements OnInit {
   faCheckCircle = faCheckCircle;
   faClosedCaptioning = faClosedCaptioning;
   faTags = faTags;
-  faGaugeHigh = faGaugeHigh;
+  faCog = faCog;
 
   addUrl = '';
+  writeSubs = false;
+  writeAutoSubs = false;
+  subLangs = '';
+  embedThumbnail = false;
+  embedMetadata = false;
+  limitRate = '';
+  retries: number;
   formats: Format[] = Formats;
   qualities: Quality[];
   quality = 'best';
@@ -233,8 +240,6 @@ export class DashboardToolsComponent implements OnInit {
     this.addUrl = '';
   }
 
-  ytdlpOptions: any = {};
-
   addDownload(url?: string, quality?: string, format?: string, folder?: string, customNamePrefix?: string, playlistStrictMode?: boolean, playlistItemLimit?: number, autoStart?: boolean, preferredBackend?: 'ytdlp' | 'gallerydl'): void {
     url = (url ?? this.addUrl)?.trim();
     if (!url) {
@@ -248,6 +253,16 @@ export class DashboardToolsComponent implements OnInit {
     playlistStrictMode = playlistStrictMode ?? this.playlistStrictMode;
     playlistItemLimit = playlistItemLimit ?? this.playlistItemLimit;
     autoStart = autoStart ?? this.autoStart;
+
+    const ytdlpOptions = {
+      writeSubs: this.writeSubs,
+      writeAutoSubs: this.writeAutoSubs,
+      subLangs: this.subLangs,
+      embedThumbnail: this.embedThumbnail,
+      embedMetadata: this.embedMetadata,
+      limitRate: this.limitRate,
+      retries: this.retries,
+    };
 
     if (this.isYoutubeUrl(url) && !this.areYoutubeCookiesReady()) {
       const wantsToUpdateCookies = confirm('YouTube downloads require valid cookies. Would you like to open the cookies manager now? Click Cancel to continue without cookies.');
@@ -268,8 +283,8 @@ export class DashboardToolsComponent implements OnInit {
       playlistItemLimit,
       autoStart
     };
-    const options = { ...this.ytdlpOptions };
-    this.downloads.add(url, quality, format, folder, customNamePrefix, playlistStrictMode, playlistItemLimit, autoStart, preferredBackend, options).subscribe({
+
+    this.downloads.add(url, quality, format, folder, customNamePrefix, playlistStrictMode, playlistItemLimit, autoStart, preferredBackend, ytdlpOptions).subscribe({
       next: (status: Status) => {
         this.addInProgress = false;
         if (status.status === 'choose-backend' && status.backend_choice) {
