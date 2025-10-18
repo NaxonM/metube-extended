@@ -190,14 +190,14 @@ def is_gallerydl_supported(url: str, executable_path: Optional[str] = None) -> b
         try:
             # Use --simulate to check if gallery-dl can handle the URL without downloading.
             # This is more reliable than matching against a static list of domains.
-            subprocess.run(
+            result = subprocess.run(
                 [candidate, "--simulate", url],
                 capture_output=True,
                 text=True,
                 check=True,
             )
-            # If the command succeeds (doesn't raise), the URL is supported.
-            return True
+            # If the command succeeds, the URL is supported.
+            return result.returncode == 0
         except FileNotFoundError:
             continue  # Try the next candidate if this one isn't found
         except subprocess.CalledProcessError:

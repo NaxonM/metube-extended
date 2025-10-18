@@ -8,6 +8,7 @@ import multiprocessing
 import logging
 import math
 import re
+import uuid
 
 import yt_dlp.networking.impersonate
 from dl_formats import get_format, get_opts, AUDIO_FORMATS
@@ -44,12 +45,10 @@ class DownloadQueueNotifier:
     async def renamed(self, dl):
         raise NotImplementedError
 
-import uuid
-
 class DownloadInfo:
-    def __init__(self, id, title, url, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookiefile=None, user_id=None, original_url=None, provider='ytdlp', cookie_profile_id=None):
-        self.uid = str(uuid.uuid4())
+    def __init__(self, id, title, url, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookiefile=None, user_id=None, original_url=None, provider='ytdlp', cookie_profile_id=None, ytdlp_options=None):
         self.id = id if len(custom_name_prefix) == 0 else f'{custom_name_prefix}.{id}'
+        self.uid = str(uuid.uuid4())
         self.title = title if len(custom_name_prefix) == 0 else f'{custom_name_prefix}.{title}'
         self.url = url
         self.original_url = original_url or url
@@ -69,6 +68,7 @@ class DownloadInfo:
         self.cookie_profile_id = cookie_profile_id
         self.user_id = user_id
         self.provider = provider
+        self.ytdlp_options = ytdlp_options or {}
         self.cookie_warning = None
         self.cookie_warning_at = None
 
@@ -93,6 +93,8 @@ class Download:
         self.output_template_chapter = output_template_chapter
         self.format = get_format(format, quality)
         self.ytdl_opts = get_opts(format, quality, ytdl_opts)
+        if hasattr(info, 'ytdlp_options') and info.ytdlp_options:
+            self.ytdl_opts.update(info.ytdlp_options)
         if "impersonate" in self.ytdl_opts:
             self.ytdl_opts["impersonate"] = yt_dlp.networking.impersonate.ImpersonateTarget.from_str(self.ytdl_opts["impersonate"])
         self.info = info
@@ -387,7 +389,7 @@ class DownloadQueue:
             self.seq_lock = asyncio.Lock()
         elif self.config.DOWNLOAD_MODE == 'limited':
             self.semaphore = asyncio.Semaphore(int(self.config.MAX_CONCURRENT_DOWNLOADS))
-
+        
         self.done.load()
         if self.max_history_items >= 0:
             self.done.truncate(self.max_history_items)
@@ -595,7 +597,7 @@ class DownloadQueue:
             dldirectory = base_directory
         return dldirectory, None
 
-    async def __add_download(self, dl, auto_start, cookie_path=None, ytdlp_options=None):
+    async def __add_download(self, dl, auto_start, cookie_path=None):
         dldirectory, error_message = self.__calc_download_path(dl.quality, dl.format, dl.folder)
         if error_message is not None:
             return error_message
@@ -608,25 +610,19 @@ class DownloadQueue:
             for property, value in entry.items():
                 if property.startswith("playlist"):
                     output = output.replace(f"%({property})s", str(value))
-
-        # Merge global, per-request, and other dynamic options
-        final_ytdl_options = dict(self.config.YTDL_OPTIONS)
-        if ytdlp_options:
-            final_ytdl_options.update(ytdlp_options)
-
+        ytdl_options = dict(self.config.YTDL_OPTIONS)
         playlist_item_limit = getattr(dl, 'playlist_item_limit', 0)
         if playlist_item_limit > 0:
             log.info(f'playlist limit is set. Processing only first {playlist_item_limit} entries')
-            final_ytdl_options['playlistend'] = playlist_item_limit
+            ytdl_options['playlistend'] = playlist_item_limit
         if cookie_path:
-            final_ytdl_options['cookiefile'] = cookie_path
+            ytdl_options['cookiefile'] = cookie_path
             dl.cookiefile = cookie_path
             try:
                 size = os.path.getsize(cookie_path)
             except OSError:
                 size = -1
             log.info('yt-dlp download %s will use cookie file %s (size=%s)', dl.id, cookie_path, size)
-
         size_limit = self._current_size_limit()
         estimated_size = self._estimate_download_size(dl)
         if size_limit is not None and estimated_size is not None and estimated_size > size_limit:
@@ -640,7 +636,7 @@ class DownloadQueue:
             output_chapter,
             dl.quality,
             dl.format,
-            final_ytdl_options,
+            ytdl_options,
             dl,
             size_limit_bytes=size_limit,
         )
@@ -669,7 +665,7 @@ class DownloadQueue:
 
         if etype.startswith('url'):
             log.debug('Processing as an url')
-            return await self.add(entry['url'], quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already, cookie_path, cookie_profile_id, ytdlp_options)
+            return await self.add(entry['url'], quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already, cookie_path, cookie_profile_id)
         elif etype == 'playlist':
             log.debug('Processing as a playlist')
             entries = entry['entries']
@@ -698,9 +694,9 @@ class DownloadQueue:
                 return {'status': 'unsupported', 'msg': 'This URL looks like a direct file download and is not supported by yt-dlp.'}
             key = entry.get('webpage_url') or entry['url']
             original_url = entry.get('webpage_url') or entry.get('url') or key
-            dl = DownloadInfo(entry['id'], entry.get('title') or entry['id'], key, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookie_path, self.user_id, original_url=original_url, cookie_profile_id=cookie_profile_id)
+            dl = DownloadInfo(entry['id'], entry.get('title') or entry['id'], key, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookie_path, self.user_id, original_url=original_url, cookie_profile_id=cookie_profile_id, ytdlp_options=ytdlp_options)
             if not self.queue.exists(dl.uid):
-                result = await self.__add_download(dl, auto_start, cookie_path, ytdlp_options)
+                result = await self.__add_download(dl, auto_start, cookie_path)
                 if result and result.get('status') == 'error':
                     return result
             return {'status': 'ok'}

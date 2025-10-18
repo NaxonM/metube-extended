@@ -29,14 +29,6 @@
       </div>
     </div>
     <div class="nav-actions">
-      <button class="btn btn-link nav-link"
-              type="button"
-              *ngIf="isAdmin"
-              (click)="navigateToAdmin()"
-              ngbTooltip="Admin Tools"
-              container="body">
-        <fa-icon [icon]="faTools"></fa-icon>
-      </button>
       <div class="nav-session" *ngIf="currentUser">
         <span class="nav-session__label">Signed in as</span>
         <span class="nav-session__user">
@@ -48,6 +40,14 @@
         <fa-icon [icon]="faRightFromBracket"></fa-icon>
         Logout
       </a>
+      <button class="btn btn-link nav-link"
+              type="button"
+              *ngIf="isAdmin"
+              (click)="navigateToAdmin()"
+              ngbTooltip="Admin Tools"
+              container="body">
+        <fa-icon [icon]="faTools"></fa-icon>
+      </button>
       <div class="nav-theme" ngbDropdown [autoClose]="'inside'">
         <button class="btn btn-link nav-link dropdown-toggle" id="theme-select" type="button" ngbDropdownToggle>
           <fa-icon [icon]="activeTheme.icon"></fa-icon>
@@ -86,17 +86,3 @@
 
   <app-dashboard-history [tools]="tools"></app-dashboard-history>
 </main>
-
-<footer class="footer">
-  <div class="container-fluid">
-    <div class="footer-links">
-      <a href="https://github.com/NaxonM/metube-extended/" target="_blank" rel="noopener noreferrer">GitHub</a>
-    </div>
-    <div class="version-info">
-      <span *ngIf="ytDlpVersion">yt-dlp version: {{ ytDlpVersion }}</span>
-      <span *ngIf="galleryDlVersion">gallery-dl version: {{ galleryDlVersion }}</span>
-      <span *ngIf="metubeVersion">MeTube version: {{ metubeVersion }}</span>
-      <span *ngIf="ytDlpOptionsUpdateTime">yt-dlp options updated: {{ ytDlpOptionsUpdateTime | date:'short' }}</span>
-    </div>
-  </div>
-</footer>

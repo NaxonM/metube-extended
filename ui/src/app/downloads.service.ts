@@ -197,7 +197,6 @@ export interface SaveCookieProfilePayload {
 }
 
 export interface Download {
-  uid: string;
   id: string;
   title: string;
   url: string;
@@ -309,38 +308,38 @@ export class DownloadsService {
     });
     socket.fromEvent('added').subscribe((strdata: string) => {
       let data: Download = JSON.parse(strdata);
-      const previous = this.queue.get(data.uid);
-      this.queue.set(data.uid, data);
+      const previous = this.queue.get(data.url);
+      this.queue.set(data.url, data);
       this.applyQueueMetrics(previous, data);
       this.emitMetrics();
       this.queueChanged.next();
     });
     socket.fromEvent('updated').subscribe((strdata: string) => {
       let data: Download = JSON.parse(strdata);
-      const existing = this.queue.get(data.uid);
+      const existing = this.queue.get(data.url);
       if (existing) {
         data.checked = existing.checked;
         data.deleting = existing.deleting;
       }
-      this.queue.set(data.uid, data);
+      this.queue.set(data.url, data);
       this.applyQueueMetrics(existing, data);
       this.emitMetrics();
-      this.updated.next({ url: data.uid, location: 'queue' });
+      this.updated.next({ url: data.url, location: 'queue' });
     });
     socket.fromEvent('completed').subscribe((strdata: string) => {
       let data: Download = JSON.parse(strdata);
-      const existing = this.queue.get(data.uid);
+      const existing = this.queue.get(data.url);
       if (existing) {
-        this.queue.delete(data.uid);
+        this.queue.delete(data.url);
         this.applyQueueMetrics(existing, undefined);
       }
-      this.done.set(data.uid, data);
+      this.done.set(data.url, data);
       this.applyDoneMetrics(undefined, data);
       this.trimDoneHistory();
       this.emitMetrics();
       this.queueChanged.next();
       this.doneChanged.next();
-      this.updated.next({ url: data.uid, location: 'done' });
+      this.updated.next({ url: data.url, location: 'done' });
     });
     socket.fromEvent('canceled').subscribe((strdata: string) => {
       let data: string = JSON.parse(strdata);
@@ -364,7 +363,7 @@ export class DownloadsService {
     });
     socket.fromEvent('renamed').subscribe((strdata: string) => {
       let data: Download = JSON.parse(strdata);
-      let existing: Download = this.done.get(data.uid);
+      let existing: Download = this.done.get(data.url);
       if (!existing) {
         return;
       }
@@ -376,7 +375,7 @@ export class DownloadsService {
         error: data.error ?? existing.error,
         size: data.size ?? existing.size
       };
-      this.done.set(data.uid, updatedEntry);
+      this.done.set(data.url, updatedEntry);
       this.applyDoneMetrics(existing, updatedEntry);
       this.emitMetrics();
       this.doneChanged.next();
@@ -759,13 +758,13 @@ export class DownloadsService {
 
   public startByFilter(where: 'queue' | 'done', filter: (dl: Download) => boolean) {
     let ids: string[] = [];
-    this[where].forEach((dl: Download) => { if (filter(dl)) ids.push(dl.uid) });
+    this[where].forEach((dl: Download) => { if (filter(dl)) ids.push(dl.url) });
     return this.startById(ids);
   }
 
   public delByFilter(where: 'queue' | 'done', filter: (dl: Download) => boolean) {
     let ids: string[] = [];
-    this[where].forEach((dl: Download) => { if (filter(dl)) ids.push(dl.uid) });
+    this[where].forEach((dl: Download) => { if (filter(dl)) ids.push(dl.url) });
     return this.delById(where, ids);
   }
   public addDownloadByUrl(url: string): Promise<any> {

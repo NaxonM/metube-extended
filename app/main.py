@@ -912,6 +912,7 @@ async def add(request):
     ytdlp_options = post.get('ytdlp_options', {})
 
     session, user_id, queue = await get_user_context(request)
+    proxy_queue: Optional[ProxyDownloadManager] = None
 
     legacy_cookie_path = session.get('cookie_file')
     if legacy_cookie_path:
@@ -953,35 +954,16 @@ async def add(request):
 
     playlist_item_limit = int(playlist_item_limit)
 
+    gallery_queue = await download_manager.get_gallery_queue(user_id)
+
     gallery_options = post.get('gallerydl_options') or []
     preferred_backend_value = post.get('preferred_backend')
     preferred_backend = preferred_backend_value.strip().lower() if isinstance(preferred_backend_value, str) else None
     if preferred_backend not in {'gallerydl', 'ytdlp'}:
         preferred_backend = None
 
-    # New, improved backend selection logic
-    hq_supported = is_hqporner_url(url)
     gallery_supported = is_gallerydl_supported(url, getattr(config, 'GALLERY_DL_EXEC', 'gallery-dl'))
     ytdlp_supported = is_ytdlp_supported(url)
-
-    async def build_proxy_prompt(msg=None) -> Dict[str, Any]:
-        proxy_config = await proxy_settings.get()
-        return {
-            'status': 'proxy',
-            'proxy': {
-                'url': url,
-                'quality': quality,
-                'format': format,
-                'folder': folder or '',
-                'custom_name_prefix': custom_name_prefix or '',
-                'playlist_strict_mode': playlist_strict_mode,
-                'playlist_item_limit': playlist_item_limit,
-                'auto_start': auto_start,
-                'size_limit_mb': proxy_config.get('limit_mb', 0),
-                'limit_enabled': proxy_config.get('limit_enabled', False)
-            },
-            'msg': msg or 'This URL is not supported by any of the available downloaders. You can still download it directly through the server.'
-        }
 
     def build_gallery_prompt() -> Dict[str, Any]:
         return {
@@ -1002,98 +984,96 @@ async def add(request):
             'archive_id': None,
         }
 
-    # 1. Check for special case: HQPorner
-    if hq_supported:
-        proxy_queue = await download_manager.get_proxy_queue(user_id)
-        status = await add_hqporner_download(
-            proxy_queue, url, quality, format, folder, custom_name_prefix, auto_start
-        )
-        return web.Response(text=serializer.encode(status))
-
-    # 2. Handle preferred backend
     if preferred_backend == 'gallerydl':
         if gallery_supported:
-            return web.Response(text=serializer.encode({'status': 'gallerydl', 'gallerydl': build_gallery_prompt()}))
+            status = {'status': 'gallerydl', 'gallerydl': build_gallery_prompt()}
         else:
             status = {'status': 'error', 'msg': 'Gallery-dl is not available for this URL.'}
         return web.Response(text=serializer.encode(status))
 
-    if preferred_backend == 'ytdlp':
-        if not ytdlp_supported:
-            if gallery_supported:
-                return web.Response(text=serializer.encode({'status': 'error', 'msg': 'This URL is not supported by yt-dlp, but is by gallery-dl. Please choose gallery-dl or a proxy download.'}))
-            return web.Response(text=serializer.encode(await build_proxy_prompt(msg='This URL is not supported by yt-dlp.')))
-        # Fall through to ytdlp logic below
-
-    # 3. Handle URLs supported by both (no preference)
-    elif gallery_supported and ytdlp_supported:
-        status = {
-            'status': 'choose-backend',
-            'backend_choice': {
-                'url': url,
-                'title': post.get('title') or '',
-                'gallerydl': build_gallery_prompt(),
-                'ytdlp': {
-                    'quality': quality,
-                    'format': format,
-                    'folder': folder or '',
-                    'custom_name_prefix': custom_name_prefix or '',
-                    'playlist_strict_mode': playlist_strict_mode,
-                    'playlist_item_limit': playlist_item_limit,
-                    'auto_start': auto_start,
-                    'ytdlp_options': ytdlp_options,
+    if preferred_backend != 'ytdlp':
+        if gallery_supported and ytdlp_supported:
+            status = {
+                'status': 'choose-backend',
+                'backend_choice': {
+                    'url': url,
+                    'title': post.get('title') or '',
+                    'gallerydl': build_gallery_prompt(),
+                    'ytdlp': {
+                        'quality': quality,
+                        'format': format,
+                        'folder': folder or '',
+                        'custom_name_prefix': custom_name_prefix or '',
+                        'playlist_strict_mode': playlist_strict_mode,
+                        'playlist_item_limit': playlist_item_limit,
+                        'auto_start': auto_start,
+                    },
                 },
-            },
-        }
-        return web.Response(text=serializer.encode(status))
+            }
+            return web.Response(text=serializer.encode(status))
+        if gallery_supported:
+            status = {'status': 'gallerydl', 'gallerydl': build_gallery_prompt()}
+            return web.Response(text=serializer.encode(status))
 
-    # 4. Handle gallery-dl only URLs
-    elif gallery_supported:
-        return web.Response(text=serializer.encode({'status': 'gallerydl', 'gallerydl': build_gallery_prompt()}))
-
-    # 5. Handle yt-dlp only URLs
-    elif ytdlp_supported:
-        # Fall through to ytdlp logic below
-        pass
-
-    # 6. Handle unsupported URLs
+    if is_hqporner_url(url):
+        proxy_queue = await download_manager.get_proxy_queue(user_id)
+        status = await add_hqporner_download(
+            proxy_queue,
+            url,
+            quality,
+            format,
+            folder,
+            custom_name_prefix,
+            auto_start,
+        )
     else:
-        return web.Response(text=serializer.encode(await build_proxy_prompt()))
-
-    # Default to yt-dlp logic
-    if cookie_path is None:
-        matched_profile = ytdlp_cookie_store.auto_match_profile(url, cookie_tags)
-        if matched_profile:
-            candidate_path = ytdlp_cookie_store.resolve_profile_path(matched_profile.get('id'))
-            if candidate_path:
-                cookie_profile_id = matched_profile.get('id')
-                cookie_path = candidate_path
-                details = _inspect_cookie_file(candidate_path)
-                log.info('yt-dlp cookie profile auto-matched: id=%s hosts=%s details=%s', cookie_profile_id, matched_profile.get('hosts'), details)
-    if cookie_path is None:
-        cookie_path = legacy_cookie_path
-        if cookie_path:
-            details = _inspect_cookie_file(cookie_path)
-            log.info('yt-dlp falling back to legacy cookie file: %s details=%s', cookie_path, details)
-    status = await queue.add(
-        url=url,
-        quality=quality,
-        format=format,
-        folder=folder,
-        custom_name_prefix=custom_name_prefix,
-        playlist_strict_mode=playlist_strict_mode,
-        playlist_item_limit=playlist_item_limit,
-        auto_start=auto_start,
-        cookie_path=cookie_path,
-        cookie_profile_id=cookie_profile_id,
-        ytdlp_options=ytdlp_options,
-    )
-    if cookie_profile_id:
-        ytdlp_cookie_store.touch_profile(cookie_profile_id)
-        log.info('yt-dlp cookie profile %s marked as recently used', cookie_profile_id)
+        if cookie_path is None:
+            matched_profile = ytdlp_cookie_store.auto_match_profile(url, cookie_tags)
+            if matched_profile:
+                candidate_path = ytdlp_cookie_store.resolve_profile_path(matched_profile.get('id'))
+                if candidate_path:
+                    cookie_profile_id = matched_profile.get('id')
+                    cookie_path = candidate_path
+                    details = _inspect_cookie_file(candidate_path)
+                    log.info('yt-dlp cookie profile auto-matched: id=%s hosts=%s details=%s', cookie_profile_id, matched_profile.get('hosts'), details)
+        if cookie_path is None:
+            cookie_path = legacy_cookie_path
+            if cookie_path:
+                details = _inspect_cookie_file(cookie_path)
+                log.info('yt-dlp falling back to legacy cookie file: %s details=%s', cookie_path, details)
+        status = await queue.add(
+            url,
+            quality,
+            format,
+            folder,
+            custom_name_prefix,
+            playlist_strict_mode,
+            playlist_item_limit,
+            auto_start,
+            cookie_path=cookie_path,
+            cookie_profile_id=cookie_profile_id,
+            ytdlp_options=ytdlp_options,
+        )
+        if cookie_profile_id:
+            ytdlp_cookie_store.touch_profile(cookie_profile_id)
+            log.info('yt-dlp cookie profile %s marked as recently used', cookie_profile_id)
 
     if status.get('status') == 'unsupported':
-        return web.Response(text=serializer.encode(await build_proxy_prompt(msg=status.get('msg'))))
+        proxy_config = await proxy_settings.get()
+        status['proxy'] = {
+            'url': url,
+            'quality': quality,
+            'format': format,
+            'folder': folder or '',
+            'custom_name_prefix': custom_name_prefix or '',
+            'playlist_strict_mode': playlist_strict_mode,
+            'playlist_item_limit': playlist_item_limit,
+            'auto_start': auto_start,
+            'size_limit_mb': proxy_config.get('limit_mb', 0),
+            'limit_enabled': proxy_config.get('limit_enabled', False)
+        }
+        if not status.get('msg'):
+            status['msg'] = 'This URL is not supported by yt-dlp. You can still download it directly through the server.'
     elif status.get('status') == 'error' and cookie_path and is_cookie_error_message(status.get('msg')):
         cookie_status_store.mark_invalid(user_id, status.get('msg'))
     return web.Response(text=serializer.encode(status))
