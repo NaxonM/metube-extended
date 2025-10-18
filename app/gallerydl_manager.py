@@ -184,29 +184,26 @@ def _resolve_domains(executable_path: Optional[str]) -> Tuple[str, ...]:
 
 
 def is_gallerydl_supported(url: str, executable_path: Optional[str] = None) -> bool:
-    if not url:
-        return False
-    for candidate in _candidate_executables(executable_path):
+    module = _ensure_gallerydl_module()
+    if module:
         try:
-            # Use --simulate to check if gallery-dl can handle the URL without downloading.
-            # This is more reliable than matching against a static list of domains.
-            result = subprocess.run(
-                [candidate, "--simulate", url],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            # If the command succeeds, the URL is supported.
-            return result.returncode == 0
-        except FileNotFoundError:
-            continue  # Try the next candidate if this one isn't found
-        except subprocess.CalledProcessError:
-            # A non-zero exit code means the URL is not supported
-            return False
-        except Exception as exc:
-            log.warning("Failed to check gallery-dl support for %s: %s", url, exc)
-            return False
-    return False
+            from gallery_dl.extractor import find  # type: ignore
+
+            return find(url) is not None
+        except Exception:  # pragma: no cover - defensive
+            pass
+
+    host = _extract_host(url)
+    if not host:
+        return False
+
+    domains = _resolve_domains(executable_path)
+    if not domains:
+        log.info("gallery-dl support check: no domains resolved for executable %s", executable_path)
+        return False
+    result = any(host == domain or host.endswith(f".{domain}") for domain in domains)
+    log.info("gallery-dl support check: host=%s match=%s", host, result)
+    return result
 
 
 def list_gallerydl_sites(executable_path: Optional[str] = None) -> List[str]:

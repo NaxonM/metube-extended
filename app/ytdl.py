@@ -8,7 +8,6 @@ import multiprocessing
 import logging
 import math
 import re
-import uuid
 
 import yt_dlp.networking.impersonate
 from dl_formats import get_format, get_opts, AUDIO_FORMATS
@@ -46,9 +45,8 @@ class DownloadQueueNotifier:
         raise NotImplementedError
 
 class DownloadInfo:
-    def __init__(self, id, title, url, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookiefile=None, user_id=None, original_url=None, provider='ytdlp', cookie_profile_id=None, ytdlp_options=None):
+    def __init__(self, id, title, url, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookiefile=None, user_id=None, original_url=None, provider='ytdlp', cookie_profile_id=None):
         self.id = id if len(custom_name_prefix) == 0 else f'{custom_name_prefix}.{id}'
-        self.uid = str(uuid.uuid4())
         self.title = title if len(custom_name_prefix) == 0 else f'{custom_name_prefix}.{title}'
         self.url = url
         self.original_url = original_url or url
@@ -68,7 +66,6 @@ class DownloadInfo:
         self.cookie_profile_id = cookie_profile_id
         self.user_id = user_id
         self.provider = provider
-        self.ytdlp_options = ytdlp_options or {}
         self.cookie_warning = None
         self.cookie_warning_at = None
 
@@ -93,8 +90,6 @@ class Download:
         self.output_template_chapter = output_template_chapter
         self.format = get_format(format, quality)
         self.ytdl_opts = get_opts(format, quality, ytdl_opts)
-        if hasattr(info, 'ytdlp_options') and info.ytdlp_options:
-            self.ytdl_opts.update(info.ytdlp_options)
         if "impersonate" in self.ytdl_opts:
             self.ytdl_opts["impersonate"] = yt_dlp.networking.impersonate.ImpersonateTarget.from_str(self.ytdl_opts["impersonate"])
         self.info = info
@@ -322,7 +317,7 @@ class PersistentQueue:
             return sorted(shelf.items(), key=lambda item: item[1].timestamp)
 
     def put(self, value):
-        key = value.info.uid
+        key = value.info.url
         self.dict[key] = value
         with shelve.open(self.path, 'w') as shelf:
             shelf[key] = value.info
@@ -552,10 +547,10 @@ class DownloadQueue:
                 message = download.info.cookie_warning or download.info.msg
                 if download.info.cookie_warning or self._is_cookie_error(message):
                     self.cookie_status_store.mark_invalid(download.info.user_id, message)
-        if self.queue.exists(download.info.uid):
-            self.queue.delete(download.info.uid)
+        if self.queue.exists(download.info.url):
+            self.queue.delete(download.info.url)
             if download.canceled:
-                asyncio.create_task(self.notifier.canceled(download.info.uid))
+                asyncio.create_task(self.notifier.canceled(download.info.url))
             else:
                 self.done.put(download)
                 if self.max_history_items >= 0:
@@ -649,7 +644,7 @@ class DownloadQueue:
         await self.notifier.added(dl)
         return {'status': 'ok'}
 
-    async def __add_entry(self, entry, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already, cookie_path=None, cookie_profile_id=None, ytdlp_options=None):
+    async def __add_entry(self, entry, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already, cookie_path=None, cookie_profile_id=None):
         if not entry:
             return {'status': 'error', 'msg': "Invalid/empty data was given."}
 
@@ -682,7 +677,7 @@ class DownloadQueue:
                 for property in ("id", "title", "uploader", "uploader_id"):
                     if property in entry:
                         etr[f"playlist_{property}"] = entry[property]
-                results.append(await self.__add_entry(etr, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already, cookie_path, cookie_profile_id, ytdlp_options))
+                results.append(await self.__add_entry(etr, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already, cookie_path, cookie_profile_id))
             if any(res['status'] == 'error' for res in results):
                 return {'status': 'error', 'msg': ', '.join(res['msg'] for res in results if res['status'] == 'error' and 'msg' in res)}
             return {'status': 'ok'}
@@ -693,16 +688,16 @@ class DownloadQueue:
                 log.info('Entry extension reported as unknown; delegating to proxy download workflow')
                 return {'status': 'unsupported', 'msg': 'This URL looks like a direct file download and is not supported by yt-dlp.'}
             key = entry.get('webpage_url') or entry['url']
-            original_url = entry.get('webpage_url') or entry.get('url') or key
-            dl = DownloadInfo(entry['id'], entry.get('title') or entry['id'], key, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookie_path, self.user_id, original_url=original_url, cookie_profile_id=cookie_profile_id, ytdlp_options=ytdlp_options)
-            if not self.queue.exists(dl.uid):
+            if not self.queue.exists(key):
+                original_url = entry.get('webpage_url') or entry.get('url') or key
+                dl = DownloadInfo(entry['id'], entry.get('title') or entry['id'], key, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookie_path, self.user_id, original_url=original_url, cookie_profile_id=cookie_profile_id)
                 result = await self.__add_download(dl, auto_start, cookie_path)
                 if result and result.get('status') == 'error':
                     return result
             return {'status': 'ok'}
         return {'status': 'error', 'msg': f'Unsupported resource "{etype}"'}
 
-    async def add(self, url, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start=True, already=None, cookie_path=None, cookie_profile_id=None, ytdlp_options=None):
+    async def add(self, url, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start=True, already=None, cookie_path=None, cookie_profile_id=None):
         log.info(f'adding {url}: {quality=} {format=} {already=} {folder=} {custom_name_prefix=} {playlist_strict_mode=} {playlist_item_limit=} {auto_start=}')
         already = set() if already is None else already
         if url in already:
@@ -718,7 +713,7 @@ class DownloadQueue:
             if 'unsupported url' in lowered or 'not a valid url' in lowered or 'url does not exist' in lowered:
                 return {'status': 'unsupported', 'msg': msg}
             return {'status': 'error', 'msg': msg}
-        return await self.__add_entry(entry, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already, cookie_path, cookie_profile_id, ytdlp_options)
+        return await self.__add_entry(entry, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already, cookie_path, cookie_profile_id)
 
     async def start_pending(self, ids):
         for id in ids:
