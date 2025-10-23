@@ -144,6 +144,7 @@ export interface SeedrAccountSummary {
   space_used?: number | null;
   space_max?: number | null;
   bandwidth_used?: number | null;
+  bandwidth_max?: number | null;
   country?: string | null;
 }
 

@@ -6,12 +6,12 @@ import time
 import uuid
 from collections import OrderedDict
 from types import SimpleNamespace
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
 import httpx
 
-from seedrcc import AsyncSeedr, models
+from seedrcc import AsyncSeedr, Token, models
 from seedrcc.exceptions import APIError, AuthenticationError, SeedrError
 
 from seedr_credentials import SeedrCredentialStore
@@ -199,12 +199,28 @@ class SeedrDownloadManager:
         self._client_lock = asyncio.Lock()
         self._account_snapshot: Optional[Dict[str, Any]] = None
         self._semaphore = asyncio.Semaphore(1)
+        self._last_account_refresh: float = 0.0
 
     async def initialize(self) -> None:
         self._load_completed()
         if self.max_history_items >= 0:
             if self._enforce_history_limit():
                 self._persist_completed()
+
+    async def account_summary(self, force: bool = False) -> Optional[Dict[str, Any]]:
+        if not force and self._account_snapshot:
+            return self._account_snapshot
+
+        try:
+            client = await self._ensure_client()
+        except AuthenticationError:
+            return None
+        except SeedrError as exc:
+            log.debug("Seedr account summary unavailable for %s: %s", self.user_id, _summarize_seedr_error(exc))
+            return self._account_snapshot
+
+        summary = await self._refresh_account_snapshot(client, persist=True)
+        return summary or self._account_snapshot
 
     async def _announce_job(self, job: SeedrJob) -> None:
         if not job.announced:
@@ -214,6 +230,86 @@ class SeedrDownloadManager:
     async def _notify_update(self, job: SeedrJob) -> None:
         if job.announced:
             await self.notifier.updated(job.info)
+
+    def _set_account_snapshot(self, summary: Optional[Dict[str, Any]], *, persist: bool = False, token: Optional[Token] = None) -> None:
+        if summary is None:
+            return
+        self._account_snapshot = summary
+        if persist:
+            try:
+                target_token = token
+                if target_token is None:
+                    record = self.token_store.load_token()
+                    target_token = record.token if record else None
+                if target_token is not None:
+                    self.token_store.save_token(target_token, summary)
+            except Exception as exc:  # pragma: no cover - persistence failures should not crash
+                log.warning("Failed to persist Seedr account snapshot for %s: %s", self.user_id, exc)
+
+    async def _refresh_account_snapshot(self, client: AsyncSeedr, *, persist: bool = False) -> Optional[Dict[str, Any]]:
+        try:
+            settings = await client.get_settings()
+        except SeedrError as exc:
+            log.debug("Seedr settings fetch failed for %s: %s", self.user_id, _summarize_seedr_error(exc))
+            return self._account_snapshot
+
+        memory: Optional[models.MemoryBandwidth] = None
+        try:
+            memory = await client.get_memory_bandwidth()
+        except SeedrError as exc:
+            log.debug("Seedr memory bandwidth fetch failed for %s: %s", self.user_id, _summarize_seedr_error(exc))
+
+        summary = self._compose_account_summary(settings, memory)
+        self._last_account_refresh = time.time()
+        self._set_account_snapshot(summary, persist=persist, token=client.token if persist else None)
+        return summary
+
+    def _compose_account_summary(
+        self,
+        settings: models.UserSettings,
+        memory: Optional[models.MemoryBandwidth],
+    ) -> Dict[str, Any]:
+        account_raw = settings.account.get_raw()
+        summary: Dict[str, Any] = {
+            "username": account_raw.get("username"),
+            "user_id": account_raw.get("user_id"),
+            "premium": account_raw.get("premium"),
+            "space_used": account_raw.get("space_used"),
+            "space_max": account_raw.get("space_max"),
+            "bandwidth_used": account_raw.get("bandwidth_used"),
+            "country": settings.country,
+        }
+
+        if memory is not None:
+            summary.update(
+                {
+                    "space_used": memory.space_used,
+                    "space_max": memory.space_max,
+                    "bandwidth_used": memory.bandwidth_used,
+                    "bandwidth_max": memory.bandwidth_max,
+                    "premium": memory.is_premium,
+                }
+            )
+
+        return summary
+
+    def _update_account_from_contents(self, contents: models.ListContentsResult) -> None:
+        if contents is None:
+            return
+
+        summary = dict(self._account_snapshot or {})
+        changed = False
+
+        if contents.space_used is not None and summary.get("space_used") != contents.space_used:
+            summary["space_used"] = contents.space_used
+            changed = True
+
+        if contents.space_max is not None and contents.space_max != 0 and summary.get("space_max") != contents.space_max:
+            summary["space_max"] = contents.space_max
+            changed = True
+
+        if changed:
+            self._set_account_snapshot(summary, persist=False)
 
     # ------------------------------------------------------------------
     # Queue helpers
@@ -517,6 +613,8 @@ class SeedrDownloadManager:
                 log.debug("Seedr list_contents failed for %s: %s", self.user_id, _summarize_seedr_error(exc))
                 continue
 
+            self._update_account_from_contents(contents)
+
             torrent = None
             magnet_hash = add_hash_from_magnet(job.magnet_link) if job.magnet_link else None
             for item in contents.torrents:
@@ -528,7 +626,7 @@ class SeedrDownloadManager:
                     break
 
             if torrent is None:
-                resolved = self._detect_completed_without_torrent(contents, job)
+                resolved = await self._handle_missing_torrent(client, job, contents)
                 if resolved:
                     job.stage = "ready"
                     job.info.msg = "Seedr finished fetching torrent"
@@ -789,6 +887,7 @@ class SeedrDownloadManager:
                 await client.delete_folder(str(job.seedr_folder_id))
         self._cleanup_local_torrent(job)
         job.seedr_file_id = None
+        await self._refresh_account_snapshot(client, persist=True)
 
     async def _ensure_client(self) -> AsyncSeedr:
         async with self._client_lock:
@@ -799,7 +898,7 @@ class SeedrDownloadManager:
             if not record:
                 raise AuthenticationError("Seedr account not connected")
 
-            self._account_snapshot = record.account
+            self._set_account_snapshot(record.account or {}, persist=False)
 
             def _on_refresh(token):
                 try:
@@ -879,6 +978,72 @@ class SeedrDownloadManager:
                 hash=file_target.hash or job.magnet_hash or "",
             )
             return torrent_like, contents
+        return None
+
+    async def _handle_missing_torrent(
+        self,
+        client: AsyncSeedr,
+        job: SeedrJob,
+        contents: models.ListContentsResult,
+    ) -> Optional[Tuple[Any, models.ListContentsResult]]:
+        resolved = self._detect_completed_without_torrent(contents, job)
+        if resolved:
+            return resolved
+
+        folder_ids: List[int] = []
+
+        if job.seedr_folder_id not in (None, 0, -1):
+            try:
+                folder_ids.append(int(job.seedr_folder_id))
+            except (TypeError, ValueError):
+                pass
+
+        if job.seedr_folder_name:
+            for folder in _flatten_folders(contents.folders):
+                if folder.fullname and folder.fullname.strip().lower() == job.seedr_folder_name.strip().lower():
+                    folder_ids.append(folder.id)
+                elif folder.name.strip().lower() == job.seedr_folder_name.strip().lower():
+                    folder_ids.append(folder.id)
+
+        seen: Set[int] = set()
+        for folder_id in folder_ids:
+            if folder_id in seen:
+                continue
+            seen.add(folder_id)
+            try:
+                folder_listing = await client.list_contents(str(folder_id))
+            except SeedrError as exc:
+                log.debug("Seedr folder lookup failed for %s (folder %s): %s", self.user_id, folder_id, _summarize_seedr_error(exc))
+                continue
+
+            job.seedr_folder_id = folder_id
+            job.seedr_folder_name = folder_listing.fullname or folder_listing.name
+            self._update_account_from_contents(folder_listing)
+
+            file_target = self._resolve_file(
+                folder_listing.files,
+                SimpleNamespace(hash=job.magnet_hash or "", name=job.expected_name or job.seedr_folder_name or ""),
+            )
+            if file_target:
+                if getattr(file_target, "folder_file_id", None):
+                    job.seedr_file_id = file_target.folder_file_id
+                torrent_like = SimpleNamespace(
+                    id=job.seedr_torrent_id or folder_id,
+                    name=file_target.name or folder_listing.name,
+                    folder=folder_listing.fullname or folder_listing.name,
+                    hash=file_target.hash or job.magnet_hash or "",
+                )
+                return torrent_like, folder_listing
+
+            if folder_listing.files or folder_listing.folders:
+                torrent_like = SimpleNamespace(
+                    id=job.seedr_torrent_id or folder_id,
+                    name=folder_listing.name,
+                    folder=folder_listing.fullname or folder_listing.name,
+                    hash=job.magnet_hash or "",
+                )
+                return torrent_like, folder_listing
+
         return None
 
     def _resolve_folder(self, folders: List[models.Folder], target_name: Optional[str]) -> Optional[models.Folder]:

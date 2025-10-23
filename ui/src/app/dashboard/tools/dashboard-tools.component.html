@@ -263,7 +263,10 @@
               </div>
               <div class="seedr-metric" *ngIf="seedrAccount.bandwidth_used != null">
                 <span class="seedr-metric__label">Bandwidth</span>
-                <span class="seedr-metric__value">{{ formatBytes(seedrAccount.bandwidth_used || 0) }}</span>
+                <span class="seedr-metric__value">
+                  {{ formatBytes(seedrAccount.bandwidth_used || 0) }}
+                  <ng-container *ngIf="seedrAccount.bandwidth_max != null"> / {{ formatBytes(seedrAccount.bandwidth_max || 0) }}</ng-container>
+                </span>
               </div>
               <div class="seedr-metric" *ngIf="seedrAccount.country">
                 <span class="seedr-metric__label">Region</span>
@@ -340,6 +343,7 @@
                           rows="4"
                           name="seedrMagnetText"
                           placeholder="Paste one magnet per line"
+                          wrap="off"
                           [(ngModel)]="seedrMagnetText"
                           [disabled]="seedrSubmitInProgress"
                           [ngModelOptions]="{standalone: true}"></textarea>
@@ -367,13 +371,13 @@
                 </div>
                 <div class="seedr-advanced__actions">
                   <button type="button"
-                          class="btn btn-outline-secondary"
+                          class="btn seedr-btn seedr-btn--ghost"
                           (click)="triggerSeedrFilePicker()"
                           [disabled]="seedrUploadInProgress">
                     Browse files
                   </button>
                   <button type="button"
-                          class="btn btn-primary"
+                          class="btn seedr-btn seedr-btn--primary"
                           (click)="submitSeedrMagnets()"
                           [disabled]="seedrSubmitInProgress">
                     <span class="spinner-border spinner-border-sm me-2" *ngIf="seedrSubmitInProgress"></span>
@@ -458,7 +462,10 @@
                 </div>
                 <div *ngIf="seedrAccount.bandwidth_used != null">
                   <span>Bandwidth used</span>
-                  <span>{{ formatBytes(seedrAccount.bandwidth_used || 0) }}</span>
+                  <span>
+                    {{ formatBytes(seedrAccount.bandwidth_used || 0) }}
+                    <ng-container *ngIf="seedrAccount.bandwidth_max != null"> / {{ formatBytes(seedrAccount.bandwidth_max || 0) }}</ng-container>
+                  </span>
                 </div>
                 <div *ngIf="seedrAccount.country">
                   <span>Region</span>
@@ -479,56 +486,63 @@
 </div>
 
 <ng-template #seedrConnectBlock>
-  <section class="seedr-panel seedr-panel--connect">
-    <header class="seedr-panel__header">
-      <h6>Connect your Seedr account</h6>
-      <button type="button"
-              class="btn btn-outline-light btn-sm"
-              (click)="refreshSeedrStatus()"
-              [disabled]="seedrStatusLoading">
-        Refresh status
-      </button>
-    </header>
-    <p class="seedr-panel__intro">Authorize once to bridge Seedr’s cloud storage with MeTubeEX.</p>
-    <ol class="seedr-steps">
-      <li>Request a device code and open the verification URL.</li>
-      <li>Enter the code using your Seedr account.</li>
-      <li>Return here and confirm once Seedr grants access.</li>
-    </ol>
-    <div class="seedr-connect__actions">
-      <button type="button"
-              class="btn btn-primary"
-              (click)="startSeedrDeviceFlow()"
-              [disabled]="seedrDeviceStartInProgress">
-        <span class="spinner-border spinner-border-sm me-2" *ngIf="seedrDeviceStartInProgress"></span>
-        Get device code
-      </button>
-    </div>
+  <section class="seedr-connect">
+    <div class="seedr-connect__body">
+      <header class="seedr-connect__header">
+        <div>
+          <h6>Connect your Seedr account</h6>
+          <p>Authorize once to bridge Seedr’s cloud storage with MeTubeEX.</p>
+        </div>
+        <button type="button"
+                class="btn seedr-btn seedr-btn--ghost"
+                (click)="refreshSeedrStatus()"
+                [disabled]="seedrStatusLoading">
+          Refresh status
+        </button>
+      </header>
 
-    <div class="seedr-device-card" *ngIf="seedrDeviceChallenge">
-      <p>Visit <a [href]="seedrDeviceChallenge.verification_url" target="_blank" rel="noopener">{{ seedrDeviceChallenge.verification_url }}</a> and enter:</p>
-      <div class="seedr-device-card__code">{{ seedrDeviceChallenge.user_code }}</div>
-      <p class="seedr-device-card__timer" *ngIf="seedrChallengeExpireLabel">{{ seedrChallengeExpireLabel }}</p>
-      <div class="seedr-device-card__actions">
-        <button type="button"
-                class="btn btn-success"
-                (click)="completeSeedrDeviceFlow()"
-                [disabled]="seedrDeviceCompleteInProgress">
-          <span class="spinner-border spinner-border-sm me-2" *ngIf="seedrDeviceCompleteInProgress"></span>
-          I authorized the device
-        </button>
-        <button type="button"
-                class="btn btn-outline-secondary"
-                (click)="seedrDeviceChallenge = null"
-                [disabled]="seedrDeviceCompleteInProgress">
-          Cancel
-        </button>
+      <div class="seedr-connect__grid">
+        <div class="seedr-connect__steps">
+          <ol>
+            <li>Request a device code and open the verification URL.</li>
+            <li>Enter the code using your Seedr account.</li>
+            <li>Return here and confirm once Seedr grants access.</li>
+          </ol>
+          <button type="button"
+                  class="btn seedr-btn seedr-btn--primary"
+                  (click)="startSeedrDeviceFlow()"
+                  [disabled]="seedrDeviceStartInProgress">
+            <span class="spinner-border spinner-border-sm me-2" *ngIf="seedrDeviceStartInProgress"></span>
+            Get device code
+          </button>
+        </div>
+
+        <div class="seedr-connect__challenge" *ngIf="seedrDeviceChallenge">
+          <p>Visit <a [href]="seedrDeviceChallenge.verification_url" target="_blank" rel="noopener">{{ seedrDeviceChallenge.verification_url }}</a> and enter:</p>
+          <div class="seedr-device-card__code">{{ seedrDeviceChallenge.user_code }}</div>
+          <p class="seedr-device-card__timer" *ngIf="seedrChallengeExpireLabel">{{ seedrChallengeExpireLabel }}</p>
+          <div class="seedr-device-card__actions">
+            <button type="button"
+                    class="btn seedr-btn seedr-btn--primary"
+                    (click)="completeSeedrDeviceFlow()"
+                    [disabled]="seedrDeviceCompleteInProgress">
+              <span class="spinner-border spinner-border-sm me-2" *ngIf="seedrDeviceCompleteInProgress"></span>
+              I authorized the device
+            </button>
+            <button type="button"
+                    class="btn seedr-btn seedr-btn--ghost"
+                    (click)="seedrDeviceChallenge = null"
+                    [disabled]="seedrDeviceCompleteInProgress">
+              Cancel
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <div class="seedr-feedback" *ngIf="seedrDeviceMessage || seedrDeviceError">
-      <div class="alert alert-success" *ngIf="seedrDeviceMessage">{{ seedrDeviceMessage }}</div>
-      <div class="alert alert-danger" *ngIf="seedrDeviceError">{{ seedrDeviceError }}</div>
+      <div class="seedr-feedback" *ngIf="seedrDeviceMessage || seedrDeviceError">
+        <div class="alert alert-success" *ngIf="seedrDeviceMessage">{{ seedrDeviceMessage }}</div>
+        <div class="alert alert-danger" *ngIf="seedrDeviceError">{{ seedrDeviceError }}</div>
+      </div>
     </div>
   </section>
 </ng-template>

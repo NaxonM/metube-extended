@@ -1230,6 +1230,16 @@ async def seedr_status(request):
 
     seedr_queue = await download_manager.get_seedr_queue(user_id)
     status = store.status()
+    if status.get('connected'):
+        try:
+            account = await seedr_queue.account_summary(force=True)
+            if account:
+                status['account'] = account
+        except AuthenticationError:
+            status['connected'] = False
+            status['account'] = None
+        except SeedrError as exc:
+            log.debug('Seedr account refresh failed for %s: %s', user_id, exc)
     status['jobs'] = seedr_queue.snapshot()
     status['status'] = 'ok'
     return web.Response(text=serializer.encode(status))
