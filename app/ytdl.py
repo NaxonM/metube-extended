@@ -780,9 +780,12 @@ class DownloadQueue:
         return response
 
     def get(self):
-        return (list((k, v.info) for k, v in self.queue.items()) +
-                list((k, v.info) for k, v in self.pending.items()),
-                list((k, v.info) for k, v in self.done.items()))
+        queue_items = list((k, v.info) for k, v in self.queue.items()) + list(
+            (k, v.info) for k, v in self.pending.items()
+        )
+        done_items = [(k, v.info) for k, v in self.done.items()]
+        done_items.reverse()
+        return (queue_items, done_items)
 
     async def rename(self, id, new_name):
         if not new_name or not new_name.strip():

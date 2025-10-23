@@ -236,8 +236,11 @@ class ProxyDownloadManager:
     # Public helpers
     # ------------------------------------------------------------------
     def get(self):
-        queue_items = [(key, job.info) for key, job in self.queue.items()] + [(key, job.info) for key, job in self.pending.items()]
+        queue_items = [(key, job.info) for key, job in self.queue.items()] + [
+            (key, job.info) for key, job in self.pending.items()
+        ]
         done_items = [(key, job.info) for key, job in self.done.items()]
+        done_items.reverse()
         return queue_items, done_items
 
     def exists_in_done(self, download_id: str) -> bool:

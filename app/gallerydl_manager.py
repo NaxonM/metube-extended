@@ -410,6 +410,7 @@ class GalleryDlManager:
             (key, job.info) for key, job in self.pending.items()
         ]
         done_items = [(key, job.info) for key, job in self.done.items()]
+        done_items.reverse()
         return queue_items, done_items
 
     async def add_job(
