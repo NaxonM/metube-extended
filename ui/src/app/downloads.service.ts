@@ -187,7 +187,7 @@ export interface SeedrAddRequest {
 
 export interface SeedrAddResponse extends Partial<Status> {
   id?: string;
-  results?: Array<Partial<Status> & { id?: string }>;
+  results?: (Partial<Status> & { id?: string })[];
   count?: number;
 }
 
