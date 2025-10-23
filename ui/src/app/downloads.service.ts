@@ -383,23 +383,25 @@ export class DownloadsService {
       this.resetMetricsState();
 
       data[0].forEach(entry => {
-        const key = entry[0];
-        const download = entry[1];
-        if (download) {
-          download.storage_key = download.storage_key || key;
+        const raw = entry[1];
+        if (!raw) {
+          return;
         }
-        this.queue.set(key, download);
-        this.applyQueueMetrics(undefined, download);
+        const normalized = this.normalizeDownload(raw);
+        const storageKey = normalized.storage_key;
+        this.queue.set(storageKey, normalized);
+        this.applyQueueMetrics(undefined, normalized);
       });
 
       data[1].forEach(entry => {
-        const key = entry[0];
-        const download = entry[1];
-        if (download) {
-          download.storage_key = download.storage_key || key;
+        const raw = entry[1];
+        if (!raw) {
+          return;
         }
-        this.done.set(key, download);
-        this.applyDoneMetrics(undefined, download);
+        const normalized = this.normalizeDownload(raw);
+        const storageKey = normalized.storage_key;
+        this.done.set(storageKey, normalized);
+        this.applyDoneMetrics(undefined, normalized);
       });
 
       this.trimDoneHistory();
@@ -408,45 +410,41 @@ export class DownloadsService {
       this.doneChanged.next();
     });
     socket.fromEvent('added').subscribe((strdata: string) => {
-      let data: Download = JSON.parse(strdata);
-      const key = data.storage_key || data.url;
-      data.storage_key = key;
-      const previous = this.queue.get(key);
-      this.queue.set(key, data);
+      const parsed = JSON.parse(strdata);
+      const storageKey = parsed.storage_key || parsed.url;
+      const previous = this.queue.get(storageKey);
+      const data = this.normalizeDownload(parsed, previous);
+      this.queue.set(storageKey, data);
       this.applyQueueMetrics(previous, data);
       this.emitMetrics();
       this.queueChanged.next();
     });
     socket.fromEvent('updated').subscribe((strdata: string) => {
-      let data: Download = JSON.parse(strdata);
-      const key = data.storage_key || data.url;
-      data.storage_key = key;
-      const existing = this.queue.get(key);
-      if (existing) {
-        data.checked = existing.checked;
-        data.deleting = existing.deleting;
-      }
-      this.queue.set(key, data);
+      const parsed = JSON.parse(strdata);
+      const storageKey = parsed.storage_key || parsed.url;
+      const existing = this.queue.get(storageKey);
+      const data = this.normalizeDownload(parsed, existing);
+      this.queue.set(storageKey, data);
       this.applyQueueMetrics(existing, data);
       this.emitMetrics();
-      this.updated.next({ id: key, sourceUrl: data.url, location: 'queue' });
+      this.updated.next({ id: storageKey, sourceUrl: data.url, location: 'queue' });
     });
     socket.fromEvent('completed').subscribe((strdata: string) => {
-      let data: Download = JSON.parse(strdata);
-      const key = data.storage_key || data.url;
-      data.storage_key = key;
-      const existing = this.queue.get(key);
+      const parsed = JSON.parse(strdata);
+      const storageKey = parsed.storage_key || parsed.url;
+      const existing = this.queue.get(storageKey);
+      const data = this.normalizeDownload(parsed, existing);
       if (existing) {
-        this.queue.delete(key);
+        this.queue.delete(storageKey);
         this.applyQueueMetrics(existing, undefined);
       }
-      this.done.set(key, data);
+      this.done.set(storageKey, data);
       this.applyDoneMetrics(undefined, data);
       this.trimDoneHistory();
       this.emitMetrics();
       this.queueChanged.next();
       this.doneChanged.next();
-      this.updated.next({ id: key, sourceUrl: data.url, location: 'done' });
+      this.updated.next({ id: storageKey, sourceUrl: data.url, location: 'done' });
     });
     socket.fromEvent('canceled').subscribe((strdata: string) => {
       let data: string = JSON.parse(strdata);
@@ -469,22 +467,17 @@ export class DownloadsService {
       }
     });
     socket.fromEvent('renamed').subscribe((strdata: string) => {
-      let data: Download = JSON.parse(strdata);
-      const key = data.storage_key || data.url;
-      data.storage_key = key;
-      let existing: Download = this.done.get(key);
+      const parsed = JSON.parse(strdata);
+      const storageKey = parsed.storage_key || parsed.url;
+      let existing: Download = this.done.get(storageKey);
       if (!existing) {
         return;
       }
-      const updatedEntry: Download = {
-        ...existing,
-        filename: data.filename ?? data.title ?? existing.filename,
-        title: data.title ?? existing.title,
-        msg: data.msg ?? existing.msg,
-        error: data.error ?? existing.error,
-        size: data.size ?? existing.size
-      };
-      this.done.set(key, updatedEntry);
+      const updatedEntry = this.normalizeDownload(parsed, existing);
+      if (!updatedEntry.filename && updatedEntry.title) {
+        updatedEntry.filename = updatedEntry.title;
+      }
+      this.done.set(storageKey, updatedEntry);
       this.applyDoneMetrics(existing, updatedEntry);
       this.emitMetrics();
       this.doneChanged.next();
@@ -517,6 +510,60 @@ export class DownloadsService {
       let data = JSON.parse(strdata);
       this.ytdlOptionsChanged.next(data);
     });
+  }
+
+  private normalizeDownload(raw: any, existing?: Download | null): Download {
+    const base: Partial<Download> = existing ? { ...existing } : {};
+    const draft: any = raw && typeof raw === 'object' ? { ...raw } : {};
+    const storageKey = draft.storage_key ?? base.storage_key ?? draft.url ?? base.url ?? draft.id ?? base.id ?? '';
+
+    const pick = (source: any, key: string) =>
+      source && Object.prototype.hasOwnProperty.call(source, key) ? source[key] : undefined;
+
+    const resolve = <T>(key: keyof Download, fallback: T): T => {
+      const draftValue = pick(draft, key as string);
+      if (draftValue !== undefined) {
+        return draftValue as T;
+      }
+      const baseValue = pick(base, key as string);
+      if (baseValue !== undefined) {
+        return baseValue as T;
+      }
+      return fallback;
+    };
+
+    const normalized: Download = {
+      ...base,
+      ...draft,
+      id: resolve('id', ''),
+      title: resolve('title', ''),
+      url: resolve('url', ''),
+      storage_key: storageKey,
+      quality: resolve('quality', ''),
+      format: resolve('format', ''),
+      folder: resolve('folder', ''),
+      custom_name_prefix: resolve('custom_name_prefix', ''),
+      playlist_strict_mode: resolve('playlist_strict_mode', false),
+      playlist_item_limit: resolve('playlist_item_limit', 0),
+      status: resolve('status', 'pending'),
+      msg: resolve('msg', ''),
+      percent: resolve('percent', 0),
+      speed: resolve('speed', 0),
+      eta: resolve('eta', 0),
+      filename: resolve('filename', ''),
+      error: resolve('error', undefined as string | undefined),
+      size: resolve('size', undefined as number | undefined),
+      checked: resolve('checked', false),
+      deleting: resolve('deleting', false),
+    };
+
+    const originalUrl = pick(draft, 'original_url');
+    const baseOriginalUrl = pick(base, 'original_url');
+    if (originalUrl !== undefined || baseOriginalUrl !== undefined) {
+      (normalized as any).original_url = originalUrl !== undefined ? originalUrl : baseOriginalUrl;
+    }
+
+    return normalized;
   }
 
   private createEmptyMetrics(): DownloadMetrics {

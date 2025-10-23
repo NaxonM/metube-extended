@@ -127,6 +127,49 @@ def _format_seedr_error(prefix: str, exc: SeedrError) -> str:
     return f"{prefix}: {detail}" if prefix else detail
 
 
+def _summarize_seedr_add_failure(payload: Optional[Dict[str, Any]]) -> str:
+    if not payload:
+        return "Seedr could not add this torrent."
+
+    candidates: List[str] = []
+    for key in ("error_description", "error", "message", "msg", "detail", "details", "reason", "status_text"):
+        value = payload.get(key)
+        if value:
+            candidates.append(str(value))
+
+    message = ""
+    for candidate in candidates:
+        cleaned = candidate.strip()
+        if cleaned and cleaned.lower() not in {"false", "true"}:
+            message = cleaned
+            break
+
+    if not message and payload.get("result") is False:
+        message = "Seedr reported a failure while adding this torrent."
+
+    serialized = ""
+    if not message:
+        try:
+            serialized = json.dumps(payload).lower()
+        except Exception:
+            serialized = ""
+        if serialized:
+            if any(term in serialized for term in ("space", "storage", "quota")):
+                message = "Seedr storage quota exceeded. Free up space before retrying."
+            elif "bandwidth" in serialized:
+                message = "Seedr bandwidth quota exceeded. Please wait for the quota to reset or upgrade your plan."
+
+    code = payload.get("code")
+    if code is not None:
+        if message:
+            if "code" not in message.lower():
+                message = f"{message} (code {code})"
+        else:
+            message = f"Seedr could not add this torrent (code {code})."
+
+    return message or "Seedr could not add this torrent."
+
+
 class SeedrJob:
     def __init__(
         self,
@@ -153,6 +196,9 @@ class SeedrJob:
         self.expected_name: Optional[str] = None
         self.magnet_hash: Optional[str] = None
         self.seedr_file_id: Optional[int] = None
+        self.fetch_started_at: Optional[float] = None
+        self.last_progress_percent: Optional[float] = None
+        self.last_progress_at: Optional[float] = None
 
     def cancel(self) -> None:
         self._cancel_requested = True
@@ -170,6 +216,9 @@ class SeedrDownloadManager:
     POLL_INTERVAL = 10
     ARCHIVE_MAX_ATTEMPTS = 6
     ARCHIVE_RETRY_INTERVAL = 5
+    TORRENT_FETCH_TIMEOUT = 3 * 60 * 60  # Seedr enforces a 3-hour limit for free accounts
+    TORRENT_STALL_TIMEOUT = 45 * 60      # Abort if no progress is reported for 45 minutes
+    MAX_STATUS_ERRORS = 12               # Allow ~2 minutes of intermittent API failures
 
     def __init__(
         self,
@@ -596,9 +645,20 @@ class SeedrDownloadManager:
             return
 
         self._cleanup_local_torrent(job)
+
+        if not getattr(add_result, "result", True) or not getattr(add_result, "user_torrent_id", None):
+            raw = add_result.get_raw() if hasattr(add_result, "get_raw") else None
+            message = _summarize_seedr_add_failure(raw if isinstance(raw, dict) else None)
+            await self._finalize_error(storage_key, job, message)
+            return
+
         job.seedr_torrent_id = add_result.user_torrent_id
         job.expected_name = add_result.title or job.info.title
         job.seedr_folder_name = add_result.title or job.seedr_folder_name
+        job.magnet_hash = add_result.torrent_hash or job.magnet_hash
+        job.fetch_started_at = time.monotonic()
+        job.last_progress_percent = None
+        job.last_progress_at = job.fetch_started_at
         raw = add_result.get_raw() if hasattr(add_result, "get_raw") else None
         if isinstance(raw, dict):
             folder_id = raw.get("folder_id") or raw.get("folder") or raw.get("user_folder")
@@ -675,14 +735,52 @@ class SeedrDownloadManager:
         storage_key: str,
         job: SeedrJob,
     ) -> Optional[Tuple[models.Torrent, models.ListContentsResult]]:
+        error_streak = 0
+        if not job.fetch_started_at:
+            job.fetch_started_at = time.monotonic()
+        if not job.last_progress_at:
+            job.last_progress_at = job.fetch_started_at
+
         while not job.canceled:
+            now = time.monotonic()
+            if job.fetch_started_at and (now - job.fetch_started_at) > self.TORRENT_FETCH_TIMEOUT:
+                await self._cleanup_seedr(client, job)
+                await self._finalize_error(
+                    storage_key,
+                    job,
+                    "Seedr did not finish fetching this torrent within the 3-hour limit enforced on free accounts.",
+                )
+                return None
+
+            if (
+                job.last_progress_percent is not None
+                and job.last_progress_at
+                and (now - job.last_progress_at) > self.TORRENT_STALL_TIMEOUT
+            ):
+                await self._cleanup_seedr(client, job)
+                await self._finalize_error(
+                    storage_key,
+                    job,
+                    "Seedr has not reported any download progress for an extended period. The job was canceled to avoid stalling the queue.",
+                )
+                return None
+
             try:
                 contents = await client.list_contents()
+                error_streak = 0
             except AuthenticationError as exc:
                 self._invalidate_client()
                 await self._finalize_error(storage_key, job, f"Seedr authentication failed: {exc}")
                 return None
             except SeedrError as exc:
+                error_streak += 1
+                if error_streak >= self.MAX_STATUS_ERRORS:
+                    await self._finalize_error(
+                        storage_key,
+                        job,
+                        _format_seedr_error("Seedr status checks failed repeatedly", exc),
+                    )
+                    return None
                 await asyncio.sleep(self.POLL_INTERVAL)
                 log.debug("Seedr list_contents failed for %s: %s", self.user_id, _summarize_seedr_error(exc))
                 continue
@@ -702,6 +800,8 @@ class SeedrDownloadManager:
             if torrent is None:
                 resolved = await self._handle_missing_torrent(client, job, contents)
                 if resolved:
+                    job.last_progress_percent = 100.0
+                    job.last_progress_at = time.monotonic()
                     job.stage = "ready"
                     job.info.msg = "Seedr finished fetching torrent"
                     await self._notify_update(job)
@@ -712,6 +812,9 @@ class SeedrDownloadManager:
             progress = _progress_to_percent(torrent.progress)
             if progress is not None:
                 job.info.percent = progress
+                if job.last_progress_percent is None or progress > job.last_progress_percent:
+                    job.last_progress_percent = progress
+                    job.last_progress_at = time.monotonic()
             job.info.msg = f"Seedr progress: {torrent.progress}" if torrent.progress else "Seedr downloading"
             await self._notify_update(job)
 

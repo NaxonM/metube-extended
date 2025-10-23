@@ -1,5 +1,4 @@
 import { Component, ElementRef, EventEmitter, HostListener, Input, OnDestroy, OnInit, Output, ViewChild, AfterViewInit } from '@angular/core';
-import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 
@@ -181,8 +180,7 @@ export class DashboardToolsComponent implements OnInit, AfterViewInit, OnDestroy
   constructor(
     public readonly downloads: DownloadsService,
     private readonly cookieService: CookieService,
-    private readonly http: HttpClient,
-    private readonly router: Router
+    private readonly http: HttpClient
   ) {
     this.format = this.cookieService.get('metube_format') || 'any';
     this.setQualities();
@@ -541,10 +539,6 @@ export class DashboardToolsComponent implements OnInit, AfterViewInit, OnDestroy
 
   openGallerySettingsModal(): void {
     this.gallerySettingsModalOpen = true;
-  }
-
-  navigateToAdmin(): void {
-    this.router.navigate(['/admin']);
   }
 
   closeCookiesModal(): void {

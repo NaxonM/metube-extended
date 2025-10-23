@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { CookieService } from 'ngx-cookie-service';
 
-import { faDownload, faClock, faCheck, faTimesCircle, faTachometerAlt, faSun, faMoon, faCircleHalfStroke, faRightFromBracket, faUserShield } from '@fortawesome/free-solid-svg-icons';
+import { faDownload, faClock, faCheck, faTimesCircle, faTachometerAlt, faSun, faMoon, faCircleHalfStroke, faRightFromBracket, faUserShield, faLayerGroup } from '@fortawesome/free-solid-svg-icons';
 
 import { DownloadsService, CurrentUser, DownloadMetrics } from '../downloads.service';
 import { Theme, Themes } from '../theme';
@@ -42,6 +42,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   faCircleHalfStroke = faCircleHalfStroke;
   faRightFromBracket = faRightFromBracket;
   faUserShield = faUserShield;
+  faLayerGroup = faLayerGroup;
 
   private metricsSubscription?: Subscription;
   private themeMediaQuery?: MediaQueryList;
@@ -89,6 +90,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   navigateToAdmin(): void {
     this.router.navigate(['/admin']);
+  }
+
+  get footerEntries(): { label: string; value: string }[] {
+    const entries: { label: string; value: string }[] = [];
+    if (this.metubeVersion) {
+      entries.push({ label: 'MeTubeEX', value: this.metubeVersion });
+    }
+    if (this.ytDlpVersion) {
+      entries.push({ label: 'yt-dlp', value: this.ytDlpVersion });
+    }
+    if (this.galleryDlVersion) {
+      entries.push({ label: 'gallery-dl', value: this.galleryDlVersion });
+    }
+    return entries;
   }
 
   private updateMetrics(metrics: DownloadMetrics): void {

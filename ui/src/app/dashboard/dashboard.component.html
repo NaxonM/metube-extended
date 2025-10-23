@@ -36,6 +36,13 @@
           {{ currentUser?.username }}
         </span>
       </div>
+      <button *ngIf="isAdmin"
+              type="button"
+              class="btn btn-outline-light btn-sm nav-admin"
+              (click)="navigateToAdmin()">
+        <fa-icon [icon]="faLayerGroup"></fa-icon>
+        <span>Admin tools</span>
+      </button>
       <a class="btn btn-outline-light btn-sm nav-logout" href="logout" *ngIf="currentUser">
         <fa-icon [icon]="faRightFromBracket"></fa-icon>
         Logout
@@ -77,4 +84,29 @@
   <app-dashboard-queue></app-dashboard-queue>
 
   <app-dashboard-history [tools]="tools"></app-dashboard-history>
+
+  <footer class="app-footer" role="contentinfo">
+    <div class="app-footer__container">
+      <div class="app-footer__content">
+        <a class="app-footer__link"
+           href="https://github.com/NaxonM/metube-extended"
+           target="_blank"
+           rel="noopener noreferrer">
+          View on GitHub
+        </a>
+        <ng-container *ngIf="footerEntries.length">
+          <span class="app-footer__separator" aria-hidden="true">•</span>
+          <ng-container *ngFor="let entry of footerEntries; let i = index">
+            <ng-container *ngIf="i > 0">
+              <span class="app-footer__separator" aria-hidden="true">•</span>
+            </ng-container>
+            <span class="app-footer__item">
+              <span class="app-footer__label">{{ entry.label }}</span>
+              <span class="app-footer__value">{{ entry.value }}</span>
+            </span>
+          </ng-container>
+        </ng-container>
+      </div>
+    </div>
+  </footer>
 </main>
