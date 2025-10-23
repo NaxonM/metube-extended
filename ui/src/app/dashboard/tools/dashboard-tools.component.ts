@@ -631,7 +631,7 @@ export class DashboardToolsComponent implements OnInit {
         this.seedrActionError = response?.msg || 'Failed to queue Seedr magnets.';
         return;
       }
-      const count = response.count ?? (response.results?.length ?? (response.id ? 1 : 0)) || 0;
+      const count = (response.count ?? (response.results?.length ?? (response.id ? 1 : 0))) || 0;
       this.seedrActionMessage = count > 1 ? `Queued ${count} magnet links in Seedr.` : 'Magnet link queued in Seedr.';
       this.seedrMagnetText = '';
     }, error => {
