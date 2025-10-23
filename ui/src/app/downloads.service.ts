@@ -213,6 +213,7 @@ export interface SeedrJobSnapshot {
   pending?: SeedrJobEntry[];
   in_progress?: SeedrJobEntry[];
   completed?: SeedrJobEntry[];
+  failed?: SeedrJobEntry[];
 }
 
 export interface GalleryDlCredentialSummary {

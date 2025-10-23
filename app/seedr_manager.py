@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 import httpx
 
 from seedrcc import AsyncSeedr, models
-from seedrcc.exceptions import AuthenticationError, SeedrError
+from seedrcc.exceptions import APIError, AuthenticationError, SeedrError
 
 from seedr_credentials import SeedrCredentialStore
 from ytdl import DownloadInfo, DownloadQueue
@@ -59,6 +59,72 @@ def _flatten_folders(folders: List[models.Folder]) -> List[models.Folder]:
         result.append(folder)
         stack.extend(folder.folders)
     return result
+
+
+def _summarize_seedr_error(exc: SeedrError) -> str:
+    message = (str(exc) or "").strip()
+    payload: Dict[str, Any] = {}
+    payload_text = ""
+    code: Optional[int] = None
+
+    if isinstance(exc, APIError):
+        code = exc.code
+        response = getattr(exc, "response", None)
+        if response is not None:
+            try:
+                raw = response.json()
+                if isinstance(raw, dict):
+                    payload = raw
+            except Exception:
+                try:
+                    payload_text = response.text.strip()
+                except Exception:
+                    payload_text = ""
+        if payload and code is None:
+            payload_code = payload.get("code")
+            if isinstance(payload_code, int):
+                code = payload_code
+
+        candidates: List[str] = []
+        if message and message.lower() != "unknown api error":
+            candidates.append(message)
+        else:
+            candidates.append("")
+
+        if payload:
+            for key in ("error_description", "error", "message", "detail", "details", "reason"):
+                value = payload.get(key)
+                if value:
+                    candidates.append(str(value))
+        if payload_text:
+            candidates.append(payload_text)
+
+        for candidate in candidates:
+            cleaned = (candidate or "").strip()
+            if cleaned and cleaned.lower() != "unknown api error":
+                message = cleaned
+                break
+
+        if (not message) or message.lower() == "unknown api error":
+            search_space = payload_text.lower() if payload_text else json.dumps(payload).lower() if payload else ""
+            if any(term in search_space for term in ("space", "storage", "quota", "full")):
+                message = "Seedr storage quota exceeded. Free up space or upgrade your plan before retrying."
+            elif "bandwidth" in search_space:
+                message = "Seedr bandwidth quota exceeded. Please wait for the quota to reset or upgrade your plan."
+            else:
+                message = "Seedr rejected this torrent. It may exceed your available storage or bandwidth."
+
+        if code is not None and "code" not in message.lower():
+            message = f"{message} (code {code})"
+
+    if not message:
+        return "Seedr request failed."
+    return message
+
+
+def _format_seedr_error(prefix: str, exc: SeedrError) -> str:
+    detail = _summarize_seedr_error(exc)
+    return f"{prefix}: {detail}" if prefix else detail
 
 
 class SeedrJob:
@@ -323,7 +389,7 @@ class SeedrDownloadManager:
             await self._finalize_error(storage_key, job, "Seedr account credentials are invalid.")
             return
         except SeedrError as exc:
-            await self._finalize_error(storage_key, job, f"Failed to connect to Seedr: {exc}")
+            await self._finalize_error(storage_key, job, _format_seedr_error("Failed to connect to Seedr", exc))
             return
         except Exception as exc:  # pragma: no cover - unexpected
             await self._finalize_error(storage_key, job, f"Unexpected Seedr error: {exc}")
@@ -353,7 +419,7 @@ class SeedrDownloadManager:
             await self._finalize_error(storage_key, job, f"Seedr authentication failed: {exc}")
             return
         except SeedrError as exc:
-            await self._finalize_error(storage_key, job, f"Failed to add torrent: {exc}")
+            await self._finalize_error(storage_key, job, _format_seedr_error("Failed to add torrent", exc))
             return
         except Exception as exc:  # pragma: no cover
             await self._finalize_error(storage_key, job, f"Unexpected error adding torrent: {exc}")
@@ -407,7 +473,7 @@ class SeedrDownloadManager:
             try:
                 folder_listing = await client.list_contents(str(target_folder.id))
             except SeedrError as exc:
-                await self._finalize_error(storage_key, job, f"Failed to list Seedr folder: {exc}")
+                await self._finalize_error(storage_key, job, _format_seedr_error("Failed to list Seedr folder", exc))
                 await self._cleanup_seedr(client, job)
                 return
 
@@ -448,7 +514,7 @@ class SeedrDownloadManager:
                 return None
             except SeedrError as exc:
                 await asyncio.sleep(self.POLL_INTERVAL)
-                log.debug("Seedr list_contents failed for %s: %s", self.user_id, exc)
+                log.debug("Seedr list_contents failed for %s: %s", self.user_id, _summarize_seedr_error(exc))
                 continue
 
             torrent = None
@@ -508,7 +574,7 @@ class SeedrDownloadManager:
             try:
                 archive = await client.create_archive(str(folder.id))
             except SeedrError as exc:
-                log.error("Failed to create Seedr archive for folder %s: %s", folder.id, exc)
+                log.error("Failed to create Seedr archive for folder %s: %s", folder.id, _summarize_seedr_error(exc))
                 await asyncio.sleep(self.ARCHIVE_RETRY_INTERVAL)
                 continue
 
@@ -622,7 +688,7 @@ class SeedrDownloadManager:
         try:
             fetch = await client.fetch_file(str(file.folder_file_id))
         except SeedrError as exc:
-            await self._finalize_error(job.info.url, job, f"Failed to fetch Seedr file: {exc}")
+            await self._finalize_error(job.info.url, job, _format_seedr_error("Failed to fetch Seedr file", exc))
             return False
 
         if not fetch.result or not fetch.url:
@@ -951,29 +1017,59 @@ class SeedrDownloadManager:
         job.local_torrent_path = None
 
     def snapshot(self) -> Dict[str, List[Dict[str, Any]]]:
-        def transform(entries: Iterable[Tuple[str, SeedrJob]], location: str) -> List[Dict[str, Any]]:
-            results: List[Dict[str, Any]] = []
-            for storage_key, job in entries:
-                results.append(
-                    {
-                        "id": storage_key,
-                        "title": job.info.title,
-                        "stage": job.stage,
-                        "status": job.info.status,
-                        "msg": job.info.msg,
-                        "percent": job.info.percent,
-                        "size": job.info.size,
-                        "created_at": job._added_at,
-                        "location": location,
-                        "provider": job.info.provider,
-                    }
-                )
-            return results
+        pending: List[Dict[str, Any]] = []
+        in_progress: List[Dict[str, Any]] = []
+        completed: List[Dict[str, Any]] = []
+        failed: List[Dict[str, Any]] = []
+
+        def add_entry(storage_key: str, job: SeedrJob, location: str) -> None:
+            entry = {
+                "id": storage_key,
+                "title": job.info.title,
+                "stage": job.stage,
+                "status": job.info.status,
+                "msg": job.info.msg,
+                "percent": job.info.percent,
+                "size": job.info.size,
+                "created_at": job._added_at,
+                "location": location,
+                "provider": job.info.provider,
+            }
+
+            status = (job.info.status or "").lower()
+            stage = job.stage
+
+            if status == "error" or stage == "error":
+                failed.append(entry)
+                return
+
+            if location == "completed" or stage in {"complete"} or status == "finished":
+                completed.append(entry)
+                return
+
+            if location == "in_progress" or stage in {"waiting-seedr", "preparing-download", "fetching-link", "downloading"}:
+                in_progress.append(entry)
+                return
+
+            pending.append(entry)
+
+        for storage_key, job in self.pending.items():
+            add_entry(storage_key, job, "pending")
+
+        for storage_key, job in self.queue.items():
+            add_entry(storage_key, job, "in_progress")
+
+        for storage_key, job in self.done.items():
+            add_entry(storage_key, job, "completed")
+
+        completed.sort(key=lambda item: item.get("created_at") or 0, reverse=True)
+        failed.sort(key=lambda item: item.get("created_at") or 0, reverse=True)
 
         return {
-            "pending": transform(self.pending.items(), "pending"),
-            "in_progress": transform(self.queue.items(), "in_progress"),
-            "completed": transform(reversed(list(self.done.items())), "completed"),
+            "pending": pending,
+            "in_progress": in_progress,
+            "completed": completed[:20],
+            "failed": failed[:20],
         }
 
     def _infer_display_title(
@@ -1009,7 +1105,7 @@ class suppress_seedr_error:
         if exc_type is None:
             return True
         if issubclass(exc_type, SeedrError):
-            log.debug("Seedr cleanup error ignored: %s", exc)
+            log.debug("Seedr cleanup error ignored: %s", _summarize_seedr_error(exc))
             return True
         return False
 
