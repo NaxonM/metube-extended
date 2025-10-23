@@ -51,6 +51,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     && rm /tmp/deno.zip \
     && ln -sf /usr/bin/tini /sbin/tini \
     && UV_PROJECT_ENVIRONMENT=/usr/local uv sync --frozen --no-dev --compile-bytecode \
+    && python -m pip install --no-cache-dir seedrcc httpx anyio \
     && curl -L "https://github.com/mikf/gallery-dl/releases/download/v${GALLERY_DL_VERSION}/gallery-dl.bin" -o /usr/local/bin/gallery-dl \
     && echo "${GALLERY_DL_SHA256}  /usr/local/bin/gallery-dl" | sha256sum -c - \
     && chmod +x /usr/local/bin/gallery-dl \
