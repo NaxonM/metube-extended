@@ -35,6 +35,10 @@ from gallerydl_manager import (
     list_gallerydl_sites,
 )
 from gallerydl_credentials import CredentialStore, CookieStore
+from seedr_credentials import SeedrCredentialStore
+from seedr_manager import SeedrDownloadManager
+from seedrcc import AsyncSeedr
+from seedrcc.exceptions import AuthenticationError, SeedrError
 from ytdlp_cookies import CookieProfileStore
 import importlib.util
 from streaming import (
@@ -255,6 +259,9 @@ gallerydl_state_dir = os.path.join(config.STATE_DIR, 'gallerydl')
 _gallery_credential_stores: Dict[str, CredentialStore] = {}
 _gallery_cookie_stores: Dict[str, CookieStore] = {}
 ytdlp_cookie_stores: Dict[str, CookieProfileStore] = {}
+seedr_state_dir = os.path.join(config.STATE_DIR, 'seedr')
+os.makedirs(seedr_state_dir, exist_ok=True)
+_seedr_token_stores: Dict[str, SeedrCredentialStore] = {}
 
 
 def _ensure_gallerydl_user_dir(user_id: str) -> str:
@@ -278,6 +285,28 @@ def get_gallery_cookie_store(user_id: str) -> CookieStore:
     if store is None:
         store = CookieStore(user_dir)
         _gallery_cookie_stores[user_dir] = store
+    return store
+
+
+def _ensure_seedr_user_dir(user_id: str) -> str:
+    path = os.path.join(seedr_state_dir, user_id)
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def get_seedr_token_store(user_id: str) -> SeedrCredentialStore:
+    user_dir = _ensure_seedr_user_dir(user_id)
+    store = _seedr_token_stores.get(user_dir)
+    if store is None:
+        secret_key = getattr(config, 'SECRET_KEY', '')
+        try:
+            store = SeedrCredentialStore(user_dir, secret_key)
+        except ValueError as exc:
+            log.error('Failed to initialise Seedr credential store for %s: %s', user_id, exc)
+            raise web.HTTPInternalServerError(
+                text='Seedr integration requires SECRET_KEY to be a 64-character hexadecimal string.'
+            )
+        _seedr_token_stores[user_dir] = store
     return store
 
 class ObjectSerializer(json.JSONEncoder):
@@ -434,6 +463,7 @@ class DownloadManager:
         self._queues: Dict[str, DownloadQueue] = {}
         self._proxy_queues: Dict[str, ProxyDownloadManager] = {}
         self._gallery_queues: Dict[str, GalleryDlManager] = {}
+        self._seedr_queues: Dict[str, "SeedrDownloadManager"] = {}
         self._notifiers: Dict[str, UserNotifier] = {}
         self.proxy_settings = proxy_settings
         self.cookie_status_store = cookie_status_store
@@ -495,6 +525,18 @@ class DownloadManager:
             )
             self._gallery_queues[user_id] = gallery_queue
 
+            seedr_queue = SeedrDownloadManager(
+                self.config,
+                notifier,
+                base_queue=queue,
+                state_dir=self._state_dir_for(user_id),
+                user_id=user_id,
+                token_store=get_seedr_token_store(user_id),
+                max_history_items=self.max_history_items,
+            )
+            await seedr_queue.initialize()
+            self._seedr_queues[user_id] = seedr_queue
+
             return queue
 
     async def get_proxy_queue(self, user_id: str) -> ProxyDownloadManager:
@@ -507,16 +549,23 @@ class DownloadManager:
             await self.get_queue(user_id)
         return self._gallery_queues[user_id]
 
+    async def get_seedr_queue(self, user_id: str) -> "SeedrDownloadManager":
+        if user_id not in self._seedr_queues:
+            await self.get_queue(user_id)
+        return self._seedr_queues[user_id]
+
     async def get_combined_state(self, user_id: str):
         queue = await self.get_queue(user_id)
         proxy_queue = await self.get_proxy_queue(user_id)
         gallery_queue = await self.get_gallery_queue(user_id)
+        seedr_queue = await self.get_seedr_queue(user_id)
         primary_queue, primary_done = queue.get()
         proxy_queue_items, proxy_done_items = proxy_queue.get()
         gallery_queue_items, gallery_done_items = gallery_queue.get()
+        seedr_queue_items, seedr_done_items = seedr_queue.get()
         return (
-            primary_queue + proxy_queue_items + gallery_queue_items,
-            primary_done + proxy_done_items + gallery_done_items,
+            primary_queue + proxy_queue_items + gallery_queue_items + seedr_queue_items,
+            primary_done + proxy_done_items + gallery_done_items + seedr_done_items,
         )
 
 
@@ -667,6 +716,14 @@ async def resolve_stream_target(user_id: str, download_id: str) -> StreamTarget:
         gallery_job = None
     if gallery_job and getattr(gallery_job, 'archive_path', None):
         raise web.HTTPNotFound(text='Streaming archives is not supported')
+
+    seedr_queue = await download_manager.get_seedr_queue(user_id)
+    seedr_job = seedr_queue.get_done(download_id)
+    if seedr_job and seedr_job.file_path and os.path.exists(seedr_job.file_path):
+        file_path = os.path.abspath(os.path.normpath(seedr_job.file_path))
+        base_directory = os.path.abspath(os.path.dirname(seedr_job.file_path))
+        if os.path.isfile(file_path) and _path_is_inside(file_path, base_directory):
+            return StreamTarget(file_path=file_path, base_directory=base_directory)
 
     log.debug('Adaptive streaming target not found for download=%s (user=%s)', download_id, user_id)
     raise web.HTTPNotFound(text='Download not found')
@@ -1087,20 +1144,23 @@ async def delete(request):
     _session, user_id, queue = await get_user_context(request)
     proxy_queue = await download_manager.get_proxy_queue(user_id)
     gallery_queue = await download_manager.get_gallery_queue(user_id)
+    seedr_queue = await download_manager.get_seedr_queue(user_id)
 
     if where == 'queue':
         results = [
             await queue.cancel(ids),
             await proxy_queue.cancel(ids),
             await gallery_queue.cancel(ids),
+            await seedr_queue.cancel(ids),
         ]
         status = next((res for res in results if res.get('status') == 'error'), {'status': 'ok'})
     else:
         primary = await queue.clear(ids)
         secondary = await proxy_queue.clear(ids)
         gallery = await gallery_queue.clear(ids)
-        deleted = (primary.get('deleted') or []) + (secondary.get('deleted') or []) + (gallery.get('deleted') or [])
-        missing = (primary.get('missing') or []) + (secondary.get('missing') or []) + (gallery.get('missing') or [])
+        seedr = await seedr_queue.clear(ids)
+        deleted = (primary.get('deleted') or []) + (secondary.get('deleted') or []) + (gallery.get('deleted') or []) + (seedr.get('deleted') or [])
+        missing = (primary.get('missing') or []) + (secondary.get('missing') or []) + (gallery.get('missing') or []) + (seedr.get('missing') or [])
         status = {'status': 'ok', 'deleted': deleted, 'missing': missing}
         errors = {}
         if primary.get('status') == 'error':
@@ -1109,6 +1169,8 @@ async def delete(request):
             errors.update(secondary.get('errors') or {})
         if gallery.get('status') == 'error':
             errors.update(gallery.get('errors') or {})
+        if seedr.get('status') == 'error':
+            errors.update(seedr.get('errors') or {})
         if errors:
             status.update({'status': 'error', 'errors': errors, 'msg': 'Some files could not be removed from disk.'})
     log.info(f"Download delete request processed for ids: {ids}, where: {where}")
@@ -1122,10 +1184,12 @@ async def start(request):
     _session, user_id, queue = await get_user_context(request)
     proxy_queue = await download_manager.get_proxy_queue(user_id)
     gallery_queue = await download_manager.get_gallery_queue(user_id)
+    seedr_queue = await download_manager.get_seedr_queue(user_id)
     results = [
         await queue.start_pending(ids),
         await proxy_queue.start_jobs(ids),
         await gallery_queue.start_jobs(ids),
+        await seedr_queue.start_jobs(ids),
     ]
     status = next((res for res in results if res.get('status') == 'error'), {'status': 'ok'})
     return web.Response(text=serializer.encode(status))
@@ -1146,8 +1210,290 @@ async def rename(request):
         if status.get('status') == 'error' and 'Download not found' in (status.get('msg') or ''):
             gallery_queue = await download_manager.get_gallery_queue(user_id)
             status = await gallery_queue.rename(id, new_name)
+            if status.get('status') == 'error' and 'Download not found' in (status.get('msg') or ''):
+                seedr_queue = await download_manager.get_seedr_queue(user_id)
+                status = await seedr_queue.rename(id, new_name)
     log.info(f"Rename request processed for id: {id}")
     return web.Response(text=serializer.encode(status))
+
+
+@routes.get(config.URL_PREFIX + 'seedr/status')
+async def seedr_status(request):
+    _session, user_id, _ = await get_user_context(request)
+    try:
+        store = get_seedr_token_store(user_id)
+    except web.HTTPException:
+        raise
+    except Exception as exc:  # pragma: no cover - unexpected
+        log.error('Failed to resolve Seedr credential store for %s: %s', user_id, exc)
+        raise web.HTTPInternalServerError(text='Seedr integration is currently unavailable.')
+
+    status = store.status()
+    status['status'] = 'ok'
+    return web.Response(text=serializer.encode(status))
+
+
+@routes.post(config.URL_PREFIX + 'seedr/device/start')
+async def seedr_device_start(request):
+    _session, user_id, _ = await get_user_context(request)
+    try:
+        store = get_seedr_token_store(user_id)
+    except web.HTTPException:
+        raise
+    except Exception as exc:  # pragma: no cover
+        log.error('Failed to resolve Seedr credential store for %s: %s', user_id, exc)
+        raise web.HTTPInternalServerError(text='Seedr integration is currently unavailable.')
+
+    device = await AsyncSeedr.get_device_code()
+    challenge_payload = {
+        'device_code': device.device_code,
+        'user_code': device.user_code,
+        'verification_url': device.verification_url,
+        'interval': device.interval,
+        'expires_in': device.expires_in,
+        'expires_at': time.time() + max(device.expires_in, 0),
+    }
+    store.save_device_challenge(challenge_payload)
+
+    response = {
+        'status': 'ok',
+        'challenge': {
+            'device_code': device.device_code,
+            'user_code': device.user_code,
+            'verification_url': device.verification_url,
+            'interval': device.interval,
+            'expires_in': device.expires_in,
+        },
+    }
+    return web.Response(text=serializer.encode(response))
+
+
+@routes.post(config.URL_PREFIX + 'seedr/device/complete')
+async def seedr_device_complete(request):
+    try:
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            payload = {}
+    except json.JSONDecodeError:
+        payload = {}
+
+    _session, user_id, _ = await get_user_context(request)
+    try:
+        store = get_seedr_token_store(user_id)
+    except web.HTTPException:
+        raise
+    except Exception as exc:  # pragma: no cover
+        log.error('Failed to resolve Seedr credential store for %s: %s', user_id, exc)
+        raise web.HTTPInternalServerError(text='Seedr integration is currently unavailable.')
+
+    device_code = payload.get('device_code') if isinstance(payload.get('device_code'), str) else None
+    challenge = store.load_device_challenge()
+    if not device_code:
+        device_code = challenge.get('device_code') if challenge else None
+
+    if not device_code:
+        return web.Response(text=serializer.encode({'status': 'error', 'msg': 'No pending Seedr device authorization found.'}))
+
+    try:
+        client = await AsyncSeedr.from_device_code(device_code)
+    except AuthenticationError as exc:
+        message = str(exc) or 'Seedr authorization is not yet complete. Please approve the device code and try again.'
+        return web.Response(text=serializer.encode({'status': 'error', 'msg': message}))
+    except SeedrError as exc:  # pragma: no cover - unexpected third-party failure
+        log.error('Seedr device authorization failed for %s: %s', user_id, exc)
+        return web.Response(text=serializer.encode({'status': 'error', 'msg': 'Seedr authorization failed. Please try again.'}))
+
+    try:
+        settings = await client.get_settings()
+        account_raw = settings.account.get_raw()
+        account_summary = {
+            'username': account_raw.get('username'),
+            'user_id': account_raw.get('user_id'),
+            'premium': account_raw.get('premium'),
+            'space_used': account_raw.get('space_used'),
+            'space_max': account_raw.get('space_max'),
+            'bandwidth_used': account_raw.get('bandwidth_used'),
+            'country': settings.country,
+        }
+        store.save_token(client.token, account_summary)
+        store.clear_device_challenge()
+        response = {'status': 'ok', 'account': account_summary}
+    except SeedrError as exc:  # pragma: no cover - third-party failure path
+        await client.close()
+        log.error('Fetching Seedr account details failed for %s: %s', user_id, exc)
+        return web.Response(text=serializer.encode({'status': 'error', 'msg': 'Failed to finalise Seedr authorization.'}))
+    except Exception:
+        await client.close()
+        raise
+
+    await client.close()
+    return web.Response(text=serializer.encode(response))
+
+
+@routes.post(config.URL_PREFIX + 'seedr/logout')
+async def seedr_logout(request):
+    _session, user_id, _ = await get_user_context(request)
+    try:
+        store = get_seedr_token_store(user_id)
+    except web.HTTPException:
+        raise
+    except Exception as exc:  # pragma: no cover
+        log.error('Failed to resolve Seedr credential store for %s: %s', user_id, exc)
+        raise web.HTTPInternalServerError(text='Seedr integration is currently unavailable.')
+
+    store.clear_token()
+    store.clear_device_challenge()
+    return web.Response(text=serializer.encode({'status': 'ok'}))
+
+
+def _extract_magnet_links(payload: Dict[str, Any]) -> List[str]:
+    links: List[str] = []
+    single = payload.get('magnet') or payload.get('magnet_link')
+    if isinstance(single, str) and single.strip():
+        links.append(single.strip())
+
+    batch = payload.get('magnet_links')
+    if isinstance(batch, list):
+        for item in batch:
+            if isinstance(item, str) and item.strip():
+                links.append(item.strip())
+
+    text_block = payload.get('magnet_text')
+    if isinstance(text_block, str):
+        for line in text_block.splitlines():
+            line = line.strip()
+            if line:
+                links.append(line)
+
+    # Deduplicate while preserving order
+    seen = set()
+    result: List[str] = []
+    for link in links:
+        if link not in seen:
+            seen.add(link)
+            result.append(link)
+    return result
+
+
+@routes.post(config.URL_PREFIX + 'seedr/add')
+async def seedr_add(request):
+    try:
+        post = await request.json()
+        if not isinstance(post, dict):
+            raise ValueError
+    except (json.JSONDecodeError, ValueError):
+        raise web.HTTPBadRequest(text='Invalid JSON payload')
+
+    magnet_links = _extract_magnet_links(post)
+    torrent_file = post.get('torrent_file') if isinstance(post.get('torrent_file'), str) else None
+
+    if not magnet_links and not torrent_file:
+        raise web.HTTPBadRequest(text='Provide at least one magnet link or a torrent_file reference.')
+
+    folder = post.get('folder') or ''
+    custom_name_prefix = post.get('custom_name_prefix') or ''
+    auto_start = bool(post.get('auto_start', True))
+    folder_id = post.get('folder_id') or '-1'
+
+    _session, user_id, _ = await get_user_context(request)
+    seedr_queue = await download_manager.get_seedr_queue(user_id)
+
+    responses: List[Dict[str, Any]] = []
+    if torrent_file and not magnet_links:
+        result = await seedr_queue.add_job(
+            torrent_file=torrent_file,
+            title=post.get('title'),
+            folder=folder,
+            custom_name_prefix=custom_name_prefix,
+            auto_start=auto_start,
+            folder_id=str(folder_id),
+        )
+        return web.Response(text=serializer.encode(result))
+
+    for link in magnet_links:
+        result = await seedr_queue.add_job(
+            magnet_link=link,
+            title=post.get('title'),
+            folder=folder,
+            custom_name_prefix=custom_name_prefix,
+            auto_start=auto_start,
+            folder_id=str(folder_id),
+        )
+        responses.append(result)
+
+    if len(responses) == 1:
+        return web.Response(text=serializer.encode(responses[0]))
+    return web.Response(text=serializer.encode({'status': 'ok', 'results': responses, 'count': len(responses)}))
+
+
+@routes.post(config.URL_PREFIX + 'seedr/upload')
+async def seedr_upload(request):
+    _session, user_id, _ = await get_user_context(request)
+    seedr_queue = await download_manager.get_seedr_queue(user_id)
+
+    reader = await request.multipart()
+    if reader is None:
+        raise web.HTTPBadRequest(text='Expected multipart form data')
+
+    upload_fields: Dict[str, str] = {}
+    saved_path: Optional[str] = None
+    original_name: Optional[str] = None
+
+    async for part in reader:
+        if part.name == 'file':
+            if not part.filename:
+                raise web.HTTPBadRequest(text='torrent file is required')
+            original_name = part.filename
+            safe_name = re.sub(r'[^A-Za-z0-9._-]+', '_', original_name)
+            if not safe_name:
+                safe_name = 'torrent'
+            user_dir = _ensure_seedr_user_dir(user_id)
+            upload_dir = os.path.join(user_dir, 'uploads')
+            os.makedirs(upload_dir, exist_ok=True)
+            extension = os.path.splitext(safe_name)[1] or '.torrent'
+            temp_name = f"{uuid.uuid4().hex}{extension}"
+            temp_path = os.path.join(upload_dir, temp_name)
+            with open(temp_path, 'wb') as fh:
+                while True:
+                    chunk = await part.read_chunk()
+                    if not chunk:
+                        break
+                    fh.write(chunk)
+            saved_path = temp_path
+        else:
+            value = await part.text()
+            upload_fields[part.name] = value
+
+    if saved_path is None:
+        raise web.HTTPBadRequest(text='torrent file is required')
+
+    folder = upload_fields.get('folder') or ''
+    custom_name_prefix = upload_fields.get('custom_name_prefix') or ''
+    folder_id = upload_fields.get('folder_id') or '-1'
+    auto_start_raw = upload_fields.get('auto_start')
+    auto_start = True
+    if isinstance(auto_start_raw, str):
+        auto_start = auto_start_raw.strip().lower() not in ('0', 'false', 'no', 'off')
+
+    title = upload_fields.get('title') or original_name or 'Seedr torrent'
+
+    result = await seedr_queue.add_job(
+        torrent_file=saved_path,
+        title=title,
+        folder=folder,
+        custom_name_prefix=custom_name_prefix,
+        auto_start=auto_start,
+        folder_id=str(folder_id),
+    )
+
+    if result.get('status') == 'error':
+        try:
+            os.remove(saved_path)
+        except OSError:
+            pass
+
+    return web.Response(text=serializer.encode(result))
+
 
 
 @routes.post(config.URL_PREFIX + 'proxy/probe')
@@ -1516,6 +1862,7 @@ async def supported_sites(request):
         'gallerydl': list_gallerydl_sites(getattr(config, 'GALLERY_DL_EXEC', 'gallery-dl')),
         'hqporner': ['hqporner'],
         'proxy': ['direct-link'],
+        'seedr': ['seedr'],
     }
     return web.json_response({'status': 'ok', 'providers': providers})
 
@@ -1895,7 +2242,16 @@ async def history(request):
     limit = max(0, limit)
     offset = max(0, offset)
 
-    history = {'done': [], 'queue': [], 'pending': [], 'proxy_done': [], 'gallery_done': [], 'limit': limit, 'offset': offset}
+    history = {
+        'done': [],
+        'queue': [],
+        'pending': [],
+        'proxy_done': [],
+        'gallery_done': [],
+        'seedr_done': [],
+        'limit': limit,
+        'offset': offset,
+    }
 
     for _, v in queue.queue.saved_items():
         history['queue'].append(v)
@@ -1905,6 +2261,7 @@ async def history(request):
     done_items = list(queue.done.saved_items())
     proxy_done = [(key, job.info) for key, job in proxy_queue.done.items()]
     gallery_done = [(key, job.info) for key, job in gallery_queue.done.items()]
+    seedr_done = [(key, job.info) for key, job in seedr_queue.done.items()]
 
     def collect_slice(items):
         ordered = sorted(items, key=lambda item: getattr(item[1], 'timestamp', 0), reverse=True)
@@ -1918,10 +2275,12 @@ async def history(request):
     total_done, history['done'] = collect_slice(done_items)
     total_proxy_done, history['proxy_done'] = collect_slice(proxy_done)
     total_gallery_done, history['gallery_done'] = collect_slice(gallery_done)
+    total_seedr_done, history['seedr_done'] = collect_slice(seedr_done)
 
     history['done_total'] = total_done
     history['proxy_done_total'] = total_proxy_done
     history['gallery_done_total'] = total_gallery_done
+    history['seedr_done_total'] = total_seedr_done
 
     log.info("Sending download history slice offset=%s limit=%s", offset, limit)
     return web.Response(text=serializer.encode(history))

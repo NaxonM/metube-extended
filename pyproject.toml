@@ -15,6 +15,9 @@ dependencies = [
     "pynacl",
     "cryptography",
     "psutil",
+    "anyio",
+    "httpx",
+    "seedrcc>=2.0.1",
 ]
 
 [dependency-groups]

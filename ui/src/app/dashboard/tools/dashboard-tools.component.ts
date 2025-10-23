@@ -1,13 +1,13 @@
-import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 
-import { faLink, faXmark, faDownload, faSliders, faChevronDown, faChevronUp, faCookieBite, faTriangleExclamation, faCircleInfo, faFileImport, faFileExport, faCopy, faKey, faLayerGroup, faTableColumns, faGrip, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
+import { faLink, faXmark, faDownload, faSliders, faChevronDown, faChevronUp, faCookieBite, faTriangleExclamation, faCircleInfo, faFileImport, faFileExport, faCopy, faKey, faLayerGroup, faTableColumns, faGrip, faCheckCircle, faMagnet, faCloudArrowUp } from '@fortawesome/free-solid-svg-icons';
 
 import { CookieService } from 'ngx-cookie-service';
 
-import { DownloadsService, Status, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, CookieStatusResponse, GalleryDlPrompt, BackendChoice, YtdlpCookieProfile, SaveCookieProfilePayload, SupportedSitesResponse, CurrentUser } from '../../downloads.service';
+import { DownloadsService, Status, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, CookieStatusResponse, GalleryDlPrompt, BackendChoice, YtdlpCookieProfile, SaveCookieProfilePayload, SupportedSitesResponse, CurrentUser, SeedrStatusResponse, SeedrDeviceChallenge, SeedrAccountSummary } from '../../downloads.service';
 import { Formats, Format, Quality } from '../../formats';
 
 type PendingAddRequest = {
@@ -50,6 +50,8 @@ export class DashboardToolsComponent implements OnInit {
   faTableColumns = faTableColumns;
   faGrip = faGrip;
   faCheckCircle = faCheckCircle;
+  faMagnet = faMagnet;
+  faCloudArrowUp = faCloudArrowUp;
 
   addUrl = '';
   formats: Format[] = Formats;
@@ -103,6 +105,27 @@ export class DashboardToolsComponent implements OnInit {
   proxyOverrideMb: number | null = null;
   proxyConfirmInProgress = false;
 
+  seedrStatus: SeedrStatusResponse | null = null;
+  seedrStatusLoading = false;
+  seedrStatusError = '';
+  seedrDeviceChallenge: SeedrDeviceChallenge | null = null;
+  seedrDeviceStartInProgress = false;
+  seedrDeviceCompleteInProgress = false;
+  seedrDeviceMessage = '';
+  seedrDeviceError = '';
+  seedrAccount: SeedrAccountSummary | null = null;
+  seedrMagnetText = '';
+  seedrFolder = '';
+  seedrCustomPrefix = '';
+  seedrAutoStart = true;
+  seedrSubmitInProgress = false;
+  seedrUploadInProgress = false;
+  seedrSelectedTorrent: File | null = null;
+  seedrActionMessage = '';
+  seedrActionError = '';
+
+  @ViewChild('seedrTorrentInput') seedrTorrentInput?: ElementRef<HTMLInputElement>;
+
   galleryPromptOpen = false;
   galleryPromptData: GalleryDlPrompt | null = null;
   galleryPromptMessage = '';
@@ -155,6 +178,7 @@ export class DashboardToolsComponent implements OnInit {
     this.refreshCookiesStatus();
     this.fetchVersionInfo();
     this.loadCurrentUser();
+    this.refreshSeedrStatus();
   }
 
   private setQualities(): void {
@@ -504,6 +528,204 @@ export class DashboardToolsComponent implements OnInit {
     this.downloads.getCookiesStatus().subscribe(data => {
       this.cookieStatus = this.normalizeCookieStatus(data);
     });
+  }
+
+  refreshSeedrStatus(): void {
+    this.seedrStatusLoading = true;
+    this.seedrStatusError = '';
+    this.downloads.seedrStatus().subscribe(response => {
+      this.seedrStatusLoading = false;
+      this.seedrStatus = response;
+      this.seedrDeviceChallenge = response.device_challenge ?? null;
+      this.seedrAccount = response.account ?? null;
+      this.seedrActionMessage = '';
+      this.seedrActionError = '';
+    }, error => {
+      this.seedrStatusLoading = false;
+      this.seedrStatusError = this.resolveError(error, 'Unable to load Seedr status.');
+    });
+  }
+
+  startSeedrDeviceFlow(): void {
+    if (this.seedrDeviceStartInProgress) {
+      return;
+    }
+    this.seedrDeviceStartInProgress = true;
+    this.seedrDeviceError = '';
+    this.seedrDeviceMessage = '';
+    this.downloads.seedrDeviceStart().subscribe(response => {
+      this.seedrDeviceStartInProgress = false;
+      if (response?.status === 'error') {
+        this.seedrDeviceError = response.msg || 'Unable to start Seedr device authorization.';
+        return;
+      }
+      this.seedrDeviceChallenge = response?.challenge ?? null;
+      if (!this.seedrDeviceChallenge) {
+        this.seedrDeviceError = 'Seedr did not return a device code. Please try again.';
+      } else {
+        this.seedrDeviceMessage = 'Enter the code below at Seedr to authorize this device.';
+      }
+    }, error => {
+      this.seedrDeviceStartInProgress = false;
+      this.seedrDeviceError = this.resolveError(error, 'Unable to start Seedr device authorization.');
+    });
+  }
+
+  completeSeedrDeviceFlow(deviceCode?: string | null): void {
+    if (this.seedrDeviceCompleteInProgress) {
+      return;
+    }
+    const code = deviceCode || this.seedrDeviceChallenge?.device_code || null;
+    this.seedrDeviceCompleteInProgress = true;
+    this.seedrDeviceError = '';
+    this.seedrDeviceMessage = '';
+    this.downloads.seedrDeviceComplete(code).subscribe(response => {
+      this.seedrDeviceCompleteInProgress = false;
+      if (!response || response.status === 'error') {
+        this.seedrDeviceError = response?.msg || 'Seedr has not authorized this device yet. Try again after approving the code.';
+        return;
+      }
+      this.seedrDeviceMessage = 'Seedr account connected successfully.';
+      this.seedrDeviceChallenge = null;
+      this.refreshSeedrStatus();
+    }, error => {
+      this.seedrDeviceCompleteInProgress = false;
+      this.seedrDeviceError = this.resolveError(error, 'Unable to finalize Seedr authorization.');
+    });
+  }
+
+  disconnectSeedr(): void {
+    this.downloads.seedrLogout().subscribe(response => {
+      if (response?.status === 'error') {
+        this.seedrActionError = response.msg || 'Unable to disconnect Seedr right now.';
+        return;
+      }
+      this.seedrStatus = null;
+      this.seedrAccount = null;
+      this.seedrDeviceChallenge = null;
+      this.seedrActionMessage = 'Seedr account disconnected.';
+      this.refreshSeedrStatus();
+    }, error => {
+      this.seedrActionError = this.resolveError(error, 'Failed to disconnect Seedr.');
+    });
+  }
+
+  submitSeedrMagnets(): void {
+    const text = (this.seedrMagnetText || '').trim();
+    if (!text) {
+      this.seedrActionError = 'Enter at least one magnet link.';
+      return;
+    }
+    this.seedrSubmitInProgress = true;
+    this.seedrActionMessage = '';
+    this.seedrActionError = '';
+    const request = {
+      magnet_text: text,
+      folder: this.seedrFolder,
+      custom_name_prefix: this.seedrCustomPrefix,
+      auto_start: this.seedrAutoStart,
+    } as any;
+    this.downloads.seedrAdd(request).subscribe(response => {
+      this.seedrSubmitInProgress = false;
+      if (!response || response.status === 'error') {
+        this.seedrActionError = response?.msg || 'Failed to queue Seedr magnets.';
+        return;
+      }
+      const count = response.count ?? (response.results?.length ?? (response.id ? 1 : 0)) || 0;
+      this.seedrActionMessage = count > 1 ? `Queued ${count} magnet links in Seedr.` : 'Magnet link queued in Seedr.';
+      this.seedrMagnetText = '';
+    }, error => {
+      this.seedrSubmitInProgress = false;
+      this.seedrActionError = this.resolveError(error, 'Unable to queue Seedr magnets.');
+    });
+  }
+
+  onSeedrTorrentSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input?.files?.length) {
+      this.seedrSelectedTorrent = null;
+      return;
+    }
+    this.seedrSelectedTorrent = input.files[0];
+  }
+
+  uploadSeedrTorrent(): void {
+    if (!this.seedrSelectedTorrent || this.seedrUploadInProgress) {
+      return;
+    }
+    const file = this.seedrSelectedTorrent;
+    const form = new FormData();
+    form.append('file', file, file.name);
+    form.append('folder', this.seedrFolder || '');
+    form.append('custom_name_prefix', this.seedrCustomPrefix || '');
+    form.append('auto_start', this.seedrAutoStart ? 'true' : 'false');
+    this.seedrUploadInProgress = true;
+    this.seedrActionError = '';
+    this.seedrActionMessage = '';
+    this.downloads.seedrUpload(form).subscribe(response => {
+      this.seedrUploadInProgress = false;
+      if (!response || response.status === 'error') {
+        this.seedrActionError = response?.msg || 'Failed to upload torrent to Seedr.';
+        return;
+      }
+      this.seedrActionMessage = 'Torrent queued in Seedr.';
+      this.seedrSelectedTorrent = null;
+      if (this.seedrTorrentInput?.nativeElement) {
+        this.seedrTorrentInput.nativeElement.value = '';
+      }
+    }, error => {
+      this.seedrUploadInProgress = false;
+      this.seedrActionError = this.resolveError(error, 'Unable to upload torrent to Seedr.');
+    });
+  }
+
+  get seedrIsConnected(): boolean {
+    return !!this.seedrStatus?.connected;
+  }
+
+  get seedrChallengeExpiresIn(): number | null {
+    if (!this.seedrDeviceChallenge?.expires_at) {
+      return null;
+    }
+    const remaining = Math.max(0, Math.floor(this.seedrDeviceChallenge.expires_at - Date.now() / 1000));
+    return remaining;
+  }
+
+  get seedrChallengeExpireLabel(): string | null {
+    const remaining = this.seedrChallengeExpiresIn;
+    if (remaining === null) {
+      return null;
+    }
+    const minutes = Math.floor(remaining / 60);
+    const seconds = remaining % 60;
+    if (minutes <= 0 && seconds <= 0) {
+      return 'Expired';
+    }
+    if (minutes <= 0) {
+      return `${seconds}s remaining`;
+    }
+    return `${minutes}m ${seconds.toString().padStart(2, '0')}s remaining`;
+  }
+
+  private resolveError(error: any, fallback: string): string {
+    if (!error) {
+      return fallback;
+    }
+    if (typeof error === 'string') {
+      return error;
+    }
+    if (error.error) {
+      if (typeof error.error === 'string') {
+        return error.error;
+      }
+      if (typeof error.error?.msg === 'string') {
+        return error.error.msg;
+      }
+    }
+    if (typeof error.message === 'string') {
+      return error.message;
+    }
+    return fallback;
   }
 
   private loadCookieProfiles(selectDefault = false, focusProfileId?: string | null): void {

@@ -137,6 +137,64 @@ export interface SupportedSitesResponse extends Partial<Status> {
   providers?: Record<string, string[]>;
 }
 
+export interface SeedrAccountSummary {
+  username?: string | null;
+  user_id?: number | string | null;
+  premium?: number | boolean | null;
+  space_used?: number | null;
+  space_max?: number | null;
+  bandwidth_used?: number | null;
+  country?: string | null;
+}
+
+export interface SeedrDeviceChallenge {
+  device_code: string;
+  user_code: string;
+  verification_url: string;
+  interval: number;
+  expires_in: number;
+  expires_at?: number;
+}
+
+export interface SeedrStatusResponse extends Partial<Status> {
+  connected: boolean;
+  account?: SeedrAccountSummary | null;
+  device_challenge?: SeedrDeviceChallenge | null;
+  token_created_at?: number;
+  token_updated_at?: number;
+}
+
+export interface SeedrDeviceStartResponse extends Partial<Status> {
+  challenge?: SeedrDeviceChallenge;
+}
+
+export interface SeedrDeviceCompleteResponse extends Partial<Status> {
+  account?: SeedrAccountSummary | null;
+}
+
+export interface SeedrAddRequest {
+  magnet?: string;
+  magnet_link?: string;
+  magnet_links?: string[];
+  magnet_text?: string;
+  torrent_file?: string;
+  title?: string;
+  folder?: string;
+  custom_name_prefix?: string;
+  folder_id?: string;
+  auto_start?: boolean;
+}
+
+export interface SeedrAddResponse extends Partial<Status> {
+  id?: string;
+  results?: Array<Partial<Status> & { id?: string }>;
+  count?: number;
+}
+
+export interface SeedrUploadResponse extends Partial<Status> {
+  id?: string;
+}
+
 export interface GalleryDlCredentialSummary {
   id: string;
   name: string;
@@ -624,6 +682,43 @@ export class DownloadsService {
   public proxyAdd(request: ProxyAddRequest) {
     return this.http.post<ProxyAddResponse>('proxy/add', request).pipe(
       catchError((error: HttpErrorResponse) => this.handleTypedError<ProxyAddResponse>(error))
+    );
+  }
+
+  public seedrStatus() {
+    return this.http.get<SeedrStatusResponse>('seedr/status').pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<SeedrStatusResponse>(error))
+    );
+  }
+
+  public seedrDeviceStart() {
+    return this.http.post<SeedrDeviceStartResponse>('seedr/device/start', {}).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<SeedrDeviceStartResponse>(error))
+    );
+  }
+
+  public seedrDeviceComplete(deviceCode?: string | null) {
+    const payload = deviceCode ? { device_code: deviceCode } : {};
+    return this.http.post<SeedrDeviceCompleteResponse>('seedr/device/complete', payload).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<SeedrDeviceCompleteResponse>(error))
+    );
+  }
+
+  public seedrLogout() {
+    return this.http.post<Status>('seedr/logout', {}).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<Status>(error))
+    );
+  }
+
+  public seedrAdd(request: SeedrAddRequest) {
+    return this.http.post<SeedrAddResponse>('seedr/add', request).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<SeedrAddResponse>(error))
+    );
+  }
+
+  public seedrUpload(form: FormData) {
+    return this.http.post<SeedrUploadResponse>('seedr/upload', form).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<SeedrUploadResponse>(error))
     );
   }
 
