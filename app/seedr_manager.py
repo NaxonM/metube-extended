@@ -40,6 +40,9 @@ def _progress_to_percent(progress: str) -> Optional[float]:
     if not progress:
         return None
     text = progress.strip()
+    lowered = text.lower()
+    if any(token in lowered for token in ("done", "finished", "seeding", "complete")):
+        return 100.0
     if text.endswith('%'):
         text = text[:-1]
     try:
@@ -217,8 +220,8 @@ class SeedrDownloadManager:
     ARCHIVE_MAX_ATTEMPTS = 6
     ARCHIVE_RETRY_INTERVAL = 5
     TORRENT_FETCH_TIMEOUT = 3 * 60 * 60  # Seedr enforces a 3-hour limit for free accounts
-    TORRENT_STALL_TIMEOUT = 45 * 60      # Abort if no progress is reported for 45 minutes
-    MAX_STATUS_ERRORS = 12               # Allow ~2 minutes of intermittent API failures
+    TORRENT_STALL_TIMEOUT = 90 * 60      # Abort if no progress for 90 minutes; Seedr free tier can be slow
+    MAX_STATUS_ERRORS = 30               # Allow up to ~5 minutes of intermittent API failures
 
     def __init__(
         self,
@@ -786,6 +789,16 @@ class SeedrDownloadManager:
                 continue
 
             self._update_account_from_contents(contents)
+
+            if job.stage in {"waiting-seedr", "uploading", "queued"}:
+                resolved_probe = self._detect_completed_without_torrent(contents, job)
+                if resolved_probe:
+                    job.last_progress_percent = 100.0
+                    job.last_progress_at = time.monotonic()
+                    job.stage = "ready"
+                    job.info.msg = "Seedr finished fetching torrent"
+                    await self._notify_update(job)
+                    return resolved_probe
 
             torrent = None
             magnet_hash = add_hash_from_magnet(job.magnet_link) if job.magnet_link else None
