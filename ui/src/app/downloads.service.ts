@@ -289,6 +289,7 @@ export interface Download {
   id: string;
   title: string;
   url: string;
+  storage_key?: string;
   quality: string;
   format: string;
   folder: string;
@@ -341,7 +342,8 @@ export interface DownloadMetrics {
 }
 
 export interface DownloadUpdateEvent {
-  url: string;
+  id: string;
+  sourceUrl: string;
   location: 'queue' | 'done';
 }
 
@@ -381,13 +383,23 @@ export class DownloadsService {
       this.resetMetricsState();
 
       data[0].forEach(entry => {
-        this.queue.set(entry[0], entry[1]);
-        this.applyQueueMetrics(undefined, entry[1]);
+        const key = entry[0];
+        const download = entry[1];
+        if (download) {
+          download.storage_key = download.storage_key || key;
+        }
+        this.queue.set(key, download);
+        this.applyQueueMetrics(undefined, download);
       });
 
       data[1].forEach(entry => {
-        this.done.set(entry[0], entry[1]);
-        this.applyDoneMetrics(undefined, entry[1]);
+        const key = entry[0];
+        const download = entry[1];
+        if (download) {
+          download.storage_key = download.storage_key || key;
+        }
+        this.done.set(key, download);
+        this.applyDoneMetrics(undefined, download);
       });
 
       this.trimDoneHistory();
@@ -397,38 +409,44 @@ export class DownloadsService {
     });
     socket.fromEvent('added').subscribe((strdata: string) => {
       let data: Download = JSON.parse(strdata);
-      const previous = this.queue.get(data.url);
-      this.queue.set(data.url, data);
+      const key = data.storage_key || data.url;
+      data.storage_key = key;
+      const previous = this.queue.get(key);
+      this.queue.set(key, data);
       this.applyQueueMetrics(previous, data);
       this.emitMetrics();
       this.queueChanged.next();
     });
     socket.fromEvent('updated').subscribe((strdata: string) => {
       let data: Download = JSON.parse(strdata);
-      const existing = this.queue.get(data.url);
+      const key = data.storage_key || data.url;
+      data.storage_key = key;
+      const existing = this.queue.get(key);
       if (existing) {
         data.checked = existing.checked;
         data.deleting = existing.deleting;
       }
-      this.queue.set(data.url, data);
+      this.queue.set(key, data);
       this.applyQueueMetrics(existing, data);
       this.emitMetrics();
-      this.updated.next({ url: data.url, location: 'queue' });
+      this.updated.next({ id: key, sourceUrl: data.url, location: 'queue' });
     });
     socket.fromEvent('completed').subscribe((strdata: string) => {
       let data: Download = JSON.parse(strdata);
-      const existing = this.queue.get(data.url);
+      const key = data.storage_key || data.url;
+      data.storage_key = key;
+      const existing = this.queue.get(key);
       if (existing) {
-        this.queue.delete(data.url);
+        this.queue.delete(key);
         this.applyQueueMetrics(existing, undefined);
       }
-      this.done.set(data.url, data);
+      this.done.set(key, data);
       this.applyDoneMetrics(undefined, data);
       this.trimDoneHistory();
       this.emitMetrics();
       this.queueChanged.next();
       this.doneChanged.next();
-      this.updated.next({ url: data.url, location: 'done' });
+      this.updated.next({ id: key, sourceUrl: data.url, location: 'done' });
     });
     socket.fromEvent('canceled').subscribe((strdata: string) => {
       let data: string = JSON.parse(strdata);
@@ -452,7 +470,9 @@ export class DownloadsService {
     });
     socket.fromEvent('renamed').subscribe((strdata: string) => {
       let data: Download = JSON.parse(strdata);
-      let existing: Download = this.done.get(data.url);
+      const key = data.storage_key || data.url;
+      data.storage_key = key;
+      let existing: Download = this.done.get(key);
       if (!existing) {
         return;
       }
@@ -464,7 +484,7 @@ export class DownloadsService {
         error: data.error ?? existing.error,
         size: data.size ?? existing.size
       };
-      this.done.set(data.url, updatedEntry);
+      this.done.set(key, updatedEntry);
       this.applyDoneMetrics(existing, updatedEntry);
       this.emitMetrics();
       this.doneChanged.next();
@@ -889,13 +909,21 @@ export class DownloadsService {
 
   public startByFilter(where: 'queue' | 'done', filter: (dl: Download) => boolean) {
     let ids: string[] = [];
-    this[where].forEach((dl: Download) => { if (filter(dl)) ids.push(dl.url) });
+    this[where].forEach((dl: Download, key: string) => {
+      if (filter(dl)) {
+        ids.push(key);
+      }
+    });
     return this.startById(ids);
   }
 
   public delByFilter(where: 'queue' | 'done', filter: (dl: Download) => boolean) {
     let ids: string[] = [];
-    this[where].forEach((dl: Download) => { if (filter(dl)) ids.push(dl.url) });
+    this[where].forEach((dl: Download, key: string) => {
+      if (filter(dl)) {
+        ids.push(key);
+      }
+    });
     return this.delById(where, ids);
   }
   public addDownloadByUrl(url: string): Promise<any> {

@@ -15,7 +15,7 @@ from seedrcc import AsyncSeedr, Token, models
 from seedrcc.exceptions import APIError, AuthenticationError, SeedrError
 
 from seedr_credentials import SeedrCredentialStore
-from ytdl import DownloadInfo, DownloadQueue
+from ytdl import DownloadInfo, DownloadQueue, build_download_storage_key
 
 log = logging.getLogger("seedr")
 
@@ -315,10 +315,24 @@ class SeedrDownloadManager:
     # Queue helpers
     # ------------------------------------------------------------------
     def get(self) -> Tuple[List[Tuple[str, DownloadInfo]], List[Tuple[str, DownloadInfo]]]:
-        queue_items = [(key, job.info) for key, job in self.queue.items()] + [
-            (key, job.info) for key, job in self.pending.items()
-        ]
-        done_items = [(key, job.info) for key, job in self.done.items()]
+        queue_items: List[Tuple[str, DownloadInfo]] = []
+        for key, job in self.queue.items():
+            info = job.info
+            if getattr(info, "storage_key", None) is None:
+                info.storage_key = key
+            queue_items.append((key, info))
+        for key, job in self.pending.items():
+            info = job.info
+            if getattr(info, "storage_key", None) is None:
+                info.storage_key = key
+            queue_items.append((key, info))
+
+        done_items: List[Tuple[str, DownloadInfo]] = []
+        for key, job in self.done.items():
+            info = job.info
+            if getattr(info, "storage_key", None) is None:
+                info.storage_key = key
+            done_items.append((key, info))
         done_items.reverse()
         return queue_items, done_items
 
@@ -344,14 +358,14 @@ class SeedrDownloadManager:
             return {"status": "error", "msg": "Seedr account is not connected."}
 
         job_id = uuid.uuid4().hex
-        storage_key = f"seedr:{job_id}"
         display_title = title or self._infer_display_title(magnet_link, torrent_file)
         magnet_hash = add_hash_from_magnet(magnet_link) if magnet_link else None
+        storage_key = build_download_storage_key('seedr', job_id, extra=magnet_hash)
 
         info = DownloadInfo(
             job_id,
             display_title,
-            storage_key,
+            magnet_link or torrent_file or "",
             "seedr",
             "seedr",
             folder or "",
@@ -363,6 +377,7 @@ class SeedrDownloadManager:
             user_id=self.user_id,
             original_url=magnet_link or torrent_file or "",
             provider="seedr",
+            storage_key=storage_key,
         )
         info.status = "pending"
         info.percent = 0.0
@@ -751,7 +766,7 @@ class SeedrDownloadManager:
     ) -> bool:
         directory = self.base_queue._resolve_download_directory(job.info)
         if not directory:
-            await self._finalize_error(job.info.url, job, "Download directory unavailable.")
+            await self._finalize_error(getattr(job.info, "storage_key", job.info.url), job, "Download directory unavailable.")
             return False
         os.makedirs(directory, exist_ok=True)
 
@@ -810,7 +825,7 @@ class SeedrDownloadManager:
                     pass
             return False
         except Exception as exc:
-            await self._finalize_error(job.info.url, job, f"Failed to download archive: {exc}")
+            await self._finalize_error(getattr(job.info, "storage_key", job.info.url), job, f"Failed to download archive: {exc}")
             if os.path.exists(path):
                 try:
                     os.remove(path)
@@ -845,16 +860,16 @@ class SeedrDownloadManager:
         try:
             fetch = await client.fetch_file(str(file.folder_file_id))
         except SeedrError as exc:
-            await self._finalize_error(job.info.url, job, _format_seedr_error("Failed to fetch Seedr file", exc))
+            await self._finalize_error(getattr(job.info, "storage_key", job.info.url), job, _format_seedr_error("Failed to fetch Seedr file", exc))
             return False
 
         if not fetch.result or not fetch.url:
-            await self._finalize_error(job.info.url, job, "Seedr did not return a download link for the file.")
+            await self._finalize_error(getattr(job.info, "storage_key", job.info.url), job, "Seedr did not return a download link for the file.")
             return False
 
         directory = self.base_queue._resolve_download_directory(job.info)
         if not directory:
-            await self._finalize_error(job.info.url, job, "Download directory unavailable.")
+            await self._finalize_error(getattr(job.info, "storage_key", job.info.url), job, "Download directory unavailable.")
             return False
         os.makedirs(directory, exist_ok=True)
 
@@ -912,7 +927,7 @@ class SeedrDownloadManager:
                     pass
             return False
         except Exception as exc:
-            await self._finalize_error(job.info.url, job, f"Failed to download Seedr file: {exc}")
+            await self._finalize_error(getattr(job.info, "storage_key", job.info.url), job, f"Failed to download Seedr file: {exc}")
             if os.path.exists(path):
                 try:
                     os.remove(path)
@@ -1145,10 +1160,14 @@ class SeedrDownloadManager:
 
         for record in data:
             try:
+                storage_key = record.get("storage_key") or record.get("url")
+                if not storage_key:
+                    continue
+                source_url = record.get("original_url") or record.get("url") or ""
                 info = DownloadInfo(
                     record["id"],
                     record.get("title"),
-                    record["url"],
+                    source_url,
                     record.get("quality", "seedr"),
                     record.get("format", "seedr"),
                     record.get("folder", ""),
@@ -1158,8 +1177,9 @@ class SeedrDownloadManager:
                     playlist_item_limit=0,
                     cookiefile=None,
                     user_id=self.user_id,
-                    original_url=record.get("original_url"),
+                    original_url=record.get("original_url") or source_url,
                     provider="seedr",
+                    storage_key=storage_key,
                 )
             except Exception as exc:
                 log.warning("Skipping corrupted Seedr history record: %s", exc)
@@ -1178,18 +1198,23 @@ class SeedrDownloadManager:
             job.seedr_folder_name = record.get("seedr_folder_name")
             job.local_torrent_path = None
             job.stage = "complete" if info.status == "finished" else info.status or "completed"
-            self.done[info.url] = job
+            key = getattr(info, "storage_key", None) or storage_key
+            info.storage_key = key
+            self.done[key] = job
 
     def _persist_completed(self) -> None:
         self._enforce_history_limit()
         data = []
         for storage_key, job in self.done.items():
             info = job.info
+            if getattr(info, "storage_key", None) is None:
+                info.storage_key = storage_key
             data.append(
                 {
                     "id": info.id,
-                    "url": storage_key,
-                    "original_url": info.original_url,
+                    "storage_key": storage_key,
+                    "url": info.original_url or info.url,
+                    "original_url": info.original_url or info.url,
                     "title": info.title,
                     "filename": info.filename,
                     "folder": info.folder,

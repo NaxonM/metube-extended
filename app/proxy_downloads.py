@@ -11,7 +11,7 @@ from urllib.parse import unquote, urlparse
 
 import aiohttp
 
-from ytdl import DownloadInfo
+from ytdl import DownloadInfo, build_download_storage_key
 class ProxySettingsStore:
     def __init__(self, path: str, default_enabled: bool, default_limit_mb: int):
         self.path = path
@@ -156,10 +156,14 @@ class ProxyDownloadManager:
             return
 
         for record in data:
+            storage_key = record.get('storage_key') or record.get('url')
+            if not storage_key:
+                continue
+            source_url = record.get('original_url') or record.get('source_url') or record.get('url') or ''
             info = DownloadInfo(
                 record['id'],
                 record['title'],
-                record['url'],
+                source_url,
                 record.get('quality', 'proxy'),
                 record.get('format', 'proxy'),
                 record.get('folder', ''),
@@ -169,8 +173,9 @@ class ProxyDownloadManager:
                 playlist_item_limit=0,
                 cookiefile=None,
                 user_id=self.user_id,
-                original_url=record.get('original_url') or record['source_url'],
-                provider='proxy'
+                original_url=record.get('original_url') or source_url,
+                provider='proxy',
+                storage_key=storage_key,
             )
             info.filename = record.get('filename')
             info.size = record.get('size')
@@ -181,20 +186,22 @@ class ProxyDownloadManager:
             info.eta = None
             info.timestamp = record.get('timestamp', time.time_ns())
 
-            job = ProxyDownloadJob(info, record['source_url'])
+            job = ProxyDownloadJob(info, record.get('source_url') or source_url)
             job.file_path = record.get('file_path')
             job.total_bytes = record.get('size')
-            self.done[info.url] = job
+            info.storage_key = storage_key
+            self.done[storage_key] = job
         if self._enforce_history_limit():
             self._persist_completed()
 
     def _persist_completed(self):
         self._enforce_history_limit()
         data = []
-        for job in self.done.values():
+        for storage_key, job in self.done.items():
             info = job.info
             data.append({
                 'id': info.id,
+                'storage_key': storage_key,
                 'url': info.url,
                 'source_url': job.source_url,
                 'original_url': getattr(info, 'original_url', info.url),
@@ -236,10 +243,24 @@ class ProxyDownloadManager:
     # Public helpers
     # ------------------------------------------------------------------
     def get(self):
-        queue_items = [(key, job.info) for key, job in self.queue.items()] + [
-            (key, job.info) for key, job in self.pending.items()
-        ]
-        done_items = [(key, job.info) for key, job in self.done.items()]
+        queue_items = []
+        for key, job in self.queue.items():
+            info = job.info
+            if getattr(info, 'storage_key', None) is None:
+                info.storage_key = key
+            queue_items.append((key, info))
+        for key, job in self.pending.items():
+            info = job.info
+            if getattr(info, 'storage_key', None) is None:
+                info.storage_key = key
+            queue_items.append((key, info))
+
+        done_items = []
+        for key, job in self.done.items():
+            info = job.info
+            if getattr(info, 'storage_key', None) is None:
+                info.storage_key = key
+            done_items.append((key, info))
         done_items.reverse()
         return queue_items, done_items
 
@@ -250,7 +271,8 @@ class ProxyDownloadManager:
         return self.done.get(download_id)
 
     def resolve_file_path(self, info: DownloadInfo) -> Optional[str]:
-        job = self.done.get(info.url)
+        key = getattr(info, 'storage_key', None) or info.url
+        job = self.done.get(key)
         return job.file_path if job else None
 
     # ------------------------------------------------------------------
@@ -296,12 +318,12 @@ class ProxyDownloadManager:
     ) -> Dict:
         display_title = title or _guess_filename_from_headers({}, url)
         job_id = uuid.uuid4().hex
-        storage_key = f'proxy:{job_id}'
+        storage_key = build_download_storage_key('proxy', job_id)
 
         info = DownloadInfo(
             job_id,
             display_title,
-            storage_key,
+            original_url or url,
             quality_label,
             format_id,
             folder or '',
@@ -312,7 +334,8 @@ class ProxyDownloadManager:
             cookiefile=None,
             user_id=self.user_id,
             original_url=original_url or url,
-            provider=provider
+            provider=provider,
+            storage_key=storage_key,
         )
 
         info.status = 'pending'
@@ -429,7 +452,7 @@ class ProxyDownloadManager:
             await self._run_download(job)
 
     async def _run_download(self, job: ProxyDownloadJob):
-        storage_key = job.info.url
+        storage_key = getattr(job.info, 'storage_key', None) or job.info.url
         directory = self.base_queue._resolve_download_directory(job.info)  # reuse base logic
         if not directory:
             job.info.status = 'error'

@@ -47,7 +47,7 @@ _FILE_EXTENSIONS = (
     ".txt",
 )
 
-from ytdl import DownloadInfo
+from ytdl import DownloadInfo, build_download_storage_key
 
 if TYPE_CHECKING:
     from gallerydl_credentials import CookieStore, CredentialStore
@@ -406,10 +406,24 @@ class GalleryDlManager:
     # Public API
     # ------------------------------------------------------------------
     def get(self) -> Tuple[List[Tuple[str, DownloadInfo]], List[Tuple[str, DownloadInfo]]]:
-        queue_items = [(key, job.info) for key, job in self.queue.items()] + [
-            (key, job.info) for key, job in self.pending.items()
-        ]
-        done_items = [(key, job.info) for key, job in self.done.items()]
+        queue_items: List[Tuple[str, DownloadInfo]] = []
+        for key, job in self.queue.items():
+            info = job.info
+            if getattr(info, "storage_key", None) is None:
+                info.storage_key = key
+            queue_items.append((key, info))
+        for key, job in self.pending.items():
+            info = job.info
+            if getattr(info, "storage_key", None) is None:
+                info.storage_key = key
+            queue_items.append((key, info))
+
+        done_items: List[Tuple[str, DownloadInfo]] = []
+        for key, job in self.done.items():
+            info = job.info
+            if getattr(info, "storage_key", None) is None:
+                info.storage_key = key
+            done_items.append((key, info))
         done_items.reverse()
         return queue_items, done_items
 
@@ -433,13 +447,13 @@ class GalleryDlManager:
         archive_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         job_id = uuid.uuid4().hex
-        storage_key = f"gallerydl:{job_id}"
+        storage_key = build_download_storage_key('gallerydl', job_id)
         display_title = title or url
 
         info = DownloadInfo(
             job_id,
             display_title,
-            storage_key,
+            url,
             "gallery",
             "zip",
             folder="",
@@ -451,6 +465,7 @@ class GalleryDlManager:
             user_id=None,
             original_url=url,
             provider="gallerydl",
+            storage_key=storage_key,
         )
         info.status = "pending"
         info.percent = None
@@ -985,7 +1000,7 @@ class GalleryDlManager:
             info = DownloadInfo(
                 job_id,
                 record.get("title") or job_id,
-                storage_key,
+                record.get("original_url") or record.get("url") or "",
                 record.get("quality", "gallery"),
                 record.get("format", "zip"),
                 folder="",
@@ -995,8 +1010,9 @@ class GalleryDlManager:
                 playlist_item_limit=0,
                 cookiefile=None,
                 user_id=None,
-                original_url=record.get("original_url"),
+                original_url=record.get("original_url") or record.get("url"),
                 provider="gallerydl",
+                storage_key=storage_key,
             )
             info.status = record.get("status", "finished")
             info.filename = record.get("filename")
@@ -1031,6 +1047,8 @@ class GalleryDlManager:
         data = []
         for storage_key, job in self.done.items():
             info = job.info
+            if getattr(info, 'storage_key', None) is None:
+                info.storage_key = storage_key
             data.append(
                 {
                     "id": info.id,

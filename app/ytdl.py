@@ -25,6 +25,31 @@ COOKIE_WARNING_MARKERS = (
     'please sign in',
 )
 
+
+def build_download_storage_key(
+    provider: str,
+    source_id: str,
+    *,
+    quality: Optional[str] = None,
+    format_id: Optional[str] = None,
+    folder: Optional[str] = None,
+    custom_prefix: Optional[str] = None,
+    extra: Optional[str] = None,
+) -> str:
+    parts = [provider or 'default', source_id or '']
+    if quality:
+        parts.append(str(quality))
+    if format_id:
+        parts.append(str(format_id))
+    if folder:
+        parts.append(str(folder))
+    if custom_prefix:
+        parts.append(str(custom_prefix))
+    if extra:
+        parts.append(str(extra))
+    return '::'.join(parts)
+
+
 class DownloadQueueNotifier:
     async def added(self, dl):
         raise NotImplementedError
@@ -45,7 +70,7 @@ class DownloadQueueNotifier:
         raise NotImplementedError
 
 class DownloadInfo:
-    def __init__(self, id, title, url, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookiefile=None, user_id=None, original_url=None, provider='ytdlp', cookie_profile_id=None):
+    def __init__(self, id, title, url, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookiefile=None, user_id=None, original_url=None, provider='ytdlp', cookie_profile_id=None, storage_key=None):
         self.id = id if len(custom_name_prefix) == 0 else f'{custom_name_prefix}.{id}'
         self.title = title if len(custom_name_prefix) == 0 else f'{custom_name_prefix}.{title}'
         self.url = url
@@ -68,6 +93,7 @@ class DownloadInfo:
         self.provider = provider
         self.cookie_warning = None
         self.cookie_warning_at = None
+        self.storage_key = storage_key or url
 
 class Download:
     manager = None
@@ -301,7 +327,10 @@ class PersistentQueue:
 
     def load(self):
         for k, v in self.saved_items():
-            self.dict[k] = Download(None, None, None, None, None, None, {}, v)
+            info = v
+            if getattr(info, 'storage_key', None) is None:
+                info.storage_key = k
+            self.dict[k] = Download(None, None, None, None, None, None, {}, info)
 
     def exists(self, key):
         return key in self.dict
@@ -317,7 +346,8 @@ class PersistentQueue:
             return sorted(shelf.items(), key=lambda item: item[1].timestamp)
 
     def put(self, value):
-        key = value.info.url
+        key = getattr(value.info, 'storage_key', None) or value.info.url
+        value.info.storage_key = key
         self.dict[key] = value
         with shelve.open(self.path, 'w') as shelf:
             shelf[key] = value.info
@@ -547,10 +577,11 @@ class DownloadQueue:
                 message = download.info.cookie_warning or download.info.msg
                 if download.info.cookie_warning or self._is_cookie_error(message):
                     self.cookie_status_store.mark_invalid(download.info.user_id, message)
-        if self.queue.exists(download.info.url):
-            self.queue.delete(download.info.url)
+        storage_key = getattr(download.info, 'storage_key', None) or download.info.url
+        if self.queue.exists(storage_key):
+            self.queue.delete(storage_key)
             if download.canceled:
-                asyncio.create_task(self.notifier.canceled(download.info.url))
+                asyncio.create_task(self.notifier.canceled(storage_key))
             else:
                 self.done.put(download)
                 if self.max_history_items >= 0:
@@ -688,9 +719,35 @@ class DownloadQueue:
                 log.info('Entry extension reported as unknown; delegating to proxy download workflow')
                 return {'status': 'unsupported', 'msg': 'This URL looks like a direct file download and is not supported by yt-dlp.'}
             key = entry.get('webpage_url') or entry['url']
-            if not self.queue.exists(key):
+            source_id = entry.get('id') or key
+            storage_key = build_download_storage_key(
+                provider='ytdlp',
+                source_id=source_id,
+                quality=quality,
+                format_id=format,
+                folder=folder or '',
+                custom_prefix=custom_name_prefix or '',
+                extra=str(entry.get('playlist_index') or '') or None,
+            )
+            if not self.queue.exists(storage_key) and not self.pending.exists(storage_key):
                 original_url = entry.get('webpage_url') or entry.get('url') or key
-                dl = DownloadInfo(entry['id'], entry.get('title') or entry['id'], key, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, cookie_path, self.user_id, original_url=original_url, cookie_profile_id=cookie_profile_id)
+                dl = DownloadInfo(
+                    entry['id'],
+                    entry.get('title') or entry['id'],
+                    key,
+                    quality,
+                    format,
+                    folder,
+                    custom_name_prefix,
+                    error,
+                    entry,
+                    playlist_item_limit,
+                    cookie_path,
+                    self.user_id,
+                    original_url=original_url,
+                    cookie_profile_id=cookie_profile_id,
+                    storage_key=storage_key,
+                )
                 result = await self.__add_download(dl, auto_start, cookie_path)
                 if result and result.get('status') == 'error':
                     return result
@@ -780,10 +837,24 @@ class DownloadQueue:
         return response
 
     def get(self):
-        queue_items = list((k, v.info) for k, v in self.queue.items()) + list(
-            (k, v.info) for k, v in self.pending.items()
-        )
-        done_items = [(k, v.info) for k, v in self.done.items()]
+        queue_items = []
+        for k, v in self.queue.items():
+            info = v.info
+            if getattr(info, 'storage_key', None) is None:
+                info.storage_key = k
+            queue_items.append((k, info))
+        for k, v in self.pending.items():
+            info = v.info
+            if getattr(info, 'storage_key', None) is None:
+                info.storage_key = k
+            queue_items.append((k, info))
+
+        done_items = []
+        for k, v in self.done.items():
+            info = v.info
+            if getattr(info, 'storage_key', None) is None:
+                info.storage_key = k
+            done_items.append((k, info))
         done_items.reverse()
         return (queue_items, done_items)
 

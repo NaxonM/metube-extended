@@ -95,6 +95,33 @@ def _get_ytdlp_extractors():
         return tuple()
 
 
+def _extractor_identity(extractor: Any) -> str:
+    name: Optional[str] = None
+    if hasattr(extractor, 'ie_key'):
+        try:
+            candidate = extractor.ie_key()
+        except Exception:  # pragma: no cover - defensive
+            candidate = None
+        if candidate:
+            name = candidate
+    if not name:
+        raw = getattr(extractor, 'IE_NAME', None)
+        if raw:
+            name = raw
+    if not name:
+        name = extractor.__class__.__name__
+    return str(name)
+
+
+def _is_fallback_ytdlp_extractor(extractor: Any) -> bool:
+    module_name = getattr(extractor, '__module__', '')
+    if module_name.startswith('yt_dlp.extractor.generic'):
+        return True
+    identity = _extractor_identity(extractor).lower()
+    return identity == 'generic'
+
+
+@functools.lru_cache(maxsize=1024)
 def is_ytdlp_supported(url: str) -> bool:
     if not url:
         return False
@@ -103,6 +130,9 @@ def is_ytdlp_supported(url: str) -> bool:
         for extractor in _get_ytdlp_extractors():
             try:
                 if extractor.suitable(url):
+                    if _is_fallback_ytdlp_extractor(extractor):
+                        log.debug('yt-dlp fallback extractor matched %s; treating as unsupported', url)
+                        continue
                     working = getattr(extractor, 'working', None)
                     if callable(working) and not working():
                         continue
@@ -1020,6 +1050,7 @@ async def add(request):
 
     gallery_supported = is_gallerydl_supported(url, getattr(config, 'GALLERY_DL_EXEC', 'gallery-dl'))
     ytdlp_supported = is_ytdlp_supported(url)
+    fallback_to_gallery = gallery_supported and preferred_backend != 'ytdlp'
 
     def build_gallery_prompt() -> Dict[str, Any]:
         return {
@@ -1097,38 +1128,50 @@ async def add(request):
             if cookie_path:
                 details = _inspect_cookie_file(cookie_path)
                 log.info('yt-dlp falling back to legacy cookie file: %s details=%s', cookie_path, details)
-        status = await queue.add(
-            url,
-            quality,
-            format,
-            folder,
-            custom_name_prefix,
-            playlist_strict_mode,
-            playlist_item_limit,
-            auto_start,
-            cookie_path=cookie_path,
-            cookie_profile_id=cookie_profile_id,
-        )
-        if cookie_profile_id:
-            ytdlp_cookie_store.touch_profile(cookie_profile_id)
-            log.info('yt-dlp cookie profile %s marked as recently used', cookie_profile_id)
+        if ytdlp_supported:
+            status = await queue.add(
+                url,
+                quality,
+                format,
+                folder,
+                custom_name_prefix,
+                playlist_strict_mode,
+                playlist_item_limit,
+                auto_start,
+                cookie_path=cookie_path,
+                cookie_profile_id=cookie_profile_id,
+            )
+            if cookie_profile_id:
+                ytdlp_cookie_store.touch_profile(cookie_profile_id)
+                log.info('yt-dlp cookie profile %s marked as recently used', cookie_profile_id)
+        else:
+            status = {
+                'status': 'unsupported',
+                'msg': 'This URL is not supported by yt-dlp.',
+            }
 
     if status.get('status') == 'unsupported':
-        proxy_config = await proxy_settings.get()
-        status['proxy'] = {
-            'url': url,
-            'quality': quality,
-            'format': format,
-            'folder': folder or '',
-            'custom_name_prefix': custom_name_prefix or '',
-            'playlist_strict_mode': playlist_strict_mode,
-            'playlist_item_limit': playlist_item_limit,
-            'auto_start': auto_start,
-            'size_limit_mb': proxy_config.get('limit_mb', 0),
-            'limit_enabled': proxy_config.get('limit_enabled', False)
-        }
-        if not status.get('msg'):
-            status['msg'] = 'This URL is not supported by yt-dlp. You can still download it directly through the server.'
+        if fallback_to_gallery:
+            fallback_status: Dict[str, Any] = {'status': 'gallerydl', 'gallerydl': build_gallery_prompt()}
+            if status.get('msg'):
+                fallback_status['msg'] = status['msg']
+            status = fallback_status
+        else:
+            proxy_config = await proxy_settings.get()
+            status['proxy'] = {
+                'url': url,
+                'quality': quality,
+                'format': format,
+                'folder': folder or '',
+                'custom_name_prefix': custom_name_prefix or '',
+                'playlist_strict_mode': playlist_strict_mode,
+                'playlist_item_limit': playlist_item_limit,
+                'auto_start': auto_start,
+                'size_limit_mb': proxy_config.get('limit_mb', 0),
+                'limit_enabled': proxy_config.get('limit_enabled', False)
+            }
+            if not status.get('msg'):
+                status['msg'] = 'This URL is not supported by yt-dlp. You can still download it directly through the server.'
     elif status.get('status') == 'error' and cookie_path and is_cookie_error_message(status.get('msg')):
         cookie_status_store.mark_invalid(user_id, status.get('msg'))
     return web.Response(text=serializer.encode(status))
