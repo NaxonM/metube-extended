@@ -7,7 +7,7 @@ import { faLink, faXmark, faDownload, faSliders, faChevronDown, faChevronUp, faC
 
 import { CookieService } from 'ngx-cookie-service';
 
-import { DownloadsService, Status, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, CookieStatusResponse, GalleryDlPrompt, BackendChoice, YtdlpCookieProfile, SaveCookieProfilePayload, SupportedSitesResponse, CurrentUser, SeedrStatusResponse, SeedrDeviceChallenge, SeedrAccountSummary } from '../../downloads.service';
+import { DownloadsService, Status, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, CookieStatusResponse, GalleryDlPrompt, BackendChoice, YtdlpCookieProfile, SaveCookieProfilePayload, SupportedSitesResponse, CurrentUser, SeedrStatusResponse, SeedrDeviceChallenge, SeedrAccountSummary, SeedrJobEntry } from '../../downloads.service';
 import { Formats, Format, Quality } from '../../formats';
 
 type PendingAddRequest = {
@@ -124,6 +124,9 @@ export class DashboardToolsComponent implements OnInit {
   seedrActionMessage = '';
   seedrActionError = '';
   seedrPanelOpen = true;
+  seedrJobsPending: SeedrJobEntry[] = [];
+  seedrJobsInProgress: SeedrJobEntry[] = [];
+  seedrJobsCompleted: SeedrJobEntry[] = [];
 
   @ViewChild('seedrTorrentInput') seedrTorrentInput?: ElementRef<HTMLInputElement>;
 
@@ -544,6 +547,10 @@ export class DashboardToolsComponent implements OnInit {
       if (!response?.connected) {
         this.seedrPanelOpen = true;
       }
+      const jobs = response.jobs || {};
+      this.seedrJobsPending = [...(jobs.pending || [])];
+      this.seedrJobsInProgress = [...(jobs.in_progress || [])];
+      this.seedrJobsCompleted = [...(jobs.completed || [])].slice(0, 5);
     }, error => {
       this.seedrStatusLoading = false;
       this.seedrStatusError = this.resolveError(error, 'Unable to load Seedr status.');
@@ -609,6 +616,9 @@ export class DashboardToolsComponent implements OnInit {
       this.seedrDeviceChallenge = null;
       this.seedrActionMessage = 'Seedr account disconnected.';
       this.seedrPanelOpen = true;
+      this.seedrJobsPending = [];
+      this.seedrJobsInProgress = [];
+      this.seedrJobsCompleted = [];
       this.refreshSeedrStatus();
     }, error => {
       this.seedrActionError = this.resolveError(error, 'Failed to disconnect Seedr.');
@@ -639,6 +649,7 @@ export class DashboardToolsComponent implements OnInit {
       const count = (response.count ?? (response.results?.length ?? (response.id ? 1 : 0))) || 0;
       this.seedrActionMessage = count > 1 ? `Queued ${count} magnet links in Seedr.` : 'Magnet link queued in Seedr.';
       this.seedrMagnetText = '';
+      this.refreshSeedrStatus();
     }, error => {
       this.seedrSubmitInProgress = false;
       this.seedrActionError = this.resolveError(error, 'Unable to queue Seedr magnets.');
@@ -678,6 +689,7 @@ export class DashboardToolsComponent implements OnInit {
       if (this.seedrTorrentInput?.nativeElement) {
         this.seedrTorrentInput.nativeElement.value = '';
       }
+      this.refreshSeedrStatus();
     }, error => {
       this.seedrUploadInProgress = false;
       this.seedrActionError = this.resolveError(error, 'Unable to upload torrent to Seedr.');

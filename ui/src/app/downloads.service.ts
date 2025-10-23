@@ -162,6 +162,7 @@ export interface SeedrStatusResponse extends Partial<Status> {
   device_challenge?: SeedrDeviceChallenge | null;
   token_created_at?: number;
   token_updated_at?: number;
+  jobs?: SeedrJobSnapshot;
 }
 
 export interface SeedrDeviceStartResponse extends Partial<Status> {
@@ -193,6 +194,25 @@ export interface SeedrAddResponse extends Partial<Status> {
 
 export interface SeedrUploadResponse extends Partial<Status> {
   id?: string;
+}
+
+export interface SeedrJobEntry {
+  id: string;
+  title: string;
+  stage: string;
+  status: string;
+  msg: string;
+  percent: number | null;
+  size?: number | null;
+  created_at?: number;
+  location: 'pending' | 'in_progress' | 'completed';
+  provider?: string | null;
+}
+
+export interface SeedrJobSnapshot {
+  pending?: SeedrJobEntry[];
+  in_progress?: SeedrJobEntry[];
+  completed?: SeedrJobEntry[];
 }
 
 export interface GalleryDlCredentialSummary {

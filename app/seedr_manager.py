@@ -81,6 +81,8 @@ class SeedrJob:
         self._cancel_requested = False
         self._added_at = time.time()
         self.local_torrent_path: Optional[str] = torrent_file if torrent_file and os.path.exists(torrent_file) else None
+        self.stage: str = "queued"
+        self.announced: bool = False
 
     def cancel(self) -> None:
         self._cancel_requested = True
@@ -133,6 +135,15 @@ class SeedrDownloadManager:
         if self.max_history_items >= 0:
             if self._enforce_history_limit():
                 self._persist_completed()
+
+    async def _announce_job(self, job: SeedrJob) -> None:
+        if not job.announced:
+            job.announced = True
+            await self.notifier.added(job.info)
+
+    async def _notify_update(self, job: SeedrJob) -> None:
+        if job.announced:
+            await self.notifier.updated(job.info)
 
     # ------------------------------------------------------------------
     # Queue helpers
@@ -199,7 +210,6 @@ class SeedrDownloadManager:
             folder_id=folder_id or "-1",
         )
         self.pending[storage_key] = job
-        await self.notifier.added(info)
 
         if auto_start:
             await self.start_jobs([storage_key])
@@ -220,7 +230,8 @@ class SeedrDownloadManager:
                 job = self.pending.pop(storage_key)
                 job.info.status = "canceled"
                 self._cleanup_local_torrent(job)
-                await self.notifier.canceled(storage_key)
+                if job.announced:
+                    await self.notifier.canceled(storage_key)
                 continue
             job = self.queue.get(storage_key)
             if job:
@@ -288,9 +299,10 @@ class SeedrDownloadManager:
     # Internal helpers
     # ------------------------------------------------------------------
     async def _start_job(self, storage_key: str, job: SeedrJob) -> None:
-        job.info.status = "preparing"
+        job.stage = "uploading"
+        job.info.status = "pending"
         job.info.msg = "Preparing Seedr transfer"
-        await self.notifier.updated(job.info)
+        await self._notify_update(job)
 
         async def runner() -> None:
             async with self._semaphore:
@@ -323,9 +335,10 @@ class SeedrDownloadManager:
             await self._finalize_error(storage_key, job, "Job has no magnet link or torrent file.")
             return
 
-        job.info.status = "uploading"
+        job.stage = "uploading"
+        job.info.status = "pending"
         job.info.msg = "Adding torrent to Seedr"
-        await self.notifier.updated(job.info)
+        await self._notify_update(job)
 
         try:
             add_result = await client.add_torrent(folder_id=job.folder_id, **add_kwargs)
@@ -342,9 +355,10 @@ class SeedrDownloadManager:
 
         self._cleanup_local_torrent(job)
         job.seedr_torrent_id = add_result.user_torrent_id
-        job.info.status = "downloading"
+        job.stage = "waiting-seedr"
+        job.info.status = "pending"
         job.info.msg = "Waiting for Seedr to fetch torrent"
-        await self.notifier.updated(job.info)
+        await self._notify_update(job)
 
         torrent_data = await self._monitor_torrent(client, storage_key, job)
         if not torrent_data:
@@ -357,23 +371,39 @@ class SeedrDownloadManager:
         torrent, contents = torrent_data
         job.seedr_folder_name = torrent.folder or torrent.name
 
-        target_folder = self._resolve_folder(contents.folders, job.seedr_folder_name)
-        if not target_folder:
-            await self._finalize_error(storage_key, job, "Unable to locate Seedr folder for completed torrent.")
-            await self._cleanup_seedr(client, job)
-            return
+        file_candidate = self._resolve_file(contents.files, torrent)
+        success = False
 
-        job.seedr_folder_id = target_folder.id
-
-        if len(target_folder.files) == 1 and not target_folder.folders:
-            success = await self._download_seedr_file(client, job, target_folder.files[0])
+        if file_candidate:
+            success = await self._download_seedr_file(client, job, file_candidate)
         else:
-            archive = await self._prepare_archive(client, storage_key, job, target_folder)
-            if not archive:
+            target_folder = self._resolve_folder(contents.folders, job.seedr_folder_name)
+            if not target_folder:
+                await self._finalize_error(storage_key, job, "Unable to locate Seedr folder for completed torrent.")
+                await self._cleanup_seedr(client, job)
                 return
 
-            job.archive_url = archive.archive_url
-            success = await self._download_archive(job, target_folder, archive)
+            job.seedr_folder_id = target_folder.id
+
+            try:
+                folder_listing = await client.list_contents(str(target_folder.id))
+            except SeedrError as exc:
+                await self._finalize_error(storage_key, job, f"Failed to list Seedr folder: {exc}")
+                await self._cleanup_seedr(client, job)
+                return
+
+            nested_file = self._resolve_file(folder_listing.files, torrent)
+
+            if nested_file and not folder_listing.folders:
+                success = await self._download_seedr_file(client, job, nested_file)
+            else:
+                archive = await self._prepare_archive(client, storage_key, job, folder_listing)
+                if not archive:
+                    await self._cleanup_seedr(client, job)
+                    return
+
+                job.archive_url = archive.archive_url
+                success = await self._download_archive(job, folder_listing, archive)
 
         if not success:
             return
@@ -423,17 +453,21 @@ class SeedrDownloadManager:
             if progress is not None:
                 job.info.percent = progress
             job.info.msg = f"Seedr progress: {torrent.progress}" if torrent.progress else "Seedr downloading"
-            await self.notifier.updated(job.info)
+            await self._notify_update(job)
 
             if progress is not None and progress >= 100:
+                job.stage = "ready"
+                job.info.msg = "Seedr finished fetching torrent"
+                await self._notify_update(job)
                 return torrent, contents
 
             await asyncio.sleep(self.POLL_INTERVAL)
 
         log.info("Seedr job %s canceled before completion", storage_key)
+        job.stage = "canceled"
         job.info.status = "canceled"
         job.info.msg = "Seedr job canceled"
-        await self.notifier.updated(job.info)
+        await self._notify_update(job)
         return None
 
     async def _prepare_archive(
@@ -443,6 +477,9 @@ class SeedrDownloadManager:
         job: SeedrJob,
         folder: models.Folder,
     ) -> Optional[models.CreateArchiveResult]:
+        job.stage = "preparing-download"
+        job.info.msg = "Preparing Seedr archive"
+        await self._notify_update(job)
         attempt = 0
         while attempt < self.ARCHIVE_MAX_ATTEMPTS:
             attempt += 1
@@ -481,6 +518,8 @@ class SeedrDownloadManager:
             filename = f"{filename}.zip"
         filename, path = _ensure_unique_path(directory, filename)
 
+        await self._announce_job(job)
+        job.stage = "downloading"
         job.info.status = "downloading"
         job.info.msg = "Downloading archive from Seedr"
         job.info.filename = filename
@@ -488,7 +527,7 @@ class SeedrDownloadManager:
         job.info.percent = None
         job.info.speed = None
         job.info.eta = None
-        await self.notifier.updated(job.info)
+        await self._notify_update(job)
 
         try:
             async with httpx.AsyncClient(timeout=None, follow_redirects=True) as session:
@@ -514,11 +553,11 @@ class SeedrDownloadManager:
                                 job.info.percent = (downloaded / total_bytes) * 100
                                 remaining = max(total_bytes - downloaded, 0)
                                 job.info.eta = int(remaining / job.info.speed) if job.info.speed else None
-                            await self.notifier.updated(job.info)
+                            await self._notify_update(job)
         except asyncio.CancelledError:
             job.info.status = "canceled"
             job.info.msg = "Download canceled"
-            await self.notifier.updated(job.info)
+            await self._notify_update(job)
             if os.path.exists(path):
                 try:
                     os.remove(path)
@@ -544,9 +583,19 @@ class SeedrDownloadManager:
         job.info.percent = 100.0
         job.info.speed = None
         job.info.eta = None
+        job.stage = "complete"
         return True
 
     async def _download_seedr_file(self, client: AsyncSeedr, job: SeedrJob, file: models.File) -> bool:
+        folder_id = getattr(file, "folder_id", None)
+        if folder_id in (0, -1):
+            job.seedr_folder_id = None
+        elif folder_id is not None:
+            job.seedr_folder_id = folder_id
+
+        job.stage = "fetching-link"
+        job.info.msg = "Requesting Seedr download link"
+        await self._notify_update(job)
         try:
             fetch = await client.fetch_file(str(file.folder_file_id))
         except SeedrError as exc:
@@ -569,6 +618,8 @@ class SeedrDownloadManager:
             filename = f"seedr-{job.info.id}"
         filename, path = _ensure_unique_path(directory, filename)
 
+        await self._announce_job(job)
+        job.stage = "downloading"
         job.info.status = "downloading"
         job.info.msg = "Downloading from Seedr"
         job.info.filename = filename
@@ -577,7 +628,7 @@ class SeedrDownloadManager:
         job.info.speed = None
         job.info.eta = None
         job.info.size = file.size
-        await self.notifier.updated(job.info)
+        await self._notify_update(job)
 
         try:
             async with httpx.AsyncClient(timeout=None, follow_redirects=True) as session:
@@ -603,11 +654,11 @@ class SeedrDownloadManager:
                                 job.info.percent = (downloaded / total_bytes) * 100
                                 remaining = max(total_bytes - downloaded, 0)
                                 job.info.eta = int(remaining / job.info.speed) if job.info.speed else None
-                            await self.notifier.updated(job.info)
+                            await self._notify_update(job)
         except asyncio.CancelledError:
             job.info.status = "canceled"
             job.info.msg = "Download canceled"
-            await self.notifier.updated(job.info)
+            await self._notify_update(job)
             if os.path.exists(path):
                 try:
                     os.remove(path)
@@ -633,6 +684,7 @@ class SeedrDownloadManager:
         job.info.percent = 100.0
         job.info.speed = None
         job.info.eta = None
+        job.stage = "complete"
         return True
 
     async def _cleanup_seedr(self, client: AsyncSeedr, job: SeedrJob) -> None:
@@ -640,7 +692,7 @@ class SeedrDownloadManager:
         if job.seedr_torrent_id is not None:
             with suppress_seedr_error():
                 await client.delete_torrent(str(job.seedr_torrent_id))
-        if job.seedr_folder_id is not None:
+        if job.seedr_folder_id is not None and job.seedr_folder_id not in {0, -1}:
             with suppress_seedr_error():
                 await client.delete_folder(str(job.seedr_folder_id))
         self._cleanup_local_torrent(job)
@@ -682,7 +734,8 @@ class SeedrDownloadManager:
     async def _finalize_error(self, storage_key: str, job: SeedrJob, message: str) -> None:
         job.info.status = "error"
         job.info.msg = message
-        await self.notifier.updated(job.info)
+        job.stage = "error"
+        await self._notify_update(job)
         self.queue.pop(storage_key, None)
         self.done[storage_key] = job
         self._persist_completed()
@@ -693,9 +746,28 @@ class SeedrDownloadManager:
             return None
         normalized = target_name.strip().lower()
         for folder in _flatten_folders(folders):
-            if folder.name.strip().lower() == normalized:
+            name = folder.name.strip().lower()
+            fullname = folder.fullname.strip().lower()
+            if name == normalized or fullname == normalized:
                 return folder
         return None
+
+    def _resolve_file(
+        self,
+        files: List[models.File],
+        torrent: models.Torrent,
+    ) -> Optional[models.File]:
+        if not files:
+            return None
+        if len(files) == 1:
+            return files[0]
+        target_hash = (torrent.hash or "").lower()
+        if target_hash:
+            for file in files:
+                if file.hash and file.hash.lower() == target_hash:
+                    return file
+        sorted_files = sorted(files, key=lambda f: f.size, reverse=True)
+        return sorted_files[0]
 
     def _load_completed(self) -> None:
         if not os.path.exists(self.completed_state_path):
@@ -741,6 +813,7 @@ class SeedrDownloadManager:
             job.seedr_folder_id = record.get("seedr_folder_id")
             job.seedr_folder_name = record.get("seedr_folder_name")
             job.local_torrent_path = None
+            job.stage = "complete" if info.status == "finished" else info.status or "completed"
             self.done[info.url] = job
 
     def _persist_completed(self) -> None:
@@ -802,6 +875,32 @@ class SeedrDownloadManager:
             except OSError:
                 pass
         job.local_torrent_path = None
+
+    def snapshot(self) -> Dict[str, List[Dict[str, Any]]]:
+        def transform(entries: Iterable[Tuple[str, SeedrJob]], location: str) -> List[Dict[str, Any]]:
+            results: List[Dict[str, Any]] = []
+            for storage_key, job in entries:
+                results.append(
+                    {
+                        "id": storage_key,
+                        "title": job.info.title,
+                        "stage": job.stage,
+                        "status": job.info.status,
+                        "msg": job.info.msg,
+                        "percent": job.info.percent,
+                        "size": job.info.size,
+                        "created_at": job._added_at,
+                        "location": location,
+                        "provider": job.info.provider,
+                    }
+                )
+            return results
+
+        return {
+            "pending": transform(self.pending.items(), "pending"),
+            "in_progress": transform(self.queue.items(), "in_progress"),
+            "completed": transform(reversed(list(self.done.items())), "completed"),
+        }
 
     def _infer_display_title(
         self,

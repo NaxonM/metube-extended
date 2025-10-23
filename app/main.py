@@ -1228,7 +1228,9 @@ async def seedr_status(request):
         log.error('Failed to resolve Seedr credential store for %s: %s', user_id, exc)
         raise web.HTTPInternalServerError(text='Seedr integration is currently unavailable.')
 
+    seedr_queue = await download_manager.get_seedr_queue(user_id)
     status = store.status()
+    status['jobs'] = seedr_queue.snapshot()
     status['status'] = 'ok'
     return web.Response(text=serializer.encode(status))
 

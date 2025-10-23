@@ -103,6 +103,48 @@
   .seedr-grid
     grid-template-columns: 1fr
 
+.seedr-status
+  display: flex
+  gap: 20px
+  margin-bottom: 22px
+  flex-wrap: wrap
+
+.seedr-status__column
+  flex: 1 1 240px
+  background: rgba(15, 23, 42, 0.6)
+  border-radius: 14px
+  border: 1px solid rgba(59, 130, 246, 0.1)
+  padding: 18px
+
+.seedr-status__column h6
+  font-size: 0.85rem
+  text-transform: uppercase
+  letter-spacing: 0.08em
+  color: rgba(226, 232, 240, 0.7)
+  margin-bottom: 0.75rem
+
+.seedr-status__column ul
+  list-style: none
+  margin: 0
+  padding: 0
+  display: grid
+  gap: 10px
+
+.seedr-status__title
+  font-size: 0.9rem
+  font-weight: 600
+  color: #f1f5f9
+
+.seedr-status__meta
+  display: flex
+  justify-content: space-between
+  font-size: 0.75rem
+  color: rgba(148, 163, 184, 0.85)
+
+.seedr-status__percent
+  font-weight: 600
+  color: #60a5fa
+
 .seedr-panel
   background: rgba(30, 41, 59, 0.85)
   border-radius: 16px
@@ -165,6 +207,37 @@
 
 .seedr-account--skeleton .placeholder
   background: rgba(148, 163, 184, 0.25)
+
+.seedr-completed
+  background: rgba(15, 23, 42, 0.62)
+  border: 1px solid rgba(148, 163, 184, 0.1)
+  border-radius: 12px
+  padding: 14px 16px
+  display: grid
+  gap: 10px
+
+.seedr-completed__title
+  margin: 0
+  font-size: 0.85rem
+  text-transform: uppercase
+  letter-spacing: 0.06em
+  color: rgba(226, 232, 240, 0.7)
+
+.seedr-completed ul
+  margin: 0
+  padding: 0
+  list-style: none
+  display: grid
+  gap: 8px
+
+.seedr-completed__name
+  font-size: 0.9rem
+  font-weight: 500
+  color: #f1f5f9
+
+.seedr-completed__meta
+  font-size: 0.75rem
+  color: rgba(148, 163, 184, 0.75)
 
 .seedr-meter
   display: flex

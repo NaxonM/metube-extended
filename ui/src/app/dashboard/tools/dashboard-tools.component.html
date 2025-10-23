@@ -238,6 +238,30 @@
           <div *ngIf="seedrStatusError" class="alert alert-danger">{{ seedrStatusError }}</div>
         </div>
 
+        <div class="seedr-status" *ngIf="seedrJobsPending.length || seedrJobsInProgress.length">
+          <div class="seedr-status__column" *ngIf="seedrJobsPending.length">
+            <h6>Queued</h6>
+            <ul>
+              <li *ngFor="let job of seedrJobsPending">
+                <div class="seedr-status__title">{{ job.title }}</div>
+                <div class="seedr-status__meta">{{ job.msg || 'Waiting for Seedr' }}</div>
+              </li>
+            </ul>
+          </div>
+          <div class="seedr-status__column" *ngIf="seedrJobsInProgress.length">
+            <h6>Processing</h6>
+            <ul>
+              <li *ngFor="let job of seedrJobsInProgress">
+                <div class="seedr-status__title">{{ job.title }}</div>
+                <div class="seedr-status__meta">
+                  <span>{{ job.msg || 'Working…' }}</span>
+                  <span *ngIf="job.percent !== null" class="seedr-status__percent">{{ job.percent | number:'1.0-0' }}%</span>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+
         <ng-container *ngIf="seedrIsConnected; else seedrConnectBlock">
           <div class="seedr-grid">
             <section class="seedr-panel seedr-panel--account">
@@ -287,6 +311,15 @@
                     Disconnect
                   </button>
                 </div>
+              </div>
+              <div class="seedr-completed" *ngIf="seedrJobsCompleted.length">
+                <h6 class="seedr-completed__title">Recently completed</h6>
+                <ul>
+                  <li *ngFor="let job of seedrJobsCompleted">
+                    <span class="seedr-completed__name">{{ job.title }}</span>
+                    <span class="seedr-completed__meta">{{ job.msg || 'Finished' }}</span>
+                  </li>
+                </ul>
               </div>
               <ng-template #seedrAccountSkeleton>
                 <div class="seedr-account seedr-account--skeleton">
