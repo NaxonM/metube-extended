@@ -5,6 +5,7 @@ import os
 import time
 import uuid
 from collections import OrderedDict
+from types import SimpleNamespace
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -83,6 +84,9 @@ class SeedrJob:
         self.local_torrent_path: Optional[str] = torrent_file if torrent_file and os.path.exists(torrent_file) else None
         self.stage: str = "queued"
         self.announced: bool = False
+        self.expected_name: Optional[str] = None
+        self.magnet_hash: Optional[str] = None
+        self.seedr_file_id: Optional[int] = None
 
     def cancel(self) -> None:
         self._cancel_requested = True
@@ -180,6 +184,7 @@ class SeedrDownloadManager:
         job_id = uuid.uuid4().hex
         storage_key = f"seedr:{job_id}"
         display_title = title or self._infer_display_title(magnet_link, torrent_file)
+        magnet_hash = add_hash_from_magnet(magnet_link) if magnet_link else None
 
         info = DownloadInfo(
             job_id,
@@ -209,6 +214,7 @@ class SeedrDownloadManager:
             torrent_file=torrent_file,
             folder_id=folder_id or "-1",
         )
+        job.magnet_hash = magnet_hash
         self.pending[storage_key] = job
 
         if auto_start:
@@ -355,6 +361,19 @@ class SeedrDownloadManager:
 
         self._cleanup_local_torrent(job)
         job.seedr_torrent_id = add_result.user_torrent_id
+        job.expected_name = add_result.title or job.info.title
+        job.seedr_folder_name = add_result.title or job.seedr_folder_name
+        raw = add_result.get_raw() if hasattr(add_result, "get_raw") else None
+        if isinstance(raw, dict):
+            folder_id = raw.get("folder_id") or raw.get("folder") or raw.get("user_folder")
+            if folder_id is not None:
+                try:
+                    job.seedr_folder_id = int(folder_id)
+                except (TypeError, ValueError):
+                    try:
+                        job.seedr_folder_id = int(str(folder_id).strip())
+                    except Exception:
+                        pass
         job.stage = "waiting-seedr"
         job.info.status = "pending"
         job.info.msg = "Waiting for Seedr to fetch torrent"
@@ -443,9 +462,12 @@ class SeedrDownloadManager:
                     break
 
             if torrent is None:
-                if job.seedr_torrent_id:
-                    await self._finalize_error(storage_key, job, "Seedr torrent disappeared before completion.")
-                    return None
+                resolved = self._detect_completed_without_torrent(contents, job)
+                if resolved:
+                    job.stage = "ready"
+                    job.info.msg = "Seedr finished fetching torrent"
+                    await self._notify_update(job)
+                    return resolved
                 await asyncio.sleep(self.POLL_INTERVAL)
                 continue
 
@@ -592,6 +614,7 @@ class SeedrDownloadManager:
             job.seedr_folder_id = None
         elif folder_id is not None:
             job.seedr_folder_id = folder_id
+        job.seedr_file_id = getattr(file, "folder_file_id", None)
 
         job.stage = "fetching-link"
         job.info.msg = "Requesting Seedr download link"
@@ -692,10 +715,14 @@ class SeedrDownloadManager:
         if job.seedr_torrent_id is not None:
             with suppress_seedr_error():
                 await client.delete_torrent(str(job.seedr_torrent_id))
+        if job.seedr_file_id is not None:
+            with suppress_seedr_error():
+                await client.delete_file(str(job.seedr_file_id))
         if job.seedr_folder_id is not None and job.seedr_folder_id not in {0, -1}:
             with suppress_seedr_error():
                 await client.delete_folder(str(job.seedr_folder_id))
         self._cleanup_local_torrent(job)
+        job.seedr_file_id = None
 
     async def _ensure_client(self) -> AsyncSeedr:
         async with self._client_lock:
@@ -740,6 +767,53 @@ class SeedrDownloadManager:
         self.done[storage_key] = job
         self._persist_completed()
         self._cleanup_local_torrent(job)
+
+    def _detect_completed_without_torrent(
+        self,
+        contents: models.ListContentsResult,
+        job: SeedrJob,
+    ) -> Optional[Tuple[Any, models.ListContentsResult]]:
+        name_candidates: List[str] = []
+        if job.seedr_folder_name:
+            name_candidates.append(job.seedr_folder_name)
+        if job.expected_name:
+            name_candidates.append(job.expected_name)
+        seen = set()
+        for name in name_candidates:
+            if not name:
+                continue
+            normalized = name.strip().lower()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            folder = self._resolve_folder(contents.folders, name)
+            if folder:
+                job.seedr_folder_name = folder.fullname or folder.name
+                job.seedr_folder_id = folder.id
+                torrent_like = SimpleNamespace(
+                    id=job.seedr_torrent_id or folder.id,
+                    name=folder.name,
+                    folder=folder.fullname or folder.name,
+                    hash=job.magnet_hash or "",
+                )
+                return torrent_like, contents
+
+        file_target = self._resolve_file(
+            contents.files,
+            SimpleNamespace(hash=job.magnet_hash or "", name=job.expected_name or job.seedr_folder_name or ""),
+        )
+        if file_target:
+            if getattr(file_target, "folder_id", None) not in (None, 0, -1):
+                job.seedr_folder_id = file_target.folder_id
+            job.expected_name = file_target.name or job.expected_name
+            torrent_like = SimpleNamespace(
+                id=job.seedr_torrent_id or file_target.file_id,
+                name=file_target.name,
+                folder="",
+                hash=file_target.hash or job.magnet_hash or "",
+            )
+            return torrent_like, contents
+        return None
 
     def _resolve_folder(self, folders: List[models.Folder], target_name: Optional[str]) -> Optional[models.Folder]:
         if target_name is None:

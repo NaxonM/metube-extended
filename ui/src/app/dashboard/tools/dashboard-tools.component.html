@@ -332,67 +332,69 @@
             </section>
 
             <section class="seedr-panel seedr-panel--actions">
-              <div class="seedr-action">
-                <div class="seedr-action__header">
-                  <h6>Queue magnet links</h6>
-                  <div class="seedr-switch">
-                    <label class="form-check-label" for="seedrAutoStartSwitch">Auto start</label>
-                    <div class="form-check form-switch">
-                      <input class="form-check-input"
-                             type="checkbox"
-                             id="seedrAutoStartSwitch"
-                             name="seedrAutoStart"
-                             [(ngModel)]="seedrAutoStart"
-                             [ngModelOptions]="{standalone: true}">
+              <div class="seedr-actions-grid">
+                <div class="seedr-action seedr-action--magnet">
+                  <div class="seedr-action__header">
+                    <h6>Queue magnet links</h6>
+                    <div class="seedr-switch">
+                      <label class="form-check-label" for="seedrAutoStartSwitch">Auto start</label>
+                      <div class="form-check form-switch">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="seedrAutoStartSwitch"
+                               name="seedrAutoStart"
+                               [(ngModel)]="seedrAutoStart"
+                               [ngModelOptions]="{standalone: true}">
+                      </div>
                     </div>
                   </div>
-                </div>
-                <textarea id="seedrMagnetTextarea"
-                          class="form-control seedr-action__textarea"
-                          rows="6"
-                          name="seedrMagnetText"
-                          placeholder="Paste one magnet link per line"
-                          [(ngModel)]="seedrMagnetText"
-                          [disabled]="seedrSubmitInProgress"
-                          [ngModelOptions]="{standalone: true}"></textarea>
-                <div class="seedr-action__footer">
-                  <div class="seedr-hint">Links are queued sequentially; Seedr transfers each back automatically.</div>
-                  <button type="button"
-                          class="btn btn-primary"
-                          (click)="submitSeedrMagnets()"
-                          [disabled]="seedrSubmitInProgress">
-                    <span class="spinner-border spinner-border-sm me-2" *ngIf="seedrSubmitInProgress"></span>
-                    Queue magnets
-                  </button>
-                </div>
-              </div>
-
-              <div class="seedr-action">
-                <div class="seedr-action__header">
-                  <h6>Upload torrent file</h6>
-                  <span class="seedr-hint">Seedr fetches the torrent before handing it off.</span>
-                </div>
-                <label class="seedr-upload" for="seedrTorrentInput">
-                  <input id="seedrTorrentInput"
-                         type="file"
-                         accept=".torrent"
-                         class="d-none"
-                         #seedrTorrentInput
-                         (change)="onSeedrTorrentSelected($event)"
-                         [ngModelOptions]="{standalone: true}">
-                  <div class="seedr-upload__drop">
-                    <fa-icon [icon]="faCloudArrowUp"></fa-icon>
-                    <span>{{ seedrSelectedTorrent?.name || 'Choose a .torrent file' }}</span>
+                  <textarea id="seedrMagnetTextarea"
+                            class="form-control seedr-action__textarea"
+                            rows="5"
+                            name="seedrMagnetText"
+                            placeholder="Paste magnets — one per line"
+                            [(ngModel)]="seedrMagnetText"
+                            [disabled]="seedrSubmitInProgress"
+                            [ngModelOptions]="{standalone: true}"></textarea>
+                  <div class="seedr-action__footer">
+                    <div class="seedr-hint">Processed sequentially, transferred back automatically.</div>
+                    <button type="button"
+                            class="btn btn-primary"
+                            (click)="submitSeedrMagnets()"
+                            [disabled]="seedrSubmitInProgress">
+                      <span class="spinner-border spinner-border-sm me-2" *ngIf="seedrSubmitInProgress"></span>
+                      Queue magnets
+                    </button>
                   </div>
-                </label>
-                <div class="seedr-action__footer">
-                  <button type="button"
-                          class="btn btn-outline-primary"
-                          (click)="uploadSeedrTorrent()"
-                          [disabled]="!seedrSelectedTorrent || seedrUploadInProgress">
-                    <span class="spinner-border spinner-border-sm me-2" *ngIf="seedrUploadInProgress"></span>
-                    Upload torrent
-                  </button>
+                </div>
+
+                <div class="seedr-action seedr-action--upload">
+                  <div class="seedr-action__header">
+                    <h6>Upload torrent file</h6>
+                    <span class="seedr-hint">We fetch the data on Seedr, then deliver locally.</span>
+                  </div>
+                  <label class="seedr-upload" for="seedrTorrentInput">
+                    <input id="seedrTorrentInput"
+                           type="file"
+                           accept=".torrent"
+                           class="d-none"
+                           #seedrTorrentInput
+                           (change)="onSeedrTorrentSelected($event)"
+                           [ngModelOptions]="{standalone: true}">
+                    <div class="seedr-upload__drop">
+                      <fa-icon [icon]="faCloudArrowUp"></fa-icon>
+                      <span>{{ seedrSelectedTorrent?.name || 'Choose a .torrent file' }}</span>
+                    </div>
+                  </label>
+                  <div class="seedr-action__footer">
+                    <button type="button"
+                            class="btn btn-outline-primary"
+                            (click)="uploadSeedrTorrent()"
+                            [disabled]="!seedrSelectedTorrent || seedrUploadInProgress">
+                      <span class="spinner-border spinner-border-sm me-2" *ngIf="seedrUploadInProgress"></span>
+                      Upload torrent
+                    </button>
+                  </div>
                 </div>
               </div>
 
