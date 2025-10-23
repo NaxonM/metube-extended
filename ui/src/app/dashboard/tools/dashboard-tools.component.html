@@ -281,8 +281,17 @@
                 Refresh
               </button>
               <button type="button"
+                      class="btn btn-outline-warning btn-sm"
+                      (click)="clearSeedrStorage()"
+                      [disabled]="seedrClearInProgress || seedrStatusLoading">
+                <span class="spinner-border spinner-border-sm me-1" *ngIf="seedrClearInProgress"></span>
+                Clear storage
+              </button>
+              <button type="button"
                       class="btn btn-outline-danger btn-sm"
-                      (click)="disconnectSeedr()">
+                      (click)="disconnectSeedr()"
+                      [disabled]="seedrDisconnectInProgress">
+                <span class="spinner-border spinner-border-sm me-1" *ngIf="seedrDisconnectInProgress"></span>
                 Disconnect
               </button>
             </div>
@@ -338,15 +347,23 @@
 
               <div class="seedr-advanced" [class.is-open]="seedrAdvancedOpen">
                 <label for="seedrMagnetTextarea" class="form-label">Magnet links</label>
-                <textarea id="seedrMagnetTextarea"
-                          class="form-control seedr-advanced__textarea"
-                          rows="4"
-                          name="seedrMagnetText"
-                          placeholder="Paste one magnet per line"
-                          wrap="off"
-                          [(ngModel)]="seedrMagnetText"
-                          [disabled]="seedrSubmitInProgress"
-                          [ngModelOptions]="{standalone: true}"></textarea>
+                <div class="seedr-advanced__textarea-wrapper">
+                  <textarea id="seedrMagnetTextarea"
+                            #seedrMagnetTextarea
+                            class="form-control seedr-advanced__textarea"
+                            [ngClass]="{'seedr-advanced__textarea--has-value': seedrMagnetText?.length}"
+                            rows="4"
+                            name="seedrMagnetText"
+                            placeholder="Paste one magnet per line"
+                            wrap="off"
+                            [value]="seedrMagnetText"
+                            (input)="onSeedrMagnetInput($event)"
+                            (scroll)="onSeedrMagnetScroll()"
+                            [disabled]="seedrSubmitInProgress"></textarea>
+                  <div class="seedr-advanced__textarea-overlay" #seedrMagnetOverlay>
+                    {{ seedrMagnetPreview }}
+                  </div>
+                </div>
                 <div class="seedr-advanced__grid">
                   <div>
                     <label class="form-label" for="seedrFolderInput">Seedr folder</label>
@@ -405,7 +422,7 @@
                 <h6 class="seedr-activity__title">Active downloads</h6>
                 <div class="seedr-progress" *ngFor="let job of seedrJobsInProgress">
                   <div class="seedr-progress__heading">
-                    <span class="seedr-progress__name">{{ job.title }}</span>
+                    <span class="seedr-progress__name" [title]="job.title">{{ formatSeedrJobTitle(job) }}</span>
                     <span class="seedr-progress__percent" *ngIf="job.percent !== null">{{ job.percent | number:'1.0-0' }}%</span>
                   </div>
                   <div class="seedr-progress__bar">
@@ -419,7 +436,7 @@
                 <h6 class="seedr-activity__title">Queued</h6>
                 <ul>
                   <li *ngFor="let job of seedrJobsPending">
-                    <span class="seedr-queue__name">{{ job.title }}</span>
+                    <span class="seedr-queue__name" [title]="job.title">{{ formatSeedrJobTitle(job) }}</span>
                     <span class="seedr-queue__meta">{{ job.msg || 'Awaiting Seedr capacity' }}</span>
                   </li>
                 </ul>
@@ -433,7 +450,7 @@
                 <h6 class="seedr-activity__title">Recently completed</h6>
                 <ul>
                   <li *ngFor="let job of seedrJobsCompleted">
-                    <span class="seedr-recent__name">{{ job.title }}</span>
+                    <span class="seedr-recent__name" [title]="job.title">{{ formatSeedrJobTitle(job) }}</span>
                     <span class="seedr-recent__meta">{{ job.msg || 'Finished' }}</span>
                   </li>
                 </ul>

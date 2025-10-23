@@ -385,7 +385,7 @@ export class DashboardHistoryComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   private refreshDoneView(): void {
-    const keys = Array.from(this.downloads.done.keys());
+    const keys = Array.from(this.downloads.done.keys()).reverse();
     this.visibleDoneKeys = this.doneExpanded ? keys : keys.slice(0, this.doneDisplayLimit);
     this.hiddenDoneCount = Math.max(keys.length - this.visibleDoneKeys.length, 0);
   }

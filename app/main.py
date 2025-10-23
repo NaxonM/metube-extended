@@ -1358,6 +1358,14 @@ async def seedr_logout(request):
     return web.Response(text=serializer.encode({'status': 'ok'}))
 
 
+@routes.post(config.URL_PREFIX + 'seedr/clear')
+async def seedr_clear(request):
+    _session, user_id, _ = await get_user_context(request)
+    seedr_queue = await download_manager.get_seedr_queue(user_id)
+    result = await seedr_queue.clear_remote_storage()
+    return web.Response(text=serializer.encode(result))
+
+
 def _extract_magnet_links(payload: Dict[str, Any]) -> List[str]:
     links: List[str] = []
     single = payload.get('magnet') or payload.get('magnet_link')

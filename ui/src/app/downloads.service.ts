@@ -217,6 +217,15 @@ export interface SeedrJobSnapshot {
   failed?: SeedrJobEntry[];
 }
 
+export interface SeedrClearResponse extends Partial<Status> {
+  removed?: {
+    torrents: number;
+    folders: number;
+    files: number;
+  };
+  errors?: string[];
+}
+
 export interface GalleryDlCredentialSummary {
   id: string;
   name: string;
@@ -729,6 +738,12 @@ export class DownloadsService {
   public seedrLogout() {
     return this.http.post<Status>('seedr/logout', {}).pipe(
       catchError((error: HttpErrorResponse) => this.handleTypedError<Status>(error))
+    );
+  }
+
+  public seedrClearStorage() {
+    return this.http.post<SeedrClearResponse>('seedr/clear', {}).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<SeedrClearResponse>(error))
     );
   }
 

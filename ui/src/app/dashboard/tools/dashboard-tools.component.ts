@@ -1,4 +1,4 @@
-import { Component, ElementRef, EventEmitter, HostListener, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
+import { Component, ElementRef, EventEmitter, HostListener, Input, OnDestroy, OnInit, Output, ViewChild, AfterViewInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
@@ -7,7 +7,7 @@ import { faLink, faXmark, faDownload, faSliders, faChevronDown, faChevronUp, faC
 
 import { CookieService } from 'ngx-cookie-service';
 
-import { DownloadsService, Status, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, CookieStatusResponse, GalleryDlPrompt, BackendChoice, YtdlpCookieProfile, SaveCookieProfilePayload, SupportedSitesResponse, CurrentUser, SeedrStatusResponse, SeedrDeviceChallenge, SeedrAccountSummary, SeedrJobEntry } from '../../downloads.service';
+import { DownloadsService, Status, ProxySuggestion, ProxyProbeResponse, ProxyAddResponse, CookieStatusResponse, GalleryDlPrompt, BackendChoice, YtdlpCookieProfile, SaveCookieProfilePayload, SupportedSitesResponse, CurrentUser, SeedrStatusResponse, SeedrDeviceChallenge, SeedrAccountSummary, SeedrJobEntry, SeedrClearResponse } from '../../downloads.service';
 import { Formats, Format, Quality } from '../../formats';
 
 type PendingAddRequest = {
@@ -27,7 +27,7 @@ type PendingAddRequest = {
     styleUrls: ['./dashboard-tools.component.sass'],
     standalone: false
 })
-export class DashboardToolsComponent implements OnInit, OnDestroy {
+export class DashboardToolsComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input() isAdmin = false;
   @Output() versionInfoChange = new EventEmitter<{ ytdlp?: string | null; gallerydl?: string | null; metube?: string | null }>();
   @Output() optionsUpdateTimeChange = new EventEmitter<string | null>();
@@ -115,6 +115,7 @@ export class DashboardToolsComponent implements OnInit, OnDestroy {
   seedrDeviceError = '';
   seedrAccount: SeedrAccountSummary | null = null;
   seedrMagnetText = '';
+  seedrMagnetPreview = '';
   seedrFolder = '';
   seedrCustomPrefix = '';
   seedrAutoStart = true;
@@ -123,7 +124,7 @@ export class DashboardToolsComponent implements OnInit, OnDestroy {
   seedrSelectedTorrent: File | null = null;
   seedrActionMessage = '';
   seedrActionError = '';
-  seedrPanelOpen = true;
+  seedrPanelOpen = false;
   seedrJobsPending: SeedrJobEntry[] = [];
   seedrJobsInProgress: SeedrJobEntry[] = [];
   seedrJobsCompleted: SeedrJobEntry[] = [];
@@ -133,10 +134,15 @@ export class DashboardToolsComponent implements OnInit, OnDestroy {
   seedrDropActive = false;
   seedrAdvancedOpen = false;
   seedrAccountExpanded = false;
+  seedrDisconnectInProgress = false;
+  seedrClearInProgress = false;
 
   private seedrStatusPollHandle: any = null;
+  private seedrFeedbackTimer: any = null;
 
   @ViewChild('seedrTorrentInput') seedrTorrentInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('seedrMagnetTextarea') seedrMagnetTextarea?: ElementRef<HTMLTextAreaElement>;
+  @ViewChild('seedrMagnetOverlay') seedrMagnetOverlay?: ElementRef<HTMLDivElement>;
 
   galleryPromptOpen = false;
   galleryPromptData: GalleryDlPrompt | null = null;
@@ -190,14 +196,23 @@ export class DashboardToolsComponent implements OnInit, OnDestroy {
     this.refreshCookiesStatus();
     this.fetchVersionInfo();
     this.loadCurrentUser();
+    this.updateSeedrMagnetPreview();
     this.refreshSeedrStatus();
     this.seedrStatusPollHandle = window.setInterval(() => this.refreshSeedrStatus(false), 15000);
+  }
+
+  ngAfterViewInit(): void {
+    this.syncSeedrMagnetOverlayScroll();
   }
 
   ngOnDestroy(): void {
     if (this.seedrStatusPollHandle) {
       clearInterval(this.seedrStatusPollHandle);
       this.seedrStatusPollHandle = null;
+    }
+    if (this.seedrFeedbackTimer) {
+      clearTimeout(this.seedrFeedbackTimer);
+      this.seedrFeedbackTimer = null;
     }
   }
 
@@ -554,8 +569,7 @@ export class DashboardToolsComponent implements OnInit, OnDestroy {
     if (showSpinner) {
       this.seedrStatusLoading = true;
       this.seedrStatusError = '';
-      this.seedrActionMessage = '';
-      this.seedrActionError = '';
+      this.clearSeedrFeedback();
     }
     this.downloads.seedrStatus().subscribe(response => {
       if (showSpinner) {
@@ -564,9 +578,6 @@ export class DashboardToolsComponent implements OnInit, OnDestroy {
       this.seedrStatus = response;
       this.seedrDeviceChallenge = response.device_challenge ?? null;
       this.seedrAccount = response.account ?? null;
-      if (!response?.connected) {
-        this.seedrPanelOpen = true;
-      }
       const jobs = response.jobs || {};
       const filterErrors = (list?: SeedrJobEntry[]) => (list || []).filter(entry => (entry.status || '').toLowerCase() !== 'error');
       const completedOnly = (list?: SeedrJobEntry[]) => (list || []).filter(entry => (entry.status || '').toLowerCase() === 'finished');
@@ -587,6 +598,38 @@ export class DashboardToolsComponent implements OnInit, OnDestroy {
       }
       this.seedrStatusError = this.resolveError(error, 'Unable to load Seedr status.');
     });
+  }
+
+  private showSeedrFeedback(message?: string, error?: string, autoDismiss: boolean = true): void {
+    if (this.seedrFeedbackTimer) {
+      clearTimeout(this.seedrFeedbackTimer);
+      this.seedrFeedbackTimer = null;
+    }
+    this.seedrActionMessage = message || '';
+    this.seedrActionError = error || '';
+    if (autoDismiss && (this.seedrActionMessage || this.seedrActionError)) {
+      this.seedrFeedbackTimer = window.setTimeout(() => {
+        this.seedrActionMessage = '';
+        this.seedrActionError = '';
+        this.seedrFeedbackTimer = null;
+      }, 4500);
+    }
+  }
+
+  private clearSeedrFeedback(): void {
+    if (this.seedrFeedbackTimer) {
+      clearTimeout(this.seedrFeedbackTimer);
+      this.seedrFeedbackTimer = null;
+    }
+    this.seedrActionMessage = '';
+    this.seedrActionError = '';
+  }
+
+  formatSeedrJobTitle(job: SeedrJobEntry | null | undefined): string {
+    if (!job) {
+      return '';
+    }
+    return this.truncateSeedrLabel(job.title || '');
   }
 
   startSeedrDeviceFlow(): void {
@@ -638,16 +681,26 @@ export class DashboardToolsComponent implements OnInit, OnDestroy {
   }
 
   disconnectSeedr(): void {
+    if (this.seedrDisconnectInProgress) {
+      return;
+    }
+    const confirmed = confirm('Disconnect Seedr from MeTubeEX? Active transfers will stop and you will need to reauthorize later.');
+    if (!confirmed) {
+      return;
+    }
+    this.seedrDisconnectInProgress = true;
+    this.clearSeedrFeedback();
     this.downloads.seedrLogout().subscribe(response => {
+      this.seedrDisconnectInProgress = false;
       if (response?.status === 'error') {
-        this.seedrActionError = response.msg || 'Unable to disconnect Seedr right now.';
+        this.showSeedrFeedback(undefined, response.msg || 'Unable to disconnect Seedr right now.', false);
         return;
       }
       this.seedrStatus = null;
       this.seedrAccount = null;
       this.seedrDeviceChallenge = null;
-      this.seedrActionMessage = 'Seedr account disconnected.';
-      this.seedrPanelOpen = true;
+      this.showSeedrFeedback('Seedr account disconnected.');
+      this.seedrPanelOpen = false;
       this.seedrJobsPending = [];
       this.seedrJobsInProgress = [];
       this.seedrJobsCompleted = [];
@@ -657,23 +710,128 @@ export class DashboardToolsComponent implements OnInit, OnDestroy {
       this.seedrAccountExpanded = false;
       this.refreshSeedrStatus();
     }, error => {
-      this.seedrActionError = this.resolveError(error, 'Failed to disconnect Seedr.');
+      this.seedrDisconnectInProgress = false;
+      this.showSeedrFeedback(undefined, this.resolveError(error, 'Failed to disconnect Seedr.'), false);
     });
+  }
+
+  clearSeedrStorage(): void {
+    if (this.seedrClearInProgress) {
+      return;
+    }
+    const confirmed = confirm('Clear all torrents, files, and folders from Seedr? This action cannot be undone.');
+    if (!confirmed) {
+      return;
+    }
+    this.seedrClearInProgress = true;
+    this.clearSeedrFeedback();
+    this.downloads.seedrClearStorage().subscribe((response: SeedrClearResponse) => {
+      this.seedrClearInProgress = false;
+      if (!response || response.status === 'error') {
+        const msg = response?.msg || 'Failed to clear Seedr storage.';
+        const details = Array.isArray(response?.errors) && response.errors.length ? `\n${response.errors.join('\n')}` : '';
+        this.showSeedrFeedback(undefined, `${msg}${details}`.trim(), false);
+        this.seedrPanelOpen = true;
+        return;
+      }
+      const removed = response.removed || { torrents: 0, folders: 0, files: 0 };
+      const segments: string[] = [];
+      if (removed.torrents) {
+        segments.push(`${removed.torrents} torrent${removed.torrents === 1 ? '' : 's'}`);
+      }
+      if (removed.folders) {
+        segments.push(`${removed.folders} folder${removed.folders === 1 ? '' : 's'}`);
+      }
+      if (removed.files) {
+        segments.push(`${removed.files} file${removed.files === 1 ? '' : 's'}`);
+      }
+      this.showSeedrFeedback(segments.length ? `Removed ${segments.join(', ')}.` : 'Seedr storage cleared.');
+      this.seedrPanelOpen = true;
+      this.refreshSeedrStatus(false);
+    }, error => {
+      this.seedrClearInProgress = false;
+      this.showSeedrFeedback(undefined, this.resolveError(error, 'Failed to clear Seedr storage.'), false);
+      this.seedrPanelOpen = true;
+    });
+  }
+
+  onSeedrMagnetInput(event: Event): void {
+    const value = (event.target as HTMLTextAreaElement)?.value ?? '';
+    this.seedrMagnetText = value;
+    this.updateSeedrMagnetPreview();
+    this.syncSeedrMagnetOverlayScroll();
+  }
+
+  onSeedrMagnetScroll(): void {
+    this.syncSeedrMagnetOverlayScroll();
+  }
+
+  private updateSeedrMagnetPreview(): void {
+    const lines = (this.seedrMagnetText || '').split(/\r?\n/);
+    this.seedrMagnetPreview = lines.map(line => this.truncateSeedrLabel(line)).join('\n');
+  }
+
+  private syncSeedrMagnetOverlayScroll(): void {
+    const area = this.seedrMagnetTextarea?.nativeElement;
+    const overlay = this.seedrMagnetOverlay?.nativeElement;
+    if (!area || !overlay) {
+      return;
+    }
+    overlay.scrollTop = area.scrollTop;
+    overlay.scrollLeft = area.scrollLeft;
+  }
+
+  private truncateSeedrLabel(label: string): string {
+    const value = (label || '').trim();
+    if (!value) {
+      return '';
+    }
+    const lower = value.toLowerCase();
+    if (!lower.startsWith('magnet:?')) {
+      return value.length > 140 ? `${value.slice(0, 120)}…${value.slice(-18)}` : value;
+    }
+
+    const hashMatch = value.match(/xt=urn:btih:([^&]+)/i);
+    const hash = hashMatch && hashMatch[1] ? hashMatch[1].toUpperCase() : '';
+    const dnMatch = value.match(/[?&]dn=([^&]+)/i);
+    if (dnMatch && dnMatch[1]) {
+      try {
+        const decoded = decodeURIComponent(dnMatch[1]).trim();
+        if (decoded) {
+          const cleaned = decoded.replace(/\s+/g, ' ');
+          if (hash) {
+            return `${cleaned} (${hash.slice(0, 6)}…${hash.slice(-6)})`;
+          }
+          return cleaned.length > 140 ? `${cleaned.slice(0, 120)}…${cleaned.slice(-18)}` : cleaned;
+        }
+      } catch {
+        // ignore malformed magnet display names
+      }
+    }
+
+    if (hash && hash.length > 12) {
+      return `magnet:?xt=urn:btih:${hash.slice(0, 8)}…${hash.slice(-8)}`;
+    }
+
+    const maxStart = 60;
+    const maxEnd = 18;
+    if (value.length <= maxStart + maxEnd + 3) {
+      return value;
+    }
+    return `${value.slice(0, maxStart)}…${value.slice(-maxEnd)}`;
   }
 
   submitSeedrMagnets(payload?: string | string[], options: { silentIfEmpty?: boolean; successMessage?: string } = {}): void {
     const magnets = this.collectSeedrMagnetLinks(payload ?? this.seedrMagnetText);
     if (!magnets.length) {
       if (!options.silentIfEmpty) {
-        this.seedrActionError = 'Enter at least one magnet link.';
-        this.seedrActionMessage = '';
+        this.showSeedrFeedback(undefined, 'Enter at least one magnet link.', false);
       }
       return;
     }
 
     this.seedrSubmitInProgress = true;
-    this.seedrActionMessage = '';
-    this.seedrActionError = '';
+    this.clearSeedrFeedback();
 
     const request = {
       magnet_links: magnets,
@@ -685,17 +843,19 @@ export class DashboardToolsComponent implements OnInit, OnDestroy {
     this.downloads.seedrAdd(request).subscribe(response => {
       this.seedrSubmitInProgress = false;
       if (!response || response.status === 'error') {
-        this.seedrActionError = response?.msg || 'Failed to queue Seedr magnets.';
+        this.showSeedrFeedback(undefined, response?.msg || 'Failed to queue Seedr magnets.', false);
         return;
       }
       const count = (response.count ?? (response.results?.length ?? (response.id ? 1 : magnets.length))) || magnets.length;
       const successMessage = options.successMessage || (count > 1 ? `Queued ${count} magnet links in Seedr.` : 'Magnet link queued in Seedr.');
-      this.seedrActionMessage = successMessage;
+      this.showSeedrFeedback(successMessage);
       this.seedrMagnetText = '';
+      this.updateSeedrMagnetPreview();
+      this.syncSeedrMagnetOverlayScroll();
       this.refreshSeedrStatus(false);
     }, error => {
       this.seedrSubmitInProgress = false;
-      this.seedrActionError = this.resolveError(error, 'Unable to queue Seedr magnets.');
+      this.showSeedrFeedback(undefined, this.resolveError(error, 'Unable to queue Seedr magnets.'), false);
     });
   }
 
@@ -718,7 +878,7 @@ export class DashboardToolsComponent implements OnInit, OnDestroy {
     const targetFile = file ?? this.seedrSelectedTorrent;
     if (!targetFile) {
       if (!options.auto) {
-        this.seedrActionError = 'Choose a .torrent file to upload.';
+        this.showSeedrFeedback(undefined, 'Choose a .torrent file to upload.', false);
       }
       return;
     }
@@ -731,24 +891,23 @@ export class DashboardToolsComponent implements OnInit, OnDestroy {
 
     this.seedrUploadInProgress = true;
     if (!options.auto) {
-      this.seedrActionMessage = '';
-      this.seedrActionError = '';
+      this.clearSeedrFeedback();
     }
 
     this.downloads.seedrUpload(form).subscribe(response => {
       this.seedrUploadInProgress = false;
       if (!response || response.status === 'error') {
-        this.seedrActionError = response?.msg || 'Failed to upload torrent to Seedr.';
+        this.showSeedrFeedback(undefined, response?.msg || 'Failed to upload torrent to Seedr.', false);
         return;
       }
 
       const successMessage = options.successMessage || `Queued ${targetFile.name} in Seedr.`;
-      this.seedrActionMessage = successMessage;
+      this.showSeedrFeedback(successMessage);
       this.seedrSelectedTorrent = null;
       this.refreshSeedrStatus(false);
     }, error => {
       this.seedrUploadInProgress = false;
-      this.seedrActionError = this.resolveError(error, 'Unable to upload torrent to Seedr.');
+      this.showSeedrFeedback(undefined, this.resolveError(error, 'Unable to upload torrent to Seedr.'), false);
     });
   }
 

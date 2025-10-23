@@ -299,14 +299,47 @@
   margin-top: 10px
 
 .seedr-advanced__textarea
-  background: rgba(15, 23, 42, 0.5)
-  border-color: rgba(99, 102, 241, 0.25)
-  color: #e2e8f0
+  background: transparent
+  border: none
+  color: rgba(226, 232, 240, 0.85)
   resize: vertical
-  overflow-x: auto
+  overflow: auto
   white-space: pre
   font-family: 'Fira Code', 'JetBrains Mono', Menlo, Consolas, monospace
+  padding: 12px
   padding-bottom: 16px
+  position: relative
+  z-index: 2
+  outline: none
+
+.seedr-advanced__textarea-wrapper
+  position: relative
+  background: rgba(15, 23, 42, 0.5)
+  border: 1px solid rgba(99, 102, 241, 0.25)
+  border-radius: 12px
+  overflow: hidden
+  transition: border-color 0.25s ease, box-shadow 0.25s ease
+
+.seedr-advanced__textarea-wrapper:focus-within
+  border-color: rgba(99, 102, 241, 0.45)
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15)
+
+.seedr-advanced__textarea--has-value
+  color: transparent
+  caret-color: #93c5fd
+
+.seedr-advanced__textarea-overlay
+  position: absolute
+  inset: 0
+  padding: 12px
+  padding-bottom: 16px
+  pointer-events: none
+  white-space: pre
+  font-family: 'Fira Code', 'JetBrains Mono', Menlo, Consolas, monospace
+  line-height: 1.45
+  color: rgba(226, 232, 240, 0.85)
+  overflow: auto
+  z-index: 1
 
 .seedr-advanced__grid
   display: grid
@@ -477,8 +510,15 @@
   font-size: 0.85rem
   color: rgba(226, 232, 240, 0.85)
 
+.seedr-feedback
+  margin-top: 18px
+
 .seedr-feedback .alert
   margin-bottom: 0
+  padding: 10px 16px
+
+.seedr-feedback .alert + .alert
+  margin-top: 10px
 
 .seedr-connect
   background: rgba(15, 23, 42, 0.78)

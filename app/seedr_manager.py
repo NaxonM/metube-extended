@@ -463,6 +463,65 @@ class SeedrDownloadManager:
         self._persist_completed()
         return {"status": "ok", "filename": sanitized, "title": sanitized}
 
+    async def clear_remote_storage(self) -> Dict[str, Any]:
+        try:
+            client = await self._ensure_client()
+        except AuthenticationError:
+            return {"status": "error", "msg": "Seedr account is not connected."}
+        except SeedrError as exc:
+            return {"status": "error", "msg": _format_seedr_error("Failed to connect to Seedr", exc)}
+
+        removed = {"torrents": 0, "folders": 0, "files": 0}
+        issues: List[str] = []
+
+        async with self._semaphore:
+            try:
+                contents = await client.list_contents()
+            except SeedrError as exc:
+                return {"status": "error", "msg": _format_seedr_error("Unable to enumerate Seedr storage", exc)}
+
+            for torrent in getattr(contents, "torrents", []) or []:
+                try:
+                    await client.delete_torrent(str(torrent.id))
+                    removed["torrents"] += 1
+                except SeedrError as exc:
+                    issues.append(_format_seedr_error(f"Failed to delete torrent {getattr(torrent, 'name', torrent.id)}", exc))
+
+            try:
+                contents = await client.list_contents()
+            except SeedrError:
+                contents = None
+
+            if contents is not None:
+                for file in getattr(contents, "files", []) or []:
+                    file_id = getattr(file, "folder_file_id", None) or getattr(file, "id", None)
+                    if file_id is None:
+                        continue
+                    try:
+                        await client.delete_file(str(file_id))
+                        removed["files"] += 1
+                    except SeedrError as exc:
+                        issues.append(_format_seedr_error(f"Failed to delete file {getattr(file, 'name', file_id)}", exc))
+
+                folders = _flatten_folders(getattr(contents, "folders", []) or [])
+                for folder in reversed(folders):
+                    folder_id = getattr(folder, "id", None)
+                    if folder_id in (None, 0, -1):
+                        continue
+                    try:
+                        await client.delete_folder(str(folder_id))
+                        removed["folders"] += 1
+                    except SeedrError as exc:
+                        name = getattr(folder, "fullname", None) or getattr(folder, "name", None) or folder_id
+                        issues.append(_format_seedr_error(f"Failed to delete folder {name}", exc))
+
+            await self._refresh_account_snapshot(client, persist=True)
+
+        status: Dict[str, Any] = {"status": "ok", "removed": removed}
+        if issues:
+            status.update({"status": "error", "msg": "Some Seedr items could not be removed.", "errors": issues})
+        return status
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
