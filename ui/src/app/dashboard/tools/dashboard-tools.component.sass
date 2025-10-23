@@ -1,59 +1,345 @@
-// Styles for dashboard tools component rely on existing global dashboard styles.
+.seedr-shell
+  position: relative
 
 .seedr-card
-  border-color: rgba(99, 102, 241, 0.22)
+  background: rgba(15, 23, 42, 0.72)
+  border: 1px solid rgba(99, 102, 241, 0.25)
+  border-radius: 18px
+  overflow: hidden
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.4)
+  backdrop-filter: blur(12px)
+  transition: box-shadow 0.3s ease, border-color 0.3s ease
+
+.seedr-card--open
+  box-shadow: 0 26px 80px rgba(79, 70, 229, 0.25)
+  border-color: rgba(99, 102, 241, 0.35)
+
+.seedr-card__header
+  width: 100%
+  border: none
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(45, 212, 191, 0.22))
+  color: #e2e8f0
+  padding: 20px 26px
+  display: flex
+  align-items: center
+  gap: 1.5rem
+  cursor: pointer
+  text-align: left
+
+.seedr-card__heading
+  display: flex
+  align-items: center
+  gap: 1rem
+  flex: 1
+
+.seedr-card__icon
+  width: 42px
+  height: 42px
+  border-radius: 50%
+  display: inline-flex
+  align-items: center
+  justify-content: center
+  background: rgba(59, 130, 246, 0.25)
+  color: #93c5fd
+  font-size: 1.2rem
 
 .seedr-card__title
+  display: block
   font-weight: 600
-  font-size: 1rem
+  font-size: 1.05rem
+  letter-spacing: 0.01em
 
-.seedr-account-summary
+.seedr-card__subtitle
+  display: block
+  font-size: 0.85rem
+  opacity: 0.75
+
+.seedr-card__status
+  display: inline-flex
+  align-items: center
+  gap: 0.5rem
+  padding: 6px 12px
+  border-radius: 999px
+  font-size: 0.85rem
+  font-weight: 600
+  text-transform: uppercase
+  letter-spacing: 0.04em
+
+.seedr-card__status.connected
+  background: rgba(134, 239, 172, 0.16)
+  color: #4ade80
+
+.seedr-card__status.disconnected
+  background: rgba(248, 113, 113, 0.16)
+  color: #f87171
+
+.seedr-card__chevron
+  font-size: 1rem
+  opacity: 0.8
+
+.seedr-card__body
+  padding: 26px
+  background: rgba(15, 23, 42, 0.82)
+  transition: max-height 0.35s ease, opacity 0.35s ease, padding 0.35s ease
+  max-height: 2000px
+  overflow: hidden
+
+.seedr-card__body.is-collapsed
+  opacity: 0
+  padding-top: 0
+  padding-bottom: 0
+  max-height: 0
+  pointer-events: none
+
+.seedr-alerts .alert + .alert
+  margin-top: 0.75rem
+
+.seedr-grid
+  display: grid
+  grid-template-columns: minmax(0, 320px) minmax(0, 1fr)
+  gap: 24px
+
+@media (max-width: 992px)
+  .seedr-grid
+    grid-template-columns: 1fr
+
+.seedr-panel
+  background: rgba(30, 41, 59, 0.85)
+  border-radius: 16px
+  padding: 22px
+  border: 1px solid rgba(148, 163, 184, 0.14)
+  display: flex
+  flex-direction: column
+  gap: 18px
+
+.seedr-panel__header
+  display: flex
+  justify-content: space-between
+  align-items: center
+  gap: 1rem
+
+.seedr-panel__header h6
+  margin: 0
+  font-size: 1rem
+  font-weight: 600
+  color: #e2e8f0
+
+.seedr-panel__intro
+  margin: 0
+  color: #94a3b8
+
+.seedr-account
+  display: flex
+  flex-direction: column
+  gap: 16px
+
+.seedr-account__identity
+  display: flex
+  align-items: center
+  gap: 0.75rem
+
+.seedr-account__name
+  font-size: 1.05rem
+  font-weight: 600
+  color: #f1f5f9
+
+.seedr-account__tag
+  padding: 2px 10px
+  border-radius: 999px
+  background: rgba(59, 130, 246, 0.2)
+  color: #60a5fa
+  font-size: 0.75rem
+  text-transform: uppercase
+  letter-spacing: 0.04em
+
+.seedr-account__meta
+  display: grid
+  gap: 10px
+  margin: 0
+
+.seedr-account__meta div
+  display: flex
+  justify-content: space-between
+  font-size: 0.85rem
+  color: #cbd5f5
+
+.seedr-account--skeleton .placeholder
+  background: rgba(148, 163, 184, 0.25)
+
+.seedr-meter
+  display: flex
+  flex-direction: column
+  gap: 6px
+
+.seedr-meter__bar
+  height: 8px
+  border-radius: 999px
+  background: rgba(148, 163, 184, 0.12)
+  overflow: hidden
+
+.seedr-meter__fill
+  height: 100%
+  background: linear-gradient(90deg, #60a5fa, #22d3ee)
+  border-radius: inherit
+
+.seedr-meter__labels
+  display: flex
+  justify-content: space-between
+  font-size: 0.75rem
+  color: rgba(226, 232, 240, 0.6)
+
+.seedr-panel__footer
+  display: flex
+  justify-content: flex-end
+
+.seedr-panel--actions
+  gap: 20px
+
+.seedr-action
+  background: rgba(15, 23, 42, 0.65)
+  border-radius: 14px
+  border: 1px solid rgba(59, 130, 246, 0.12)
+  padding: 18px
+  display: flex
+  flex-direction: column
+  gap: 14px
+
+.seedr-action__header
   display: flex
   justify-content: space-between
   align-items: flex-start
-  padding: 12px 16px
-  border-radius: 12px
-  background: rgba(99, 102, 241, 0.08)
-  margin-bottom: 1rem
+  gap: 1rem
 
-.seedr-account-summary__name
+.seedr-action__header h6
+  margin: 0
+  font-size: 0.95rem
   font-weight: 600
+  color: #e2e8f0
 
-.seedr-account-summary__meta
-  font-size: 0.85rem
-  color: rgba(148, 163, 184, 0.9)
+.seedr-hint
+  font-size: 0.8rem
+  color: rgba(148, 163, 184, 0.8)
 
-.seedr-account-summary__badge
-  align-self: center
-  background: rgba(59, 130, 246, 0.15)
-  color: #2563eb
-  font-weight: 600
-  padding: 4px 12px
-  border-radius: 999px
-  font-size: 0.85rem
-
-.seedr-inputs textarea
-  resize: vertical
-
-.seedr-autostart-switch
+.seedr-switch
   display: flex
   align-items: center
+  gap: 0.75rem
+  font-size: 0.8rem
+  color: rgba(148, 163, 184, 0.8)
+
+.seedr-action__textarea
+  resize: vertical
+  min-height: 160px
+  background: rgba(15, 23, 42, 0.5)
+  border-color: rgba(99, 102, 241, 0.25)
+  color: #e2e8f0
+
+.seedr-action__footer
+  display: flex
+  justify-content: space-between
+  align-items: center
+  gap: 1rem
+
+.seedr-upload
+  display: block
+  background: rgba(15, 23, 42, 0.5)
+  border: 1px dashed rgba(148, 163, 184, 0.45)
+  border-radius: 14px
+  padding: 28px 18px
+  text-align: center
+  color: rgba(226, 232, 240, 0.85)
+  transition: border-color 0.25s ease, background 0.25s ease
+
+.seedr-upload:hover
+  border-color: rgba(99, 102, 241, 0.5)
+  background: rgba(59, 130, 246, 0.08)
+
+.seedr-upload__drop
+  display: flex
+  flex-direction: column
+  gap: 0.5rem
+  align-items: center
+  font-size: 0.9rem
+
+.seedr-upload__drop fa-icon
+  font-size: 1.6rem
+  color: #60a5fa
+
+.seedr-inline-fields
+  display: grid
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))
+  gap: 16px
+
+.seedr-inline-fields__item .form-label
+  color: rgba(226, 232, 240, 0.85)
+
+.seedr-feedback .alert
+  margin-bottom: 0
+
+.seedr-panel--connect
+  gap: 16px
+
+.seedr-steps
+  padding-left: 1.25rem
+  color: rgba(203, 213, 225, 0.9)
+  margin: 0
+  display: grid
   gap: 0.5rem
 
-.seedr-device__code
+.seedr-connect__actions
+  display: flex
+  gap: 0.75rem
+  flex-wrap: wrap
+
+.seedr-device-card
+  background: rgba(15, 118, 110, 0.12)
+  border-radius: 14px
+  padding: 18px
+  border: 1px solid rgba(16, 185, 129, 0.35)
+  color: #ccfbf1
+  display: flex
+  flex-direction: column
+  gap: 10px
+
+.seedr-device-card__code
   display: inline-block
-  padding: 8px 16px
-  border-radius: 10px
-  background: #1d4ed8
-  color: #fff
-  font-weight: 700
-  letter-spacing: 0.2em
-  font-size: 1.05rem
-
-.seedr-connect
-  padding: 4px 2px
-
-.seedr-device
-  background: rgba(16, 185, 129, 0.08)
+  padding: 10px 16px
   border-radius: 12px
-  padding: 16px
+  background: #0f766e
+  font-weight: 700
+  letter-spacing: 0.22em
+  font-size: 1.1rem
+  text-transform: uppercase
+
+.seedr-device-card__timer
+  font-size: 0.85rem
+  opacity: 0.7
+
+.seedr-device-card__actions
+  display: flex
+  flex-wrap: wrap
+  gap: 0.75rem
+
+@media (max-width: 768px)
+  .seedr-card__header
+    flex-wrap: wrap
+
+  .seedr-card__status
+    order: 3
+
+  .seedr-card__chevron
+    order: 2
+
+  .seedr-card__heading
+    order: 1
+
+  .seedr-action__footer
+    flex-direction: column
+    align-items: stretch
+
+  .seedr-switch
+    flex-direction: column
+    align-items: flex-start
+
+  .seedr-panel__footer
+    justify-content: flex-start

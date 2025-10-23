@@ -216,136 +216,206 @@
 </form>
 
 <div class="container mt-4">
-  <div class="card seedr-card">
-  <div class="card-header d-flex justify-content-between align-items-center">
-    <div class="seedr-card__title">
-      <fa-icon [icon]="faMagnet" class="me-2"></fa-icon>
-      <span>Seedr Cloud Downloads</span>
-    </div>
-    <div class="d-flex gap-2" *ngIf="seedrIsConnected">
-      <button type="button"
-              class="btn btn-outline-secondary btn-sm"
-              (click)="refreshSeedrStatus()"
-              [disabled]="seedrStatusLoading">
-        Refresh
+  <div class="seedr-shell">
+    <div class="seedr-card" [class.seedr-card--open]="seedrPanelOpen">
+      <button type="button" class="seedr-card__header" (click)="toggleSeedrPanel()">
+        <div class="seedr-card__heading">
+          <span class="seedr-card__icon"><fa-icon [icon]="faMagnet"></fa-icon></span>
+          <div>
+            <span class="seedr-card__title">Seedr cloud transfers</span>
+            <span class="seedr-card__subtitle">{{ seedrIsConnected ? 'Connected and syncing' : 'Connect to bridge Seedr with MeTubeEX' }}</span>
+          </div>
+        </div>
+        <div class="seedr-card__status" [ngClass]="seedrConnectionStatus">
+          <fa-icon [icon]="seedrIsConnected ? faCheckCircle : faTriangleExclamation"></fa-icon>
+          <span>{{ seedrIsConnected ? 'Ready' : 'Action needed' }}</span>
+        </div>
+        <fa-icon [icon]="seedrPanelOpen ? faChevronUp : faChevronDown" class="seedr-card__chevron"></fa-icon>
       </button>
-      <button type="button"
-              class="btn btn-outline-danger btn-sm"
-              (click)="disconnectSeedr()">
-        Disconnect
-      </button>
+      <div class="seedr-card__body" [ngClass]="{'is-collapsed': !seedrPanelOpen}">
+        <div class="seedr-alerts">
+          <div *ngIf="seedrStatusLoading" class="alert alert-info">Checking Seedr status…</div>
+          <div *ngIf="seedrStatusError" class="alert alert-danger">{{ seedrStatusError }}</div>
+        </div>
+
+        <ng-container *ngIf="seedrIsConnected; else seedrConnectBlock">
+          <div class="seedr-grid">
+            <section class="seedr-panel seedr-panel--account">
+              <div class="seedr-panel__header">
+                <h6>Account overview</h6>
+                <button type="button"
+                        class="btn btn-outline-light btn-sm"
+                        (click)="refreshSeedrStatus()"
+                        [disabled]="seedrStatusLoading">
+                  Refresh
+                </button>
+              </div>
+              <div class="seedr-account" *ngIf="seedrAccount; else seedrAccountSkeleton">
+                <div class="seedr-account__identity">
+                  <span class="seedr-account__name">{{ seedrAccount.username || 'Seedr user' }}</span>
+                  <span class="seedr-account__tag" *ngIf="seedrAccount.premium">Premium</span>
+                </div>
+                <dl class="seedr-account__meta">
+                  <div *ngIf="seedrAccount.space_max != null">
+                    <dt>Storage</dt>
+                    <dd>
+                      {{ formatBytes(seedrAccount.space_used || 0) }} / {{ formatBytes(seedrAccount.space_max || 0) }}
+                    </dd>
+                  </div>
+                  <div *ngIf="seedrAccount.bandwidth_used != null">
+                    <dt>Bandwidth</dt>
+                    <dd>{{ formatBytes(seedrAccount.bandwidth_used || 0) }}</dd>
+                  </div>
+                  <div *ngIf="seedrAccount.country">
+                    <dt>Region</dt>
+                    <dd>{{ seedrAccount.country }}</dd>
+                  </div>
+                </dl>
+                <div class="seedr-meter" *ngIf="seedrStorageUsagePercent !== null">
+                  <div class="seedr-meter__bar">
+                    <div class="seedr-meter__fill" [style.width.%]="seedrStorageUsagePercent"></div>
+                  </div>
+                  <div class="seedr-meter__labels">
+                    <span>Used</span>
+                    <span>{{ seedrStorageUsagePercent | number:'1.0-0' }}%</span>
+                  </div>
+                </div>
+                <div class="seedr-panel__footer">
+                  <button type="button"
+                          class="btn btn-outline-danger btn-sm"
+                          (click)="disconnectSeedr()">
+                    Disconnect
+                  </button>
+                </div>
+              </div>
+              <ng-template #seedrAccountSkeleton>
+                <div class="seedr-account seedr-account--skeleton">
+                  <div class="placeholder-wave">
+                    <span class="placeholder col-9"></span>
+                    <span class="placeholder col-5 mt-2"></span>
+                  </div>
+                </div>
+              </ng-template>
+            </section>
+
+            <section class="seedr-panel seedr-panel--actions">
+              <div class="seedr-action">
+                <div class="seedr-action__header">
+                  <h6>Queue magnet links</h6>
+                  <div class="seedr-switch">
+                    <label class="form-check-label" for="seedrAutoStartSwitch">Auto start</label>
+                    <div class="form-check form-switch">
+                      <input class="form-check-input"
+                             type="checkbox"
+                             id="seedrAutoStartSwitch"
+                             name="seedrAutoStart"
+                             [(ngModel)]="seedrAutoStart"
+                             [ngModelOptions]="{standalone: true}">
+                    </div>
+                  </div>
+                </div>
+                <textarea id="seedrMagnetTextarea"
+                          class="form-control seedr-action__textarea"
+                          rows="6"
+                          name="seedrMagnetText"
+                          placeholder="Paste one magnet link per line"
+                          [(ngModel)]="seedrMagnetText"
+                          [disabled]="seedrSubmitInProgress"
+                          [ngModelOptions]="{standalone: true}"></textarea>
+                <div class="seedr-action__footer">
+                  <div class="seedr-hint">Links are queued sequentially; Seedr transfers each back automatically.</div>
+                  <button type="button"
+                          class="btn btn-primary"
+                          (click)="submitSeedrMagnets()"
+                          [disabled]="seedrSubmitInProgress">
+                    <span class="spinner-border spinner-border-sm me-2" *ngIf="seedrSubmitInProgress"></span>
+                    Queue magnets
+                  </button>
+                </div>
+              </div>
+
+              <div class="seedr-action">
+                <div class="seedr-action__header">
+                  <h6>Upload torrent file</h6>
+                  <span class="seedr-hint">Seedr fetches the torrent before handing it off.</span>
+                </div>
+                <label class="seedr-upload" for="seedrTorrentInput">
+                  <input id="seedrTorrentInput"
+                         type="file"
+                         accept=".torrent"
+                         class="d-none"
+                         #seedrTorrentInput
+                         (change)="onSeedrTorrentSelected($event)"
+                         [ngModelOptions]="{standalone: true}">
+                  <div class="seedr-upload__drop">
+                    <fa-icon [icon]="faCloudArrowUp"></fa-icon>
+                    <span>{{ seedrSelectedTorrent?.name || 'Choose a .torrent file' }}</span>
+                  </div>
+                </label>
+                <div class="seedr-action__footer">
+                  <button type="button"
+                          class="btn btn-outline-primary"
+                          (click)="uploadSeedrTorrent()"
+                          [disabled]="!seedrSelectedTorrent || seedrUploadInProgress">
+                    <span class="spinner-border spinner-border-sm me-2" *ngIf="seedrUploadInProgress"></span>
+                    Upload torrent
+                  </button>
+                </div>
+              </div>
+
+              <div class="seedr-inline-fields">
+                <div class="seedr-inline-fields__item">
+                  <label class="form-label" for="seedrFolderInput">Seedr folder</label>
+                  <input id="seedrFolderInput"
+                         type="text"
+                         class="form-control"
+                         name="seedrFolder"
+                         placeholder="Root"
+                         [(ngModel)]="seedrFolder"
+                         [ngModelOptions]="{standalone: true}">
+                </div>
+                <div class="seedr-inline-fields__item">
+                  <label class="form-label" for="seedrPrefixInput">Name prefix</label>
+                  <input id="seedrPrefixInput"
+                         type="text"
+                         class="form-control"
+                         name="seedrCustomPrefix"
+                         placeholder="Optional"
+                         [(ngModel)]="seedrCustomPrefix"
+                         [ngModelOptions]="{standalone: true}">
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="seedr-feedback" *ngIf="seedrActionMessage || seedrActionError">
+            <div class="alert alert-success" *ngIf="seedrActionMessage">{{ seedrActionMessage }}</div>
+            <div class="alert alert-danger" *ngIf="seedrActionError">{{ seedrActionError }}</div>
+          </div>
+        </ng-container>
+      </div>
     </div>
-  </div>
-  <div class="card-body">
-    <div *ngIf="seedrStatusLoading" class="alert alert-info">Checking Seedr connection...</div>
-    <div *ngIf="seedrStatusError" class="alert alert-danger">{{ seedrStatusError }}</div>
-
-    <ng-container *ngIf="seedrIsConnected; else seedrConnectBlock">
-      <div class="seedr-account-summary" *ngIf="seedrAccount">
-        <div>
-          <div class="seedr-account-summary__name">{{ seedrAccount.username || 'Seedr user' }}</div>
-          <div class="seedr-account-summary__meta" *ngIf="seedrAccount.space_max != null">
-            Storage: {{ formatBytes(seedrAccount.space_used || 0) }} / {{ formatBytes(seedrAccount.space_max || 0) }}
-          </div>
-          <div class="seedr-account-summary__meta" *ngIf="seedrAccount.bandwidth_used != null">
-            Bandwidth used: {{ formatBytes(seedrAccount.bandwidth_used || 0) }}
-          </div>
-          <div class="seedr-account-summary__meta" *ngIf="seedrAccount.country">
-            Region: {{ seedrAccount.country }}
-          </div>
-        </div>
-        <span class="seedr-account-summary__badge" *ngIf="seedrAccount.premium">Premium</span>
-      </div>
-
-      <div class="row g-3 seedr-inputs">
-        <div class="col-lg-7">
-          <label class="form-label" for="seedrMagnetTextarea">Magnet links</label>
-          <textarea id="seedrMagnetTextarea"
-                    class="form-control"
-                    rows="6"
-                    name="seedrMagnetText"
-                    placeholder="Enter one magnet link per line"
-                    [(ngModel)]="seedrMagnetText"
-                    [disabled]="seedrSubmitInProgress"
-                    [ngModelOptions]="{standalone: true}"></textarea>
-          <div class="form-text">Links are processed sequentially. Seedr will transfer files back to MeTubeEX.</div>
-          <div class="d-flex flex-wrap gap-2 mt-3 align-items-center">
-            <button type="button"
-                    class="btn btn-primary"
-                    (click)="submitSeedrMagnets()"
-                    [disabled]="seedrSubmitInProgress">
-              <span class="spinner-border spinner-border-sm me-2" *ngIf="seedrSubmitInProgress"></span>
-              Queue magnets
-            </button>
-            <div class="form-check form-switch seedr-autostart-switch">
-              <input class="form-check-input"
-                     type="checkbox"
-                     id="seedrAutoStartSwitch"
-                     name="seedrAutoStart"
-                     [(ngModel)]="seedrAutoStart"
-                     [ngModelOptions]="{standalone: true}">
-              <label class="form-check-label" for="seedrAutoStartSwitch">Auto start when imported</label>
-            </div>
-          </div>
-        </div>
-        <div class="col-lg-5">
-          <label class="form-label" for="seedrTorrentInput">Torrent file</label>
-          <input id="seedrTorrentInput"
-                 type="file"
-                 accept=".torrent"
-                 class="form-control"
-                 #seedrTorrentInput
-                 (change)="onSeedrTorrentSelected($event)"
-                 [ngModelOptions]="{standalone: true}">
-          <div class="form-text">Upload a .torrent file to fetch it via Seedr.</div>
-          <div class="d-flex gap-2 align-items-center mt-3">
-            <button type="button"
-                    class="btn btn-outline-primary"
-                    (click)="uploadSeedrTorrent()"
-                    [disabled]="!seedrSelectedTorrent || seedrUploadInProgress">
-              <span class="spinner-border spinner-border-sm me-2" *ngIf="seedrUploadInProgress"></span>
-              <fa-icon [icon]="faCloudArrowUp" class="me-2"></fa-icon>
-              Upload torrent
-            </button>
-            <span class="text-muted small" *ngIf="seedrSelectedTorrent">{{ seedrSelectedTorrent.name }}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="row g-3 mt-3">
-        <div class="col-md-6 col-lg-4">
-          <label class="form-label" for="seedrFolderInput">Seedr folder name</label>
-          <input id="seedrFolderInput"
-                 type="text"
-                 class="form-control"
-                 name="seedrFolder"
-                 placeholder="Root"
-                 [(ngModel)]="seedrFolder"
-                 [ngModelOptions]="{standalone: true}">
-        </div>
-        <div class="col-md-6 col-lg-4">
-          <label class="form-label" for="seedrPrefixInput">Custom name prefix</label>
-          <input id="seedrPrefixInput"
-                 type="text"
-                 class="form-control"
-                 name="seedrCustomPrefix"
-                 placeholder="None"
-                 [(ngModel)]="seedrCustomPrefix"
-                 [ngModelOptions]="{standalone: true}">
-        </div>
-      </div>
-    </ng-container>
-
-    <div *ngIf="seedrActionMessage" class="alert alert-success mt-3">{{ seedrActionMessage }}</div>
-    <div *ngIf="seedrActionError" class="alert alert-danger mt-3">{{ seedrActionError }}</div>
-  </div>
   </div>
 </div>
 
 <ng-template #seedrConnectBlock>
-  <div class="seedr-connect">
-    <p>Connect your Seedr account to download magnets via Seedr and transfer them back automatically.</p>
-    <div class="d-flex flex-wrap gap-2">
+  <section class="seedr-panel seedr-panel--connect">
+    <header class="seedr-panel__header">
+      <h6>Connect your Seedr account</h6>
+      <button type="button"
+              class="btn btn-outline-light btn-sm"
+              (click)="refreshSeedrStatus()"
+              [disabled]="seedrStatusLoading">
+        Refresh status
+      </button>
+    </header>
+    <p class="seedr-panel__intro">Authorize once to bridge Seedr’s cloud storage with MeTubeEX.</p>
+    <ol class="seedr-steps">
+      <li>Request a device code and open the verification URL.</li>
+      <li>Enter the code using your Seedr account.</li>
+      <li>Return here and confirm once Seedr grants access.</li>
+    </ol>
+    <div class="seedr-connect__actions">
       <button type="button"
               class="btn btn-primary"
               (click)="startSeedrDeviceFlow()"
@@ -353,19 +423,13 @@
         <span class="spinner-border spinner-border-sm me-2" *ngIf="seedrDeviceStartInProgress"></span>
         Get device code
       </button>
-      <button type="button"
-              class="btn btn-outline-secondary"
-              (click)="refreshSeedrStatus()"
-              [disabled]="seedrStatusLoading">
-        Refresh status
-      </button>
     </div>
 
-    <div *ngIf="seedrDeviceChallenge" class="seedr-device mt-3">
-      <p class="mb-1">Visit <a [href]="seedrDeviceChallenge.verification_url" target="_blank" rel="noopener">{{ seedrDeviceChallenge.verification_url }}</a> and enter this code:</p>
-      <div class="seedr-device__code">{{ seedrDeviceChallenge.user_code }}</div>
-      <p class="text-muted small" *ngIf="seedrChallengeExpireLabel">{{ seedrChallengeExpireLabel }}</p>
-      <div class="d-flex flex-wrap gap-2 mt-2">
+    <div class="seedr-device-card" *ngIf="seedrDeviceChallenge">
+      <p>Visit <a [href]="seedrDeviceChallenge.verification_url" target="_blank" rel="noopener">{{ seedrDeviceChallenge.verification_url }}</a> and enter:</p>
+      <div class="seedr-device-card__code">{{ seedrDeviceChallenge.user_code }}</div>
+      <p class="seedr-device-card__timer" *ngIf="seedrChallengeExpireLabel">{{ seedrChallengeExpireLabel }}</p>
+      <div class="seedr-device-card__actions">
         <button type="button"
                 class="btn btn-success"
                 (click)="completeSeedrDeviceFlow()"
@@ -382,9 +446,11 @@
       </div>
     </div>
 
-    <div *ngIf="seedrDeviceMessage" class="alert alert-success mt-3">{{ seedrDeviceMessage }}</div>
-    <div *ngIf="seedrDeviceError" class="alert alert-danger mt-3">{{ seedrDeviceError }}</div>
-  </div>
+    <div class="seedr-feedback" *ngIf="seedrDeviceMessage || seedrDeviceError">
+      <div class="alert alert-success" *ngIf="seedrDeviceMessage">{{ seedrDeviceMessage }}</div>
+      <div class="alert alert-danger" *ngIf="seedrDeviceError">{{ seedrDeviceError }}</div>
+    </div>
+  </section>
 </ng-template>
 
 <!-- Batch Import Modal -->

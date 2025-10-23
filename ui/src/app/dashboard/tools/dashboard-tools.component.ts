@@ -123,6 +123,7 @@ export class DashboardToolsComponent implements OnInit {
   seedrSelectedTorrent: File | null = null;
   seedrActionMessage = '';
   seedrActionError = '';
+  seedrPanelOpen = true;
 
   @ViewChild('seedrTorrentInput') seedrTorrentInput?: ElementRef<HTMLInputElement>;
 
@@ -540,6 +541,9 @@ export class DashboardToolsComponent implements OnInit {
       this.seedrAccount = response.account ?? null;
       this.seedrActionMessage = '';
       this.seedrActionError = '';
+      if (!response?.connected) {
+        this.seedrPanelOpen = true;
+      }
     }, error => {
       this.seedrStatusLoading = false;
       this.seedrStatusError = this.resolveError(error, 'Unable to load Seedr status.');
@@ -604,6 +608,7 @@ export class DashboardToolsComponent implements OnInit {
       this.seedrAccount = null;
       this.seedrDeviceChallenge = null;
       this.seedrActionMessage = 'Seedr account disconnected.';
+      this.seedrPanelOpen = true;
       this.refreshSeedrStatus();
     }, error => {
       this.seedrActionError = this.resolveError(error, 'Failed to disconnect Seedr.');
@@ -705,6 +710,26 @@ export class DashboardToolsComponent implements OnInit {
       return `${seconds}s remaining`;
     }
     return `${minutes}m ${seconds.toString().padStart(2, '0')}s remaining`;
+  }
+
+  get seedrStorageUsagePercent(): number | null {
+    if (!this.seedrAccount) {
+      return null;
+    }
+    const used = Number(this.seedrAccount.space_used || 0);
+    const max = Number(this.seedrAccount.space_max || 0);
+    if (!max || isNaN(used) || isNaN(max) || max <= 0) {
+      return null;
+    }
+    return Math.min(100, Math.max(0, (used / max) * 100));
+  }
+
+  get seedrConnectionStatus(): 'connected' | 'disconnected' {
+    return this.seedrIsConnected ? 'connected' : 'disconnected';
+  }
+
+  toggleSeedrPanel(): void {
+    this.seedrPanelOpen = !this.seedrPanelOpen;
   }
 
   private resolveError(error: any, fallback: string): string {

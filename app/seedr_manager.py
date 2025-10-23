@@ -6,6 +6,7 @@ import time
 import uuid
 from collections import OrderedDict
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+from urllib.parse import parse_qs, unquote, urlparse
 
 import httpx
 
@@ -95,6 +96,8 @@ class SeedrJob:
 
 class SeedrDownloadManager:
     POLL_INTERVAL = 10
+    ARCHIVE_MAX_ATTEMPTS = 6
+    ARCHIVE_RETRY_INTERVAL = 5
 
     def __init__(
         self,
@@ -165,7 +168,7 @@ class SeedrDownloadManager:
 
         job_id = uuid.uuid4().hex
         storage_key = f"seedr:{job_id}"
-        display_title = title or magnet_link or torrent_file or "Seedr job"
+        display_title = title or self._infer_display_title(magnet_link, torrent_file)
 
         info = DownloadInfo(
             job_id,
@@ -187,6 +190,7 @@ class SeedrDownloadManager:
         info.percent = 0.0
         info.speed = None
         info.eta = None
+        info.filename = display_title
 
         job = SeedrJob(
             info,
@@ -361,17 +365,17 @@ class SeedrDownloadManager:
 
         job.seedr_folder_id = target_folder.id
 
-        archive = await self._create_archive(client, target_folder)
-        if not archive:
-            await self._finalize_error(storage_key, job, "Failed to create Seedr archive.")
-            await self._cleanup_seedr(client, job)
-            return
+        if len(target_folder.files) == 1 and not target_folder.folders:
+            success = await self._download_seedr_file(client, job, target_folder.files[0])
+        else:
+            archive = await self._prepare_archive(client, storage_key, job, target_folder)
+            if not archive:
+                return
 
-        job.archive_url = archive.archive_url
+            job.archive_url = archive.archive_url
+            success = await self._download_archive(job, target_folder, archive)
 
-        success = await self._download_archive(job, archive)
         if not success:
-            await self._cleanup_seedr(client, job)
             return
 
         await self._cleanup_seedr(client, job)
@@ -432,21 +436,47 @@ class SeedrDownloadManager:
         await self.notifier.updated(job.info)
         return None
 
-    async def _create_archive(self, client: AsyncSeedr, folder: models.Folder) -> Optional[models.CreateArchiveResult]:
-        try:
-            return await client.create_archive(str(folder.id))
-        except SeedrError as exc:
-            log.error("Failed to create Seedr archive for folder %s: %s", folder.id, exc)
-            return None
+    async def _prepare_archive(
+        self,
+        client: AsyncSeedr,
+        storage_key: str,
+        job: SeedrJob,
+        folder: models.Folder,
+    ) -> Optional[models.CreateArchiveResult]:
+        attempt = 0
+        while attempt < self.ARCHIVE_MAX_ATTEMPTS:
+            attempt += 1
+            try:
+                archive = await client.create_archive(str(folder.id))
+            except SeedrError as exc:
+                log.error("Failed to create Seedr archive for folder %s: %s", folder.id, exc)
+                await asyncio.sleep(self.ARCHIVE_RETRY_INTERVAL)
+                continue
 
-    async def _download_archive(self, job: SeedrJob, archive: models.CreateArchiveResult) -> bool:
+            if archive and archive.result and archive.archive_url:
+                return archive
+
+            await asyncio.sleep(self.ARCHIVE_RETRY_INTERVAL)
+
+        await self._finalize_error(storage_key, job, "Seedr archive is not ready yet. Please try again later.")
+        return None
+
+    async def _download_archive(
+        self,
+        job: SeedrJob,
+        folder: models.Folder,
+        archive: models.CreateArchiveResult,
+    ) -> bool:
         directory = self.base_queue._resolve_download_directory(job.info)
         if not directory:
             await self._finalize_error(job.info.url, job, "Download directory unavailable.")
             return False
         os.makedirs(directory, exist_ok=True)
 
-        filename = _sanitize_filename(job.info.title or f"seedr-{job.info.id}.zip")
+        folder_name = folder.fullname or folder.name or job.info.title or f"seedr-{job.info.id}"
+        filename = _sanitize_filename(folder_name)
+        if not filename:
+            filename = f"seedr-{job.info.id}"
         if not filename.lower().endswith('.zip'):
             filename = f"{filename}.zip"
         filename, path = _ensure_unique_path(directory, filename)
@@ -454,6 +484,7 @@ class SeedrDownloadManager:
         job.info.status = "downloading"
         job.info.msg = "Downloading archive from Seedr"
         job.info.filename = filename
+        job.info.title = filename
         job.info.percent = None
         job.info.speed = None
         job.info.eta = None
@@ -496,6 +527,95 @@ class SeedrDownloadManager:
             return False
         except Exception as exc:
             await self._finalize_error(job.info.url, job, f"Failed to download archive: {exc}")
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+            return False
+
+        job.file_path = path
+        try:
+            job.info.size = os.path.getsize(path)
+        except OSError:
+            pass
+        job.info.status = "finished"
+        job.info.msg = "Seedr transfer complete"
+        job.info.percent = 100.0
+        job.info.speed = None
+        job.info.eta = None
+        return True
+
+    async def _download_seedr_file(self, client: AsyncSeedr, job: SeedrJob, file: models.File) -> bool:
+        try:
+            fetch = await client.fetch_file(str(file.folder_file_id))
+        except SeedrError as exc:
+            await self._finalize_error(job.info.url, job, f"Failed to fetch Seedr file: {exc}")
+            return False
+
+        if not fetch.result or not fetch.url:
+            await self._finalize_error(job.info.url, job, "Seedr did not return a download link for the file.")
+            return False
+
+        directory = self.base_queue._resolve_download_directory(job.info)
+        if not directory:
+            await self._finalize_error(job.info.url, job, "Download directory unavailable.")
+            return False
+        os.makedirs(directory, exist_ok=True)
+
+        base_name = fetch.name or file.name or job.info.title or f"seedr-{job.info.id}"
+        filename = _sanitize_filename(base_name)
+        if not filename:
+            filename = f"seedr-{job.info.id}"
+        filename, path = _ensure_unique_path(directory, filename)
+
+        job.info.status = "downloading"
+        job.info.msg = "Downloading from Seedr"
+        job.info.filename = filename
+        job.info.title = filename
+        job.info.percent = 0.0
+        job.info.speed = None
+        job.info.eta = None
+        job.info.size = file.size
+        await self.notifier.updated(job.info)
+
+        try:
+            async with httpx.AsyncClient(timeout=None, follow_redirects=True) as session:
+                async with session.stream("GET", fetch.url) as response:
+                    response.raise_for_status()
+                    total = response.headers.get("Content-Length")
+                    total_bytes = int(total) if total and total.isdigit() else (file.size or None)
+                    downloaded = 0
+                    start_time = time.monotonic()
+
+                    with open(path, "wb") as fh:
+                        async for chunk in response.aiter_bytes(chunk_size=256 * 1024):
+                            if job.canceled:
+                                raise asyncio.CancelledError()
+                            if not chunk:
+                                continue
+                            fh.write(chunk)
+                            downloaded += len(chunk)
+                            job.info.size = downloaded
+                            elapsed = max(time.monotonic() - start_time, 1e-6)
+                            job.info.speed = downloaded / elapsed
+                            if total_bytes:
+                                job.info.percent = (downloaded / total_bytes) * 100
+                                remaining = max(total_bytes - downloaded, 0)
+                                job.info.eta = int(remaining / job.info.speed) if job.info.speed else None
+                            await self.notifier.updated(job.info)
+        except asyncio.CancelledError:
+            job.info.status = "canceled"
+            job.info.msg = "Download canceled"
+            await self.notifier.updated(job.info)
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+            return False
+        except Exception as exc:
+            await self._finalize_error(job.info.url, job, f"Failed to download Seedr file: {exc}")
             if os.path.exists(path):
                 try:
                     os.remove(path)
@@ -682,6 +802,30 @@ class SeedrDownloadManager:
             except OSError:
                 pass
         job.local_torrent_path = None
+
+    def _infer_display_title(
+        self,
+        magnet_link: Optional[str],
+        torrent_file: Optional[str],
+    ) -> str:
+        if torrent_file:
+            name = os.path.basename(torrent_file)
+            if name:
+                return name.strip() or "Seedr torrent"
+
+        if magnet_link:
+            try:
+                parsed = urlparse(magnet_link)
+                params = parse_qs(parsed.query)
+                if params.get("dn"):
+                    display = unquote(params["dn"][0]).strip()
+                    if display:
+                        sanitized = " ".join(display.split())
+                        if sanitized:
+                            return sanitized[:200]
+            except Exception:
+                pass
+        return "Seedr magnet"
 
 
 class suppress_seedr_error:
