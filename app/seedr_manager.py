@@ -724,6 +724,18 @@ class SeedrDownloadManager:
                 success = await self._download_archive(job, folder_listing, archive)
 
         if not success:
+            if job.info.status != "error":
+                await self._cleanup_seedr(client, job)
+            if job.canceled:
+                self.queue.pop(storage_key, None)
+                job.stage = "canceled"
+                job.info.status = "canceled"
+                job.info.msg = "Seedr job canceled"
+                job.info.percent = None
+                job.info.speed = None
+                job.info.eta = None
+                await self._notify_update(job)
+                await self.notifier.canceled(storage_key)
             return
 
         await self._cleanup_seedr(client, job)
