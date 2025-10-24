@@ -192,7 +192,7 @@ If you prefer the lean single-user experience, the original [alexta69/metube](ht
 - MeTubeEX inherits the original project license and builds directly atop the upstream codebase.
 - Huge thanks to [@alexta69](https://github.com/alexta69) and all contributors whose work powers this extended edition.
 - Special thanks to the following projects that enable additional functionalities:
-  - [seedrcc](https://github.com/hemantapkh/seedrcc) for Seedr integration.
+  - [hemantapkh](https://github.com/hemantapkh/seedrcc) for Seedr integration.
   - [gallery-dl](https://github.com/mikf/gallery-dl) for gallery-dl integration.
   - [yt-dlp](https://github.com/yt-dlp/yt-dlp) for enhanced downloading capabilities.
   - [EchterAlsFake](https://github.com/EchterAlsFake) for additional website support.
