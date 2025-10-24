@@ -6,17 +6,34 @@
 
 ## What's new in the extended edition?
 
-- Multi-user authentication and roles with a persistent user store, roles, session cookies, and Socket.IO segregation. Admins can manage accounts directly from the UI.
-- Per-user download sandboxes so queues, history, and yt-dlp cookie files stay isolated per account.
-- Inline file management to rename completed downloads from the dashboard with immediate updates across connected clients.
-- Cookie upload console to paste, review, and clear Netscape-format cookies without touching the server.
-- Modernized UX touches such as a refreshed login screen, contextual metrics, and ready-to-use dark/auto theming.
-- Modularized dashboard and admin areas with lazy-loaded Angular routes for snappier first paint and clearer separation of tools.
-- Incremental download metrics, bounded queue/history rendering, and smarter websocket diffs to keep the dashboard responsive even with large workloads.
-- Adaptive HLS streaming pipeline with ffmpeg-generated playlists and an hls.js player that gracefully falls back to byte-range streaming when MSE is unavailable.
-- Per-user gallery-dl credential/cookie stores, download size limits, and history retention caps so long-running nodes stay tidy by default.
+### Multi-User & Authentication
+- **Secure Authentication**: Modern login UI with dark theme, session management, and rate limiting to prevent brute-force attacks.
+- **Role-Based Access**: Support for admin and user roles with persistent user stores. Admins can create, manage, and disable accounts directly from the UI.
+- **Per-User Isolation**: Queues, history, downloads, and cookies are fully sandboxed per user, ensuring privacy and security.
 
-Everything the upstream project offered—robust yt-dlp integration, playlist support, browser helpers, and Docker friendliness—remains available here.
+### Enhanced Downloading Capabilities
+- **Yt-dlp Integration**: Advanced options for format and quality selection, playlist handling, custom output templates, and size limits with real-time progress tracking.
+- **Gallery-dl Support**: Download from hundreds of supported sites with credential management, cookie stores, proxy support, retries, and archive features to prevent re-downloads.
+- **Seedr Integration**: Add torrents via magnet links or files, monitor progress, and download via direct files or ZIP archives. Includes account management and automatic cleanup.
+- **Proxy Downloads**: Direct file downloads for unsupported URLs with size limits, file type detection, and automatic naming.
+
+
+### Streaming & Media Management
+- **Adaptive HLS Streaming**: FFmpeg-powered transcoding for smooth video playback with CPU and memory limits. Falls back to byte-range streaming when needed. [WORK IN PROGRESS]
+- **Inline File Management**: Rename, delete, and manage completed downloads directly from the dashboard with live updates across connected clients.
+- **Custom Directories**: Support for custom download folders with validation and creation options.
+
+### UI/UX Improvements
+- **Modern Angular Frontend**: Responsive design with Bootstrap, dark/auto theming, and real-time updates via Socket.IO.
+- **Dashboard Features**: Modular admin and user areas, lazy-loaded routes, bounded rendering for performance, and contextual metrics.
+- **Cookie Management**: Upload, review, and clear yt-dlp cookies in Netscape format without server access. Support for multiple profiles and auto-matching.
+
+### Admin & System Features
+- **User Management**: Full admin interface for account creation, role assignment, password resets, and monitoring.
+- **System Monitoring**: Real-time stats on CPU, memory, network, and uptime. Configurable proxy settings and size limits.
+- **Security Enhancements**: Encrypted sessions with NaCl, bcrypt password hashing, and configurable login rate limiting.
+
+Everything the upstream project offered—robust yt-dlp integration, playlist support, browser helpers, and Docker friendliness—remains available here, with these enhancements layered on top for a production-ready, multi-user experience.
 
 ![Application screenshot](./screenshot.gif)
 
@@ -63,7 +80,7 @@ python app/main.py
 
 ### Development quick start
 
-- **Tooling versions:** Node 22.x LTS, npm 10+, Python 3.13.
+- **Tooling versions:** Node 22.x LTS, npm 10+, Python 3.13. All backend modules and requirements have been updated to their latest versions for optimal performance and compatibility.
 - **Key scripts:** `npm run lint`, `npm run build -- --configuration production`, `npm run test`.
 - **Docker build:** `docker build -t metubeex:dev .` (uses the Angular bundle from the build stage).
 
@@ -154,12 +171,19 @@ All configuration knobs from upstream MeTube carry over. Set environment variabl
 
 | Feature | MeTubeEX | MeTube |
 |---------|----------|--------|
-| Multi-user authentication | Yes (built-in) | No |
+| Multi-user authentication | Yes (built-in with roles) | No |
 | Admin UI for account management | Yes | No |
 | Per-user queue/state separation | Yes | No |
-| Cookie upload/clear UI | Yes | Partial (manual) |
+| Cookie upload/clear UI | Yes (with profiles) | Partial (manual) |
 | Inline rename with live UI updates | Yes | Backend only |
-| Updated login experience | Yes | No |
+| Updated login experience | Yes (modern dark UI) | No |
+| Gallery-dl integration | Yes (hundreds of sites) | No |
+| Seedr torrent support | Yes (magnets & files) | No |
+| Proxy direct downloads | Yes | No |
+| Adaptive HLS streaming | Yes (with FFmpeg) [WIP] | No |
+| Real-time system monitoring | Yes | No |
+| Configurable size limits | Yes | No |
+| Advanced cookie management | Yes (multiple profiles) | Basic |
 
 If you prefer the lean single-user experience, the original [alexta69/metube](https://github.com/alexta69/metube) remains an excellent choice.
 
@@ -167,5 +191,10 @@ If you prefer the lean single-user experience, the original [alexta69/metube](ht
 
 - MeTubeEX inherits the original project license and builds directly atop the upstream codebase.
 - Huge thanks to [@alexta69](https://github.com/alexta69) and all contributors whose work powers this extended edition.
+- Special thanks to the following projects that enable additional functionalities:
+  - [seedrcc](https://github.com/hemantapkh/seedrcc) for Seedr integration.
+  - [gallery-dl](https://github.com/mikf/gallery-dl) for gallery-dl integration.
+  - [yt-dlp](https://github.com/yt-dlp/yt-dlp) for enhanced downloading capabilities.
+  - [EchterAlsFake](https://github.com/EchterAlsFake) for additional website support.
 
 Happy downloading!
