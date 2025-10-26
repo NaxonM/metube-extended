@@ -2263,6 +2263,33 @@ async def admin_get_resource_limits(request):
         'disk_read_iops': int(getattr(config, 'DISK_READ_IOPS', 0)),
         'disk_write_iops': int(getattr(config, 'DISK_WRITE_IOPS', 0)),
         'network_bandwidth_mb': int(getattr(config, 'NETWORK_BANDWIDTH_MB', 0)),
+    })
+
+
+@routes.get(config.URL_PREFIX + 'admin/resource-limits')
+async def admin_get_resource_limits(request):
+    session = await get_session(request)
+    ensure_admin(session)
+    return web.json_response({
+        'cpu_limit_percent': float(getattr(config, 'CPU_LIMIT_PERCENT', 100)),
+        'memory_limit_mb': int(getattr(config, 'MEMORY_LIMIT_MB', 0)),
+        'disk_read_iops': int(getattr(config, 'DISK_READ_IOPS', 0)),
+        'disk_write_iops': int(getattr(config, 'DISK_WRITE_IOPS', 0)),
+        'network_bandwidth_mb': int(getattr(config, 'NETWORK_BANDWIDTH_MB', 0)),
+        'max_concurrent_downloads': int(getattr(config, 'MAX_CONCURRENT_DOWNLOADS', 3)),
+    })
+
+
+@routes.get(config.URL_PREFIX + 'admin/resource-limits')
+async def admin_get_resource_limits(request):
+    session = await get_session(request)
+    ensure_admin(session)
+    return web.json_response({
+        'cpu_limit_percent': float(getattr(config, 'CPU_LIMIT_PERCENT', 100)),
+        'memory_limit_mb': int(getattr(config, 'MEMORY_LIMIT_MB', 0)),
+        'disk_read_iops': int(getattr(config, 'DISK_READ_IOPS', 0)),
+        'disk_write_iops': int(getattr(config, 'DISK_WRITE_IOPS', 0)),
+        'network_bandwidth_mb': int(getattr(config, 'NETWORK_BANDWIDTH_MB', 0)),
         'max_concurrent_downloads': int(getattr(config, 'MAX_CONCURRENT_DOWNLOADS', 3)),
     })
 
