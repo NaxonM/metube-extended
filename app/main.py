@@ -2798,7 +2798,7 @@ async def resource_monitor():
     memory_limit_mb = int(getattr(config, 'MEMORY_LIMIT_MB', 0))
     disk_read_iops_limit = int(getattr(config, 'DISK_READ_IOPS', 0))
     disk_write_iops_limit = int(getattr(config, 'DISK_WRITE_IOPS', 0))
-    network_limit_mb = float(getattr(config, 'NETWORK_BANDWIDTH_MB', 0))
+    network_limit_mb = int(getattr(config, 'NETWORK_BANDWIDTH_MB', 0))
 
     last_net_check = time.time()
     last_disk_check = time.time()
