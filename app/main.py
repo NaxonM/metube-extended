@@ -189,6 +189,11 @@ class Config:
         'STREAM_TRANSCODE_FFMPEG': 'ffmpeg',
         'STREAM_TRANSCODE_CPU_LIMIT_PERCENT': '30',
         'STREAM_TRANSCODE_MEMORY_LIMIT_PERCENT': '40',
+        'CPU_LIMIT_PERCENT': '80',  # Limit CPU usage to 80%
+        'MEMORY_LIMIT_MB': '2048',  # Limit RAM to 2GB
+        'DISK_READ_IOPS': '1000',   # Limit disk read IOPS
+        'DISK_WRITE_IOPS': '1000',  # Limit disk write IOPS
+        'NETWORK_BANDWIDTH_MB': '62.5',  # Limit network bandwidth to 500 Mb/s (62.5 MB/s)
     }
 
     _BOOLEAN = ('DOWNLOAD_DIRS_INDEXABLE', 'CUSTOM_DIRS', 'CREATE_CUSTOM_DIRS', 'DELETE_FILE_ON_TRASHCAN', 'DEFAULT_OPTION_PLAYLIST_STRICT_MODE', 'HTTPS', 'ENABLE_ACCESSLOG', 'PROXY_DOWNLOAD_LIMIT_ENABLED', 'STREAM_TRANSCODE_ENABLED')
@@ -2248,6 +2253,96 @@ async def admin_set_proxy_settings(request):
     })
 
 
+@routes.get(config.URL_PREFIX + 'admin/resource-limits')
+async def admin_get_resource_limits(request):
+    session = await get_session(request)
+    ensure_admin(session)
+    return web.json_response({
+        'cpu_limit_percent': float(getattr(config, 'CPU_LIMIT_PERCENT', 100)),
+        'memory_limit_mb': int(getattr(config, 'MEMORY_LIMIT_MB', 0)),
+        'disk_read_iops': int(getattr(config, 'DISK_READ_IOPS', 0)),
+        'disk_write_iops': int(getattr(config, 'DISK_WRITE_IOPS', 0)),
+        'network_bandwidth_mb': int(getattr(config, 'NETWORK_BANDWIDTH_MB', 0)),
+    })
+
+
+@routes.get(config.URL_PREFIX + 'admin/resource-limits')
+async def admin_get_resource_limits(request):
+    session = await get_session(request)
+    ensure_admin(session)
+    return web.json_response({
+        'cpu_limit_percent': float(getattr(config, 'CPU_LIMIT_PERCENT', 100)),
+        'memory_limit_mb': int(getattr(config, 'MEMORY_LIMIT_MB', 0)),
+        'disk_read_iops': int(getattr(config, 'DISK_READ_IOPS', 0)),
+        'disk_write_iops': int(getattr(config, 'DISK_WRITE_IOPS', 0)),
+        'network_bandwidth_mb': int(getattr(config, 'NETWORK_BANDWIDTH_MB', 0)),
+        'max_concurrent_downloads': int(getattr(config, 'MAX_CONCURRENT_DOWNLOADS', 3)),
+    })
+
+
+@routes.get(config.URL_PREFIX + 'admin/resource-limits')
+async def admin_get_resource_limits(request):
+    session = await get_session(request)
+    ensure_admin(session)
+    return web.json_response({
+        'cpu_limit_percent': float(getattr(config, 'CPU_LIMIT_PERCENT', 100)),
+        'memory_limit_mb': int(getattr(config, 'MEMORY_LIMIT_MB', 0)),
+        'disk_read_iops': int(getattr(config, 'DISK_READ_IOPS', 0)),
+        'disk_write_iops': int(getattr(config, 'DISK_WRITE_IOPS', 0)),
+        'network_bandwidth_mb': int(getattr(config, 'NETWORK_BANDWIDTH_MB', 0)),
+        'max_concurrent_downloads': int(getattr(config, 'MAX_CONCURRENT_DOWNLOADS', 3)),
+    })
+
+
+@routes.post(config.URL_PREFIX + 'admin/resource-limits')
+async def admin_set_resource_limits(request):
+    session = await get_session(request)
+    ensure_admin(session)
+
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError:
+        raise web.HTTPBadRequest(text='Invalid JSON payload')
+
+    updates = {}
+    for key in ['CPU_LIMIT_PERCENT', 'MEMORY_LIMIT_MB', 'DISK_READ_IOPS', 'DISK_WRITE_IOPS', 'NETWORK_BANDWIDTH_MB', 'MAX_CONCURRENT_DOWNLOADS']:
+        value = payload.get(key.lower())
+        if value is not None:
+            try:
+                if key in ['CPU_LIMIT_PERCENT']:
+                    val = max(min(float(value), 100), 0)
+                else:
+                    val = max(int(value), 0)
+                updates[key] = val
+            except (TypeError, ValueError):
+                raise web.HTTPBadRequest(text=f'{key.lower()} must be a valid number')
+
+    # Since config is immutable, we need to update environment or restart, but for simplicity, log and suggest restart
+    if updates:
+        for key, val in updates.items():
+            os.environ[key] = str(val)
+            setattr(config, key, str(val) if key != 'CPU_LIMIT_PERCENT' else str(val))
+            log.info(f"Resource limit updated: {key} = {val}. Restart may be required for full effect.")
+
+    return web.json_response({
+        'cpu_limit_percent': float(getattr(config, 'CPU_LIMIT_PERCENT', 100)),
+        'memory_limit_mb': int(getattr(config, 'MEMORY_LIMIT_MB', 0)),
+        'disk_read_iops': int(getattr(config, 'DISK_READ_IOPS', 0)),
+        'disk_write_iops': int(getattr(config, 'DISK_WRITE_IOPS', 0)),
+        'network_bandwidth_mb': int(getattr(config, 'NETWORK_BANDWIDTH_MB', 0)),
+        'max_concurrent_downloads': int(getattr(config, 'MAX_CONCURRENT_DOWNLOADS', 3)),
+    })
+
+
+@routes.post(config.URL_PREFIX + 'admin/restart')
+async def admin_restart(request):
+    session = await get_session(request)
+    ensure_admin(session)
+    log.warning("System restart requested by admin. Shutting down...")
+    # Use os.execv to restart the process
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+
 @routes.get(config.URL_PREFIX + 'admin/system-stats')
 async def admin_system_stats(request):
     session = await get_session(request)
@@ -2257,6 +2352,7 @@ async def admin_system_stats(request):
     memory = psutil.virtual_memory()
     swap = psutil.swap_memory()
     net = psutil.net_io_counters()
+    disk_io = psutil.disk_io_counters()
     now = time.time()
     uptime_seconds = max(now - psutil.boot_time(), 0.0)
 
@@ -2265,12 +2361,14 @@ async def admin_system_stats(request):
             'percent': cpu_percent,
             'cores': psutil.cpu_count(logical=False) or psutil.cpu_count(logical=True) or 1,
             'threads': psutil.cpu_count() or 1,
+            'limit_percent': float(getattr(config, 'CPU_LIMIT_PERCENT', 100)),
         },
         'memory': {
             'percent': memory.percent,
             'used': memory.used,
             'available': memory.available,
             'total': memory.total,
+            'limit_mb': int(getattr(config, 'MEMORY_LIMIT_MB', 0)),
         },
         'swap': {
             'percent': swap.percent,
@@ -2280,6 +2378,15 @@ async def admin_system_stats(request):
         'network': {
             'bytes_sent': net.bytes_sent,
             'bytes_recv': net.bytes_recv,
+            'limit_mb': int(getattr(config, 'NETWORK_BANDWIDTH_MB', 0)),
+        },
+        'disk': {
+            'read_count': disk_io.read_count if disk_io else 0,
+            'write_count': disk_io.write_count if disk_io else 0,
+            'read_bytes': disk_io.read_bytes if disk_io else 0,
+            'write_bytes': disk_io.write_bytes if disk_io else 0,
+            'read_iops_limit': int(getattr(config, 'DISK_READ_IOPS', 0)),
+            'write_iops_limit': int(getattr(config, 'DISK_WRITE_IOPS', 0)),
         },
         'uptime_seconds': uptime_seconds,
         'timestamp': now,
@@ -2712,11 +2819,71 @@ def isAccessLogEnabled():
     else:
         return None
 
+async def resource_monitor():
+    """Monitor and enforce resource limits."""
+    cpu_limit = float(getattr(config, 'CPU_LIMIT_PERCENT', 100)) / 100.0
+    memory_limit_mb = int(getattr(config, 'MEMORY_LIMIT_MB', 0))
+    disk_read_iops_limit = int(getattr(config, 'DISK_READ_IOPS', 0))
+    disk_write_iops_limit = int(getattr(config, 'DISK_WRITE_IOPS', 0))
+    network_limit_mb = int(getattr(config, 'NETWORK_BANDWIDTH_MB', 0))
+
+    last_net_check = time.time()
+    last_disk_check = time.time()
+    net_bytes_sent_prev = 0
+    net_bytes_recv_prev = 0
+    disk_read_count_prev = 0
+    disk_write_count_prev = 0
+
+    while True:
+        await asyncio.sleep(5)  # Check every 5 seconds
+
+        # CPU Check
+        cpu_percent = psutil.cpu_percent(interval=1)
+        if cpu_percent > cpu_limit * 100:
+            log.warning(f"CPU usage ({cpu_percent:.1f}%) exceeds limit ({cpu_limit * 100:.1f}%)")
+
+        # Memory Check
+        memory = psutil.virtual_memory()
+        memory_mb = memory.used / (1024 * 1024)
+        if memory_limit_mb > 0 and memory_mb > memory_limit_mb:
+            log.warning(f"Memory usage ({memory_mb:.1f} MB) exceeds limit ({memory_limit_mb} MB)")
+
+        # Network Bandwidth Check (approximate)
+        now = time.time()
+        net = psutil.net_io_counters()
+        if now - last_net_check >= 1:
+            sent_mb = (net.bytes_sent - net_bytes_sent_prev) / (1024 * 1024) / (now - last_net_check)
+            recv_mb = (net.bytes_recv - net_bytes_recv_prev) / (1024 * 1024) / (now - last_net_check)
+            total_mb = sent_mb + recv_mb
+            if network_limit_mb > 0 and total_mb > network_limit_mb:
+                log.warning(f"Network bandwidth ({total_mb:.1f} MB/s) exceeds limit ({network_limit_mb} MB/s)")
+            net_bytes_sent_prev = net.bytes_sent
+            net_bytes_recv_prev = net.bytes_recv
+            last_net_check = now
+
+        # Disk IOPS Check
+        disk_io = psutil.disk_io_counters()
+        if disk_io:
+            if now - last_disk_check >= 1:
+                read_iops = (disk_io.read_count - disk_read_count_prev) / (now - last_disk_check)
+                write_iops = (disk_io.write_count - disk_write_count_prev) / (now - last_disk_check)
+                if disk_read_iops_limit > 0 and read_iops > disk_read_iops_limit:
+                    log.warning(f"Disk read IOPS ({read_iops:.1f}) exceeds limit ({disk_read_iops_limit})")
+                if disk_write_iops_limit > 0 and write_iops > disk_write_iops_limit:
+                    log.warning(f"Disk write IOPS ({write_iops:.1f}) exceeds limit ({disk_write_iops_limit})")
+                disk_read_count_prev = disk_io.read_count
+                disk_write_count_prev = disk_io.write_count
+                last_disk_check = now
+
+
 if __name__ == '__main__':
     logging.basicConfig(level=parseLogLevel(config.LOGLEVEL))
     log.info(f"Listening on {config.HOST}:{config.PORT}")
 
     setup_auth(app, sio, config, user_store)
+
+    # Start resource monitoring
+    asyncio.create_task(resource_monitor())
 
     if config.HTTPS:
         ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)

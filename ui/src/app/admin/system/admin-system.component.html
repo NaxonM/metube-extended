@@ -59,6 +59,57 @@
         </div>
         <div class="text-muted">Total sent {{ formatBytes(systemStats.network.bytes_sent) }}, received {{ formatBytes(systemStats.network.bytes_recv) }}</div>
       </div>
+   
+      <div class="mt-4">
+        <h5>Resource Limits</h5>
+        <div class="admin-stats-grid">
+          <div class="stat-tile">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="text-muted text-uppercase small">CPU Limit</span>
+              <span class="fw-semibold">{{ resourceLimits?.cpu_limit_percent || 100 }}%</span>
+            </div>
+            <input type="number" class="form-control form-control-sm" [(ngModel)]="editLimits.cpu_limit_percent" min="0" max="100" placeholder="CPU %">
+          </div>
+   
+          <div class="stat-tile">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="text-muted text-uppercase small">Memory Limit</span>
+              <span class="fw-semibold">{{ resourceLimits?.memory_limit_mb || 0 }} MB</span>
+            </div>
+            <input type="number" class="form-control form-control-sm" [(ngModel)]="editLimits.memory_limit_mb" min="0" placeholder="MB">
+          </div>
+   
+          <div class="stat-tile">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="text-muted text-uppercase small">Network Limit</span>
+              <span class="fw-semibold">{{ resourceLimits?.network_bandwidth_mb || 0 }} MB/s</span>
+            </div>
+            <input type="number" class="form-control form-control-sm" [(ngModel)]="editLimits.network_bandwidth_mb" min="0" placeholder="MB/s">
+          </div>
+   
+          <div class="stat-tile">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="text-muted text-uppercase small">Concurrent Downloads</span>
+              <span class="fw-semibold">{{ resourceLimits?.max_concurrent_downloads || 3 }}</span>
+            </div>
+            <input type="number" class="form-control form-control-sm" [(ngModel)]="editLimits.max_concurrent_downloads" min="1" placeholder="Count">
+          </div>
+        </div>
+   
+        <div class="d-flex justify-content-between align-items-center mt-3">
+          <div>
+            <button type="button" class="btn btn-primary btn-sm me-2" (click)="saveResourceLimits()" [disabled]="savingLimits">
+              <span *ngIf="savingLimits" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+              Save Limits
+            </button>
+            <button type="button" class="btn btn-danger btn-sm" (click)="restartSystem()" [disabled]="restarting">
+              <span *ngIf="restarting" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+              Restart System
+            </button>
+          </div>
+          <div *ngIf="limitsMessage" class="text-muted small">{{ limitsMessage }}</div>
+        </div>
+      </div>
     </div>
     <div class="d-flex justify-content-between align-items-center mt-3 small text-muted">
       <span>Last update: {{ formatTimestampLocal(systemStats?.timestamp) }}</span>

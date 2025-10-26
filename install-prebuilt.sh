@@ -23,7 +23,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
-echo "[metube] Launching installer from ${SCRIPT_URL} (prebuilt images)" >&2
+echo "[metube] Launching installer from ${SCRIPT_URL} (prebuilt images with auto resource detection)" >&2
 
 export METUBE_PULL_IMAGES=${METUBE_PULL_IMAGES:-1}
 

@@ -91,6 +91,52 @@ get_public_ip() {
     done
 }
 
+detect_host_resources() {
+    log "Detecting host system resources for optimal configuration..."
+
+    # Detect number of CPU cores
+    local HOST_CPUS
+    HOST_CPUS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
+    HOST_CPUS=${HOST_CPUS:-2}
+
+    # Detect total memory in GB
+    local HOST_MEMORY_GB
+    if command -v free >/dev/null 2>&1; then
+        HOST_MEMORY_GB=$(free -g | awk 'NR==2{printf "%.0f", $2}')
+    elif command -v sysctl >/dev/null 2>&1; then
+        local HOST_MEMORY_KB
+        HOST_MEMORY_KB=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
+        HOST_MEMORY_GB=$((HOST_MEMORY_KB / 1024 / 1024 / 1024))
+    else
+        HOST_MEMORY_GB=4  # Default fallback
+    fi
+    HOST_MEMORY_GB=${HOST_MEMORY_GB:-4}
+
+    # Calculate half of resources (minimum 1 CPU, 1GB RAM)
+    local CPU_LIMIT
+    CPU_LIMIT=$(awk "BEGIN {print ($HOST_CPUS / 2 > 1) ? $HOST_CPUS / 2 : 1}")
+    local MEMORY_LIMIT_GB
+    MEMORY_LIMIT_GB=$(awk "BEGIN {print ($HOST_MEMORY_GB / 2 > 1) ? $HOST_MEMORY_GB / 2 : 1}")
+
+    # Set environment variables
+    export CPU_LIMIT="${CPU_LIMIT}"
+    export MEMORY_LIMIT="${MEMORY_LIMIT_GB}G"
+    export CPU_RESERVATION=$(awk "BEGIN {print ($CPU_LIMIT / 2 > 0.5) ? $CPU_LIMIT / 2 : 0.5}")
+    export MEMORY_RESERVATION=$(awk "BEGIN {print ($MEMORY_LIMIT_GB / 2 > 0.5) ? $MEMORY_LIMIT_GB / 2 : 0.5}G")
+
+    # Set app-specific limits
+    export CPU_LIMIT_PERCENT=80
+    export MEMORY_LIMIT_MB=$((MEMORY_LIMIT_GB * 1024))
+    export DISK_READ_IOPS=1000
+    export DISK_WRITE_IOPS=1000
+    export NETWORK_BANDWIDTH_MB=62.5  # 500 Mb/s
+    export MAX_CONCURRENT_DOWNLOADS=5
+
+    log_success "Detected host resources: $HOST_CPUS CPUs, ${HOST_MEMORY_GB}GB RAM"
+    log_success "Setting Docker limits: $CPU_LIMIT CPUs, ${MEMORY_LIMIT_GB}GB RAM"
+    log_success "Setting app limits: CPU ${CPU_LIMIT_PERCENT}%, Memory ${MEMORY_LIMIT_MB}MB, Network 500 Mb/s"
+}
+
 # --- Core Logic Functions ---
 show_usage() {
     echo "Usage: $0 [command | <branch-name>]"
@@ -121,8 +167,24 @@ check_dependencies() {
 
 # Handles the creation of the .env file on first-time setup.
 handle_config() {
+    # Detect host resources for optimal limits (run this every time for updates)
+    detect_host_resources
+
     if [ -f "$ENV_FILE" ]; then
-        log "Configuration file found. Skipping configuration."
+        log "Configuration file found. Updating resource limits..."
+        # Update existing resource limits in .env
+        sed -i.bak "s/^CPU_LIMIT=.*/CPU_LIMIT=$CPU_LIMIT/" "$ENV_FILE"
+        sed -i.bak "s/^MEMORY_LIMIT=.*/MEMORY_LIMIT=$MEMORY_LIMIT/" "$ENV_FILE"
+        sed -i.bak "s/^CPU_RESERVATION=.*/CPU_RESERVATION=$CPU_RESERVATION/" "$ENV_FILE"
+        sed -i.bak "s/^MEMORY_RESERVATION=.*/MEMORY_RESERVATION=$MEMORY_RESERVATION/" "$ENV_FILE"
+        sed -i.bak "s/^CPU_LIMIT_PERCENT=.*/CPU_LIMIT_PERCENT=$CPU_LIMIT_PERCENT/" "$ENV_FILE"
+        sed -i.bak "s/^MEMORY_LIMIT_MB=.*/MEMORY_LIMIT_MB=$MEMORY_LIMIT_MB/" "$ENV_FILE"
+        sed -i.bak "s/^DISK_READ_IOPS=.*/DISK_READ_IOPS=$DISK_READ_IOPS/" "$ENV_FILE"
+        sed -i.bak "s/^DISK_WRITE_IOPS=.*/DISK_WRITE_IOPS=$DISK_WRITE_IOPS/" "$ENV_FILE"
+        sed -i.bak "s/^NETWORK_BANDWIDTH_MB=.*/NETWORK_BANDWIDTH_MB=$NETWORK_BANDWIDTH_MB/" "$ENV_FILE"
+        sed -i.bak "s/^MAX_CONCURRENT_DOWNLOADS=.*/MAX_CONCURRENT_DOWNLOADS=$MAX_CONCURRENT_DOWNLOADS/" "$ENV_FILE"
+        rm -f "$ENV_FILE.bak"
+        log_success "Resource limits updated in existing configuration."
         return
     fi
 
@@ -169,6 +231,9 @@ handle_config() {
     log "Generating configuration file..."
     SECRET_KEY=$(openssl rand -hex 32)
 
+    # Detect host resources for optimal limits
+    detect_host_resources
+
     # Write the main .env file, excluding the Cloudflare token.
     cat <<EOF > "$ENV_FILE"
 # --- General Configuration ---
@@ -179,6 +244,18 @@ LETSENCRYPT_EMAIL="$config_email"
 COMPOSE_PROJECT_NAME="$PROJECT_DIR_NAME"
 HTTP_PORT="${config_http_port}"
 HTTPS_PORT="${config_https_port}"
+
+# --- Resource Limits (Auto-detected) ---
+CPU_LIMIT="$CPU_LIMIT"
+MEMORY_LIMIT="$MEMORY_LIMIT"
+CPU_RESERVATION="$CPU_RESERVATION"
+MEMORY_RESERVATION="$MEMORY_RESERVATION"
+CPU_LIMIT_PERCENT="$CPU_LIMIT_PERCENT"
+MEMORY_LIMIT_MB="$MEMORY_LIMIT_MB"
+DISK_READ_IOPS="$DISK_READ_IOPS"
+DISK_WRITE_IOPS="$DISK_WRITE_IOPS"
+NETWORK_BANDWIDTH_MB="$NETWORK_BANDWIDTH_MB"
+MAX_CONCURRENT_DOWNLOADS="$MAX_CONCURRENT_DOWNLOADS"
 
 # --- Secret values (DO NOT COMMIT) ---
 ADMIN_USERNAME="$config_admin_user"
