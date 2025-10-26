@@ -2262,7 +2262,7 @@ async def admin_get_resource_limits(request):
         'memory_limit_mb': int(getattr(config, 'MEMORY_LIMIT_MB', 0)),
         'disk_read_iops': int(getattr(config, 'DISK_READ_IOPS', 0)),
         'disk_write_iops': int(getattr(config, 'DISK_WRITE_IOPS', 0)),
-        'network_bandwidth_mb': float(getattr(config, 'NETWORK_BANDWIDTH_MB', 0)),
+        'network_bandwidth_mb': int(getattr(config, 'NETWORK_BANDWIDTH_MB', 0)),
         'max_concurrent_downloads': int(getattr(config, 'MAX_CONCURRENT_DOWNLOADS', 3)),
     })
 
@@ -2351,7 +2351,7 @@ async def admin_system_stats(request):
         'network': {
             'bytes_sent': net.bytes_sent,
             'bytes_recv': net.bytes_recv,
-            'limit_mb': float(getattr(config, 'NETWORK_BANDWIDTH_MB', 0)),
+            'limit_mb': int(getattr(config, 'NETWORK_BANDWIDTH_MB', 0)),
         },
         'disk': {
             'read_count': disk_io.read_count if disk_io else 0,
