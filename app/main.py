@@ -2849,14 +2849,19 @@ async def resource_monitor():
                 last_disk_check = now
 
 
+async def start_resource_monitoring(app):
+    """Start resource monitoring when the app starts."""
+    asyncio.create_task(resource_monitor())
+    log.info("Resource monitoring started")
+
 if __name__ == '__main__':
     logging.basicConfig(level=parseLogLevel(config.LOGLEVEL))
     log.info(f"Listening on {config.HOST}:{config.PORT}")
 
     setup_auth(app, sio, config, user_store)
 
-    # Start resource monitoring
-    asyncio.create_task(resource_monitor())
+    # Start resource monitoring when app starts
+    app.on_startup.append(start_resource_monitoring)
 
     if config.HTTPS:
         ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)

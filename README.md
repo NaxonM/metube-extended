@@ -160,9 +160,10 @@ If you need to adjust limits manually:
 
 If the automatic resource detection fails during installation:
 
-1. **Check if running on Windows**: The installer is designed for Unix/Linux. On Windows, run in WSL or Docker Desktop.
+1. **Linux/Unix only**: The installer is optimized for Linux/Unix systems. On Windows, use WSL or Docker Desktop with Linux containers.
 2. **Manual resource detection**: Run `./scripts/set-resource-limits.sh` to manually detect and update limits
 3. **Use defaults**: The installer will fall back to safe defaults (2 CPU cores, 4GB RAM) if detection fails
+4. **Check commands**: Ensure `nproc`, `free`, and `sysctl` are available on your system
 
 ### Available Limits
 
