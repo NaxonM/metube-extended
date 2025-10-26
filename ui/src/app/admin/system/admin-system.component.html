@@ -66,33 +66,33 @@
           <div class="stat-tile">
             <div class="d-flex justify-content-between align-items-center mb-1">
               <span class="text-muted text-uppercase small">CPU Limit</span>
-              <span class="fw-semibold">{{ resourceLimits?.cpu_limit_percent || config?.CPU_LIMIT_PERCENT || 80 }}%</span>
+              <span class="fw-semibold">{{ resourceLimits?.cpu_limit_percent || 100 }}%</span>
             </div>
-            <input type="number" class="form-control form-control-sm" [(ngModel)]="editLimits.cpu_limit_percent" min="0" max="100" placeholder="CPU %" [value]="config?.CPU_LIMIT_PERCENT || 80">
+            <input type="number" class="form-control form-control-sm" [(ngModel)]="editLimits.cpu_limit_percent" min="0" max="100" placeholder="CPU %">
           </div>
-
+   
           <div class="stat-tile">
             <div class="d-flex justify-content-between align-items-center mb-1">
               <span class="text-muted text-uppercase small">Memory Limit</span>
-              <span class="fw-semibold">{{ resourceLimits?.memory_limit_mb || config?.MEMORY_LIMIT_MB || 2048 }} MB</span>
+              <span class="fw-semibold">{{ resourceLimits?.memory_limit_mb || 0 }} MB</span>
             </div>
-            <input type="number" class="form-control form-control-sm" [(ngModel)]="editLimits.memory_limit_mb" min="0" placeholder="MB" [value]="config?.MEMORY_LIMIT_MB || 2048">
+            <input type="number" class="form-control form-control-sm" [(ngModel)]="editLimits.memory_limit_mb" min="0" placeholder="MB">
           </div>
-
+   
           <div class="stat-tile">
             <div class="d-flex justify-content-between align-items-center mb-1">
               <span class="text-muted text-uppercase small">Network Limit</span>
-              <span class="fw-semibold">{{ resourceLimits?.network_bandwidth_mb || config?.NETWORK_BANDWIDTH_MB || 62.5 }} MB/s</span>
+              <span class="fw-semibold">{{ resourceLimits?.network_bandwidth_mb || 0 }} MB/s</span>
             </div>
-            <input type="number" class="form-control form-control-sm" [(ngModel)]="editLimits.network_bandwidth_mb" min="0" placeholder="MB/s" [value]="config?.NETWORK_BANDWIDTH_MB || 62.5">
+            <input type="number" class="form-control form-control-sm" [(ngModel)]="editLimits.network_bandwidth_mb" min="0" placeholder="MB/s">
           </div>
-
+   
           <div class="stat-tile">
             <div class="d-flex justify-content-between align-items-center mb-1">
               <span class="text-muted text-uppercase small">Concurrent Downloads</span>
-              <span class="fw-semibold">{{ resourceLimits?.max_concurrent_downloads || config?.MAX_CONCURRENT_DOWNLOADS || 5 }}</span>
+              <span class="fw-semibold">{{ resourceLimits?.max_concurrent_downloads || 3 }}</span>
             </div>
-            <input type="number" class="form-control form-control-sm" [(ngModel)]="editLimits.max_concurrent_downloads" min="1" placeholder="Count" [value]="config?.MAX_CONCURRENT_DOWNLOADS || 5">
+            <input type="number" class="form-control form-control-sm" [(ngModel)]="editLimits.max_concurrent_downloads" min="1" placeholder="Count">
           </div>
         </div>
    

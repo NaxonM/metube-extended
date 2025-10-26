@@ -389,7 +389,7 @@ export class DownloadsService {
   private currentUserCache: CurrentUser | null = null;
   private currentUserInitialized = false;
 
-  configuration: any = {};
+  configuration = {};
   customDirs = {};
   private adaptiveStreamingEnabled = true;
   private adaptiveStreamingStatus: string | null = null;

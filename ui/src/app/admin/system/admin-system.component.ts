@@ -22,7 +22,6 @@ export class AdminSystemComponent implements OnInit, OnDestroy {
   savingLimits = false;
   restarting = false;
   limitsMessage = '';
-  config: any = {};
 
   constructor(private readonly downloads: DownloadsService) {}
 
@@ -30,30 +29,13 @@ export class AdminSystemComponent implements OnInit, OnDestroy {
     this.downloads.getResourceLimits().subscribe(result => {
       if ((result as any).status === 'error') {
         this.limitsMessage = (result as any).msg || 'Unable to load resource limits.';
-        // Use config values as fallback
-        this.resourceLimits = {
-          cpu_limit_percent: parseFloat(this.config?.CPU_LIMIT_PERCENT) || 80,
-          memory_limit_mb: parseInt(this.config?.MEMORY_LIMIT_MB) || 2048,
-          network_bandwidth_mb: parseFloat(this.config?.NETWORK_BANDWIDTH_MB) || 62.5,
-          max_concurrent_downloads: parseInt(this.config?.MAX_CONCURRENT_DOWNLOADS) || 5,
-          disk_read_iops: 1000,
-          disk_write_iops: 1000
-        };
         return;
       }
       this.resourceLimits = result;
+      this.editLimits = { ...this.resourceLimits };
       this.limitsMessage = '';
     }, () => {
       this.limitsMessage = 'Unable to load resource limits.';
-      // Use config values as fallback
-      this.resourceLimits = {
-        cpu_limit_percent: parseFloat(this.config?.CPU_LIMIT_PERCENT) || 80,
-        memory_limit_mb: parseInt(this.config?.MEMORY_LIMIT_MB) || 2048,
-        network_bandwidth_mb: parseFloat(this.config?.NETWORK_BANDWIDTH_MB) || 62.5,
-        max_concurrent_downloads: parseInt(this.config?.MAX_CONCURRENT_DOWNLOADS) || 5,
-        disk_read_iops: 1000,
-        disk_write_iops: 1000
-      };
     });
   }
 
@@ -99,16 +81,6 @@ export class AdminSystemComponent implements OnInit, OnDestroy {
     this.fetchSystemStats(true);
     this.fetchResourceLimits();
     this.systemStatsIntervalId = window.setInterval(() => this.fetchSystemStats(), 5000);
-
-    // Subscribe to configuration changes
-    this.downloads.configurationChanged.subscribe(config => {
-      this.config = config;
-      this.initializeEditLimits();
-    });
-
-    // Initialize with current config
-    this.config = this.downloads.configuration || {};
-    this.initializeEditLimits();
   }
 
   ngOnDestroy(): void {
@@ -120,15 +92,6 @@ export class AdminSystemComponent implements OnInit, OnDestroy {
 
   refreshSystemStats(): void {
     this.fetchSystemStats(true);
-  }
-
-  private initializeEditLimits(): void {
-    this.editLimits = {
-      cpu_limit_percent: parseFloat(this.config?.CPU_LIMIT_PERCENT) || 80,
-      memory_limit_mb: parseInt(this.config?.MEMORY_LIMIT_MB) || 2048,
-      network_bandwidth_mb: parseFloat(this.config?.NETWORK_BANDWIDTH_MB) || 62.5,
-      max_concurrent_downloads: parseInt(this.config?.MAX_CONCURRENT_DOWNLOADS) || 5
-    };
   }
 
   formatBytes(bytes: number | null | undefined): string {
