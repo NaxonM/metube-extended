@@ -1,6 +1,6 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 
-import { DownloadsService, SystemStats, ResourceLimits } from '../../downloads.service';
+import { DownloadsService, SystemStats } from '../../downloads.service';
 
 @Component({
   selector: 'app-admin-system',
@@ -17,69 +17,10 @@ export class AdminSystemComponent implements OnInit, OnDestroy {
   private systemStatsIntervalId: number | null = null;
   private systemStatsRequestActive = false;
 
-  resourceLimits: ResourceLimits | null = null;
-  editLimits: Partial<ResourceLimits> = {};
-  savingLimits = false;
-  restarting = false;
-  limitsMessage = '';
-
   constructor(private readonly downloads: DownloadsService) {}
-
-  fetchResourceLimits(): void {
-    this.downloads.getResourceLimits().subscribe(result => {
-      if ((result as any).status === 'error') {
-        this.limitsMessage = (result as any).msg || 'Unable to load resource limits.';
-        return;
-      }
-      this.resourceLimits = result;
-      this.editLimits = { ...this.resourceLimits };
-      this.limitsMessage = '';
-    }, () => {
-      this.limitsMessage = 'Unable to load resource limits.';
-    });
-  }
-
-  saveResourceLimits(): void {
-    this.savingLimits = true;
-    this.limitsMessage = '';
-    this.downloads.updateResourceLimits(this.editLimits).subscribe(result => {
-      this.savingLimits = false;
-      if ((result as any).status === 'error') {
-        this.limitsMessage = (result as any).msg || 'Unable to save resource limits.';
-        return;
-      }
-      this.resourceLimits = result;
-      this.editLimits = { ...this.resourceLimits };
-      this.limitsMessage = 'Limits saved successfully. Restart may be required.';
-    }, () => {
-      this.savingLimits = false;
-      this.limitsMessage = 'Unable to save resource limits.';
-    });
-  }
-
-  restartSystem(): void {
-    if (!confirm('Are you sure you want to restart the system?')) {
-      return;
-    }
-    this.restarting = true;
-    this.limitsMessage = '';
-    this.downloads.restartSystem().subscribe(result => {
-      this.restarting = false;
-      if (result.status === 'error') {
-        this.limitsMessage = result.msg || 'Unable to restart system.';
-      } else {
-        this.limitsMessage = 'System restarting...';
-        // The page will reload after restart
-      }
-    }, () => {
-      this.restarting = false;
-      this.limitsMessage = 'Unable to restart system.';
-    });
-  }
 
   ngOnInit(): void {
     this.fetchSystemStats(true);
-    this.fetchResourceLimits();
     this.systemStatsIntervalId = window.setInterval(() => this.fetchSystemStats(), 5000);
   }
 

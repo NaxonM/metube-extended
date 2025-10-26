@@ -92,14 +92,12 @@ export interface SystemStats {
     percent: number;
     cores: number;
     threads: number;
-    limit_percent: number;
   };
   memory: {
     percent: number;
     used: number;
     available: number;
     total: number;
-    limit_mb: number;
   };
   swap: {
     percent: number;
@@ -109,32 +107,13 @@ export interface SystemStats {
   network: {
     bytes_sent: number;
     bytes_recv: number;
-    limit_mb: number;
-  };
-  disk: {
-    read_count: number;
-    write_count: number;
-    read_bytes: number;
-    write_bytes: number;
-    read_iops_limit: number;
-    write_iops_limit: number;
   };
   uptime_seconds: number;
   timestamp: number;
 }
 
-export interface ResourceLimits {
-  cpu_limit_percent: number;
-  memory_limit_mb: number;
-  disk_read_iops: number;
-  disk_write_iops: number;
-  network_bandwidth_mb: number;
-  max_concurrent_downloads: number;
-}
-
 export type ProxySettingsResponse = ProxySettings & Partial<Status>;
 export type SystemStatsResponse = SystemStats & Partial<Status>;
-export type ResourceLimitsResponse = ResourceLimits & Partial<Status>;
 
 export interface GalleryDlAddRequest {
   url: string;
@@ -1132,24 +1111,6 @@ export class DownloadsService {
   public getSystemStats() {
     return this.http.get<SystemStatsResponse>('admin/system-stats').pipe(
       catchError((error: HttpErrorResponse) => this.handleTypedError<SystemStatsResponse>(error))
-    );
-  }
-
-  public getResourceLimits() {
-    return this.http.get<ResourceLimitsResponse>('admin/resource-limits').pipe(
-      catchError((error: HttpErrorResponse) => this.handleTypedError<ResourceLimitsResponse>(error))
-    );
-  }
-
-  public updateResourceLimits(limits: Partial<ResourceLimits>) {
-    return this.http.post<ResourceLimitsResponse>('admin/resource-limits', limits).pipe(
-      catchError((error: HttpErrorResponse) => this.handleTypedError<ResourceLimitsResponse>(error))
-    );
-  }
-
-  public restartSystem() {
-    return this.http.post<{status: string; msg?: string}>('admin/restart', {}).pipe(
-      catchError((error: HttpErrorResponse) => this.handleTypedError<{status: string; msg?: string}>(error))
     );
   }
 

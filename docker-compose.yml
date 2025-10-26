@@ -20,11 +20,3 @@ services:
       - "YTDL_OPTIONS={}"
     env_file:
       - .env
-    deploy:
-      resources:
-        limits:
-          cpus: '${CPU_LIMIT:-1.0}'  # Limit to half of host CPU cores
-          memory: '${MEMORY_LIMIT:-2G}'  # Limit to half of host RAM
-        reservations:
-          cpus: '${CPU_RESERVATION:-0.5}'  # Reserve quarter of host CPU
-          memory: '${MEMORY_RESERVATION:-1G}'  # Reserve quarter of host RAM
