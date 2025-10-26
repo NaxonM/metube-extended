@@ -94,35 +94,78 @@ get_public_ip() {
 detect_host_resources() {
     log "Detecting host system resources for optimal configuration..."
 
-    # Detect number of CPU cores
-    local HOST_CPUS
-    HOST_CPUS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
-    HOST_CPUS=${HOST_CPUS:-2}
+    # Default values in case detection fails
+    local HOST_CPUS=4
+    local HOST_MEMORY_GB=8
 
-    # Detect total memory in GB
-    local HOST_MEMORY_GB
+    # Try to detect CPU cores (simple approach without timeout)
+    if command -v nproc >/dev/null 2>&1; then
+        HOST_CPUS=$(nproc 2>/dev/null || echo 4) 2>/dev/null
+    elif command -v sysctl >/dev/null 2>&1; then
+        HOST_CPUS=$(sysctl -n hw.ncpu 2>/dev/null || echo 4) 2>/dev/null
+    elif command -v wmic >/dev/null 2>&1; then
+        # Windows fallback using wmic
+        HOST_CPUS=$(wmic cpu get NumberOfCores 2>/dev/null | tail -1 2>/dev/null || echo 4) 2>/dev/null
+    fi
+
+    # Try to detect memory (simple approach without timeout)
     if command -v free >/dev/null 2>&1; then
-        HOST_MEMORY_GB=$(free -g | awk 'NR==2{printf "%.0f", $2}')
+        HOST_MEMORY_GB=$(free -g 2>/dev/null | awk 'NR==2{printf "%.0f", $2}' 2>/dev/null || echo 8) 2>/dev/null
     elif command -v sysctl >/dev/null 2>&1; then
         local HOST_MEMORY_KB
-        HOST_MEMORY_KB=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
-        HOST_MEMORY_GB=$((HOST_MEMORY_KB / 1024 / 1024 / 1024))
-    else
-        HOST_MEMORY_GB=4  # Default fallback
+        HOST_MEMORY_KB=$(sysctl -n hw.memsize 2>/dev/null || echo 0) 2>/dev/null
+        if [ "$HOST_MEMORY_KB" -gt 0 ] 2>/dev/null; then
+            HOST_MEMORY_GB=$((HOST_MEMORY_KB / 1024 / 1024 / 1024)) 2>/dev/null
+        fi
+    elif command -v wmic >/dev/null 2>&1; then
+        # Windows fallback using wmic
+        local HOST_MEMORY_MB
+        HOST_MEMORY_MB=$(wmic ComputerSystem get TotalPhysicalMemory 2>/dev/null | tail -1 2>/dev/null || echo 0) 2>/dev/null
+        if [ "$HOST_MEMORY_MB" -gt 0 ] 2>/dev/null; then
+            HOST_MEMORY_GB=$((HOST_MEMORY_MB / 1024)) 2>/dev/null
+        fi
     fi
-    HOST_MEMORY_GB=${HOST_MEMORY_GB:-4}
+
+    # Ensure minimum values
+    HOST_CPUS=${HOST_CPUS:-4}
+    HOST_MEMORY_GB=${HOST_MEMORY_GB:-8}
 
     # Calculate half of resources (minimum 1 CPU, 1GB RAM)
     local CPU_LIMIT
-    CPU_LIMIT=$(awk "BEGIN {print ($HOST_CPUS / 2 > 1) ? $HOST_CPUS / 2 : 1}")
+    if [ "$HOST_CPUS" -gt 2 ]; then
+        CPU_LIMIT=$((HOST_CPUS / 2))
+    else
+        CPU_LIMIT=1
+    fi
+
     local MEMORY_LIMIT_GB
-    MEMORY_LIMIT_GB=$(awk "BEGIN {print ($HOST_MEMORY_GB / 2 > 1) ? $HOST_MEMORY_GB / 2 : 1}")
+    if [ "$HOST_MEMORY_GB" -gt 2 ]; then
+        MEMORY_LIMIT_GB=$((HOST_MEMORY_GB / 2))
+    else
+        MEMORY_LIMIT_GB=1
+    fi
 
     # Set environment variables
     export CPU_LIMIT="${CPU_LIMIT}"
     export MEMORY_LIMIT="${MEMORY_LIMIT_GB}G"
-    export CPU_RESERVATION=$(awk "BEGIN {print ($CPU_LIMIT / 2 > 0.5) ? $CPU_LIMIT / 2 : 0.5}")
-    export MEMORY_RESERVATION=$(awk "BEGIN {print ($MEMORY_LIMIT_GB / 2 > 0.5) ? $MEMORY_LIMIT_GB / 2 : 0.5}G")
+
+    # Calculate reservations (quarter of limits, minimum 0.5 CPU, 0.5G RAM)
+    local CPU_RESERVATION
+    if [ "$CPU_LIMIT" -gt 1 ]; then
+        CPU_RESERVATION=$((CPU_LIMIT / 2))
+    else
+        CPU_RESERVATION=0.5
+    fi
+
+    local MEMORY_RESERVATION
+    if [ "$MEMORY_LIMIT_GB" -gt 1 ]; then
+        MEMORY_RESERVATION=$((MEMORY_LIMIT_GB / 2))
+    else
+        MEMORY_RESERVATION=0.5
+    fi
+
+    export CPU_RESERVATION="${CPU_RESERVATION}"
+    export MEMORY_RESERVATION="${MEMORY_RESERVATION}G"
 
     # Set app-specific limits
     export CPU_LIMIT_PERCENT=80
@@ -168,23 +211,82 @@ check_dependencies() {
 # Handles the creation of the .env file on first-time setup.
 handle_config() {
     # Detect host resources for optimal limits (run this every time for updates)
-    detect_host_resources
+    if detect_host_resources 2>/dev/null; then
+        log_success "Resource detection completed successfully"
+    else
+        log "Resource detection failed, using default limits"
+        # Set default values if detection fails
+        export CPU_LIMIT="2"
+        export MEMORY_LIMIT="4G"
+        export CPU_RESERVATION="1"
+        export MEMORY_RESERVATION="2G"
+        export CPU_LIMIT_PERCENT=80
+        export MEMORY_LIMIT_MB=4096
+        export DISK_READ_IOPS=1000
+        export DISK_WRITE_IOPS=1000
+        export NETWORK_BANDWIDTH_MB=62.5
+        export MAX_CONCURRENT_DOWNLOADS=5
+    fi
 
     if [ -f "$ENV_FILE" ]; then
         log "Configuration file found. Updating resource limits..."
         # Update existing resource limits in .env
-        sed -i.bak "s/^CPU_LIMIT=.*/CPU_LIMIT=$CPU_LIMIT/" "$ENV_FILE"
-        sed -i.bak "s/^MEMORY_LIMIT=.*/MEMORY_LIMIT=$MEMORY_LIMIT/" "$ENV_FILE"
-        sed -i.bak "s/^CPU_RESERVATION=.*/CPU_RESERVATION=$CPU_RESERVATION/" "$ENV_FILE"
-        sed -i.bak "s/^MEMORY_RESERVATION=.*/MEMORY_RESERVATION=$MEMORY_RESERVATION/" "$ENV_FILE"
-        sed -i.bak "s/^CPU_LIMIT_PERCENT=.*/CPU_LIMIT_PERCENT=$CPU_LIMIT_PERCENT/" "$ENV_FILE"
-        sed -i.bak "s/^MEMORY_LIMIT_MB=.*/MEMORY_LIMIT_MB=$MEMORY_LIMIT_MB/" "$ENV_FILE"
-        sed -i.bak "s/^DISK_READ_IOPS=.*/DISK_READ_IOPS=$DISK_READ_IOPS/" "$ENV_FILE"
-        sed -i.bak "s/^DISK_WRITE_IOPS=.*/DISK_WRITE_IOPS=$DISK_WRITE_IOPS/" "$ENV_FILE"
-        sed -i.bak "s/^NETWORK_BANDWIDTH_MB=.*/NETWORK_BANDWIDTH_MB=$NETWORK_BANDWIDTH_MB/" "$ENV_FILE"
-        sed -i.bak "s/^MAX_CONCURRENT_DOWNLOADS=.*/MAX_CONCURRENT_DOWNLOADS=$MAX_CONCURRENT_DOWNLOADS/" "$ENV_FILE"
-        rm -f "$ENV_FILE.bak"
-        log_success "Resource limits updated in existing configuration."
+        if command -v sed >/dev/null 2>&1; then
+            # Create backup
+            cp "$ENV_FILE" "${ENV_FILE}.bak" 2>/dev/null || true
+
+            # Update each limit, add if not exists
+            if ! grep -q "^CPU_LIMIT=" "$ENV_FILE" 2>/dev/null; then
+                echo "CPU_LIMIT=$CPU_LIMIT" >> "$ENV_FILE"
+            else
+                sed -i "s/^CPU_LIMIT=.*/CPU_LIMIT=$CPU_LIMIT/" "$ENV_FILE" 2>/dev/null || true
+            fi
+
+            if ! grep -q "^MEMORY_LIMIT=" "$ENV_FILE" 2>/dev/null; then
+                echo "MEMORY_LIMIT=$MEMORY_LIMIT" >> "$ENV_FILE"
+            else
+                sed -i "s/^MEMORY_LIMIT=.*/MEMORY_LIMIT=$MEMORY_LIMIT/" "$ENV_FILE" 2>/dev/null || true
+            fi
+
+            if ! grep -q "^CPU_RESERVATION=" "$ENV_FILE" 2>/dev/null; then
+                echo "CPU_RESERVATION=$CPU_RESERVATION" >> "$ENV_FILE"
+            else
+                sed -i "s/^CPU_RESERVATION=.*/CPU_RESERVATION=$CPU_RESERVATION/" "$ENV_FILE" 2>/dev/null || true
+            fi
+
+            if ! grep -q "^MEMORY_RESERVATION=" "$ENV_FILE" 2>/dev/null; then
+                echo "MEMORY_RESERVATION=$MEMORY_RESERVATION" >> "$ENV_FILE"
+            else
+                sed -i "s/^MEMORY_RESERVATION=.*/MEMORY_RESERVATION=$MEMORY_RESERVATION/" "$ENV_FILE" 2>/dev/null || true
+            fi
+
+            # Update application limits (with fallback)
+            if ! sed -i "s/^CPU_LIMIT_PERCENT=.*/CPU_LIMIT_PERCENT=$CPU_LIMIT_PERCENT/" "$ENV_FILE" 2>/dev/null; then
+                sed -i.bak "s/^CPU_LIMIT_PERCENT=.*/CPU_LIMIT_PERCENT=$CPU_LIMIT_PERCENT/" "$ENV_FILE" 2>/dev/null || echo "CPU_LIMIT_PERCENT=$CPU_LIMIT_PERCENT" >> "$ENV_FILE"
+            fi
+            if ! sed -i "s/^MEMORY_LIMIT_MB=.*/MEMORY_LIMIT_MB=$MEMORY_LIMIT_MB/" "$ENV_FILE" 2>/dev/null; then
+                sed -i.bak "s/^MEMORY_LIMIT_MB=.*/MEMORY_LIMIT_MB=$MEMORY_LIMIT_MB/" "$ENV_FILE" 2>/dev/null || echo "MEMORY_LIMIT_MB=$MEMORY_LIMIT_MB" >> "$ENV_FILE"
+            fi
+            if ! sed -i "s/^DISK_READ_IOPS=.*/DISK_READ_IOPS=$DISK_READ_IOPS/" "$ENV_FILE" 2>/dev/null; then
+                sed -i.bak "s/^DISK_READ_IOPS=.*/DISK_READ_IOPS=$DISK_READ_IOPS/" "$ENV_FILE" 2>/dev/null || echo "DISK_READ_IOPS=$DISK_READ_IOPS" >> "$ENV_FILE"
+            fi
+            if ! sed -i "s/^DISK_WRITE_IOPS=.*/DISK_WRITE_IOPS=$DISK_WRITE_IOPS/" "$ENV_FILE" 2>/dev/null; then
+                sed -i.bak "s/^DISK_WRITE_IOPS=.*/DISK_WRITE_IOPS=$DISK_WRITE_IOPS/" "$ENV_FILE" 2>/dev/null || echo "DISK_WRITE_IOPS=$DISK_WRITE_IOPS" >> "$ENV_FILE"
+            fi
+            if ! sed -i "s/^NETWORK_BANDWIDTH_MB=.*/NETWORK_BANDWIDTH_MB=$NETWORK_BANDWIDTH_MB/" "$ENV_FILE" 2>/dev/null; then
+                sed -i.bak "s/^NETWORK_BANDWIDTH_MB=.*/NETWORK_BANDWIDTH_MB=$NETWORK_BANDWIDTH_MB/" "$ENV_FILE" 2>/dev/null || echo "NETWORK_BANDWIDTH_MB=$NETWORK_BANDWIDTH_MB" >> "$ENV_FILE"
+            fi
+            if ! sed -i "s/^MAX_CONCURRENT_DOWNLOADS=.*/MAX_CONCURRENT_DOWNLOADS=$MAX_CONCURRENT_DOWNLOADS/" "$ENV_FILE" 2>/dev/null; then
+                sed -i.bak "s/^MAX_CONCURRENT_DOWNLOADS=.*/MAX_CONCURRENT_DOWNLOADS=$MAX_CONCURRENT_DOWNLOADS/" "$ENV_FILE" 2>/dev/null || echo "MAX_CONCURRENT_DOWNLOADS=$MAX_CONCURRENT_DOWNLOADS" >> "$ENV_FILE"
+            fi
+
+            # Clean up backup files
+            rm -f "$ENV_FILE.bak" 2>/dev/null || true
+
+            log_success "Resource limits updated in existing configuration."
+        else
+            log "sed command not available, skipping .env update"
+        fi
         return
     fi
 
@@ -232,7 +334,20 @@ handle_config() {
     SECRET_KEY=$(openssl rand -hex 32)
 
     # Detect host resources for optimal limits
-    detect_host_resources
+    if ! detect_host_resources 2>/dev/null; then
+        log "Resource detection failed, using default limits"
+        # Set default values if detection fails
+        export CPU_LIMIT="2"
+        export MEMORY_LIMIT="4G"
+        export CPU_RESERVATION="1"
+        export MEMORY_RESERVATION="2G"
+        export CPU_LIMIT_PERCENT=80
+        export MEMORY_LIMIT_MB=4096
+        export DISK_READ_IOPS=1000
+        export DISK_WRITE_IOPS=1000
+        export NETWORK_BANDWIDTH_MB=62.5
+        export MAX_CONCURRENT_DOWNLOADS=5
+    fi
 
     # Write the main .env file, excluding the Cloudflare token.
     cat <<EOF > "$ENV_FILE"

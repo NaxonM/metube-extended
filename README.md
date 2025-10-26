@@ -156,6 +156,14 @@ If you need to adjust limits manually:
 2. Or set environment variables in `docker-compose.yml`
 3. Or use the admin panel at `/admin/system` after installation
 
+### Troubleshooting
+
+If the automatic resource detection fails during installation:
+
+1. **Check if running on Windows**: The installer is designed for Unix/Linux. On Windows, run in WSL or Docker Desktop.
+2. **Manual resource detection**: Run `./scripts/set-resource-limits.sh` to manually detect and update limits
+3. **Use defaults**: The installer will fall back to safe defaults (2 CPU cores, 4GB RAM) if detection fails
+
 ### Available Limits
 
 - **Docker CPU**: Half of host CPU cores (minimum 1)
