@@ -141,6 +141,15 @@ All configuration knobs from upstream MeTube carry over. Set environment variabl
 
 MeTube Extended automatically detects your host system specifications and configures resource limits to use only half of available resources for optimal performance.
 
+### Features
+
+- **Automatic Detection**: Detects host CPU cores and memory during installation
+- **Docker Limits**: Sets container resource limits (CPU, memory, IOPS)
+- **Application Limits**: Configures app-specific limits (CPU %, memory, network bandwidth)
+- **Real-time Monitoring**: Tracks resource usage and logs warnings when limits are exceeded
+- **Admin Controls**: Web interface to view and adjust limits
+- **Dynamic Updates**: Restart application to apply new limits
+
 ### Automatic Configuration
 
 The one-liner installer automatically:
