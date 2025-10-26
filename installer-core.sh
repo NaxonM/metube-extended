@@ -98,21 +98,31 @@ detect_host_resources() {
     local HOST_CPUS=4
     local HOST_MEMORY_GB=8
 
-    # Try to detect CPU cores (Linux/Unix optimized)
+    # Try to detect CPU cores (simple approach without timeout)
     if command -v nproc >/dev/null 2>&1; then
-        HOST_CPUS=$(nproc 2>/dev/null || echo 4)
+        HOST_CPUS=$(nproc 2>/dev/null || echo 4) 2>/dev/null
     elif command -v sysctl >/dev/null 2>&1; then
-        HOST_CPUS=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
+        HOST_CPUS=$(sysctl -n hw.ncpu 2>/dev/null || echo 4) 2>/dev/null
+    elif command -v wmic >/dev/null 2>&1; then
+        # Windows fallback using wmic
+        HOST_CPUS=$(wmic cpu get NumberOfCores 2>/dev/null | tail -1 2>/dev/null || echo 4) 2>/dev/null
     fi
 
-    # Try to detect memory (Linux/Unix optimized)
+    # Try to detect memory (simple approach without timeout)
     if command -v free >/dev/null 2>&1; then
-        HOST_MEMORY_GB=$(free -g 2>/dev/null | awk 'NR==2{printf "%.0f", $2}' 2>/dev/null || echo 8)
+        HOST_MEMORY_GB=$(free -g 2>/dev/null | awk 'NR==2{printf "%.0f", $2}' 2>/dev/null || echo 8) 2>/dev/null
     elif command -v sysctl >/dev/null 2>&1; then
         local HOST_MEMORY_KB
-        HOST_MEMORY_KB=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
-        if [ "$HOST_MEMORY_KB" -gt 0 ]; then
-            HOST_MEMORY_GB=$((HOST_MEMORY_KB / 1024 / 1024 / 1024))
+        HOST_MEMORY_KB=$(sysctl -n hw.memsize 2>/dev/null || echo 0) 2>/dev/null
+        if [ "$HOST_MEMORY_KB" -gt 0 ] 2>/dev/null; then
+            HOST_MEMORY_GB=$((HOST_MEMORY_KB / 1024 / 1024 / 1024)) 2>/dev/null
+        fi
+    elif command -v wmic >/dev/null 2>&1; then
+        # Windows fallback using wmic
+        local HOST_MEMORY_MB
+        HOST_MEMORY_MB=$(wmic ComputerSystem get TotalPhysicalMemory 2>/dev/null | tail -1 2>/dev/null || echo 0) 2>/dev/null
+        if [ "$HOST_MEMORY_MB" -gt 0 ] 2>/dev/null; then
+            HOST_MEMORY_GB=$((HOST_MEMORY_MB / 1024)) 2>/dev/null
         fi
     fi
 
