@@ -119,6 +119,26 @@ check_dependencies() {
     log_success "All dependencies are satisfied."
 }
 
+# --- Resource Detection ---
+detect_system_resources() {
+    local cpu_cores
+    local total_mem_mb
+
+    if command -v nproc &>/dev/null; then
+        cpu_cores=$(nproc)
+    else
+        cpu_cores=$(grep -c ^processor /proc/cpuinfo)
+    fi
+
+    if command -v free &>/dev/null; then
+        total_mem_mb=$(free -m | awk '/^Mem:/{print $2}')
+    else
+        total_mem_mb=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+    fi
+
+    echo "$cpu_cores $total_mem_mb"
+}
+
 # Handles the creation of the .env file on first-time setup.
 handle_config() {
     if [ -f "$ENV_FILE" ]; then
@@ -169,6 +189,25 @@ handle_config() {
     log "Generating configuration file..."
     SECRET_KEY=$(openssl rand -hex 32)
 
+    # --- Resource Limit Configuration ---
+    local metube_cpu_limit
+    local max_concurrent_downloads
+
+    read -p "Do you want to configure resource limits for the application? (recommended) [Y/n] " -n 1 -r; echo
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        read -r cpu_cores total_mem_mb <<<"$(detect_system_resources)"
+        log "Detected system resources: ${cpu_cores} CPU cores, ${total_mem_mb}MB RAM."
+
+        suggested_cpu_limit=$(printf "%.1f" "$(($cpu_cores / 2))")
+        suggested_downloads=$((cpu_cores / 2))
+
+        read -p "Enter CPU limit (e.g., 0.5 for half a core) [${suggested_cpu_limit}]: " metube_cpu_limit
+        metube_cpu_limit=${metube_cpu_limit:-$suggested_cpu_limit}
+
+        read -p "Enter max concurrent downloads [${suggested_downloads}]: " max_concurrent_downloads
+        max_concurrent_downloads=${max_concurrent_downloads:-$suggested_downloads}
+    fi
+
     # Write the main .env file, excluding the Cloudflare token.
     cat <<EOF > "$ENV_FILE"
 # --- General Configuration ---
@@ -179,6 +218,10 @@ LETSENCRYPT_EMAIL="$config_email"
 COMPOSE_PROJECT_NAME="$PROJECT_DIR_NAME"
 HTTP_PORT="${config_http_port}"
 HTTPS_PORT="${config_https_port}"
+
+# --- Resource Limits ---
+METUBE_CPU_LIMIT="${metube_cpu_limit}"
+MAX_CONCURRENT_DOWNLOADS="${max_concurrent_downloads}"
 
 # --- Secret values (DO NOT COMMIT) ---
 ADMIN_USERNAME="$config_admin_user"
