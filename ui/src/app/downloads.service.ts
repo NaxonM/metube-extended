@@ -1114,6 +1114,18 @@ export class DownloadsService {
     );
   }
 
+  public getConcurrentDownloads() {
+    return this.http.get<{max_concurrent_downloads: number}>('admin/concurrent-downloads').pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<{max_concurrent_downloads: number}>(error))
+    );
+  }
+
+  public setConcurrentDownloads(maxConcurrentDownloads: number) {
+    return this.http.post<{max_concurrent_downloads: number}>('admin/concurrent-downloads', {max_concurrent_downloads: maxConcurrentDownloads}).pipe(
+      catchError((error: HttpErrorResponse) => this.handleTypedError<{max_concurrent_downloads: number}>(error))
+    );
+  }
+
   private handleTypedError<T extends Partial<Status>>(error: HttpErrorResponse) {
     const msg = error.error instanceof ErrorEvent ? error.error.message : error.error;
     return of({status: 'error', msg} as T);
