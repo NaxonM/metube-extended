@@ -26,7 +26,7 @@ import mimetypes
 import psutil
 from watchfiles import DefaultFilter, Change, awatch
 
-from ytdl import DownloadQueueNotifier, DownloadQueue, setup_download_queue
+from ytdl import DownloadQueueNotifier, DownloadQueue
 from proxy_downloads import ProxyDownloadManager, ProxySettingsStore
 from gallerydl_manager import (
     GalleryDlManager,
@@ -247,11 +247,6 @@ class Config:
         return (True, '')
 
 config = Config()
-
-if os.path.exists(os.path.join(config.STATE_DIR, 'settings.json')):
-    with open(os.path.join(config.STATE_DIR, 'settings.json'), 'r') as f:
-        settings = json.load(f)
-        config.MAX_CONCURRENT_DOWNLOADS = settings.get('max_concurrent_downloads', config.MAX_CONCURRENT_DOWNLOADS)
 
 gallery_dl_version = detect_gallerydl_version(getattr(config, 'GALLERY_DL_EXEC', 'gallery-dl'))
 
@@ -2258,37 +2253,6 @@ async def admin_system_stats(request):
     session = await get_session(request)
     ensure_admin(session)
 
-@routes.get(config.URL_PREFIX + 'admin/concurrent-downloads')
-async def admin_get_concurrent_downloads(request):
-    session = await get_session(request)
-    ensure_admin(session)
-    return web.json_response({'max_concurrent_downloads': config.MAX_CONCURRENT_DOWNLOADS})
-
-
-@routes.post(config.URL_PREFIX + 'admin/concurrent-downloads')
-async def admin_set_concurrent_downloads(request):
-    session = await get_session(request)
-    ensure_admin(session)
-
-    try:
-        payload = await request.json()
-    except json.JSONDecodeError:
-        raise web.HTTPBadRequest(text='Invalid JSON payload')
-
-    max_concurrent_downloads = payload.get('max_concurrent_downloads')
-
-    if max_concurrent_downloads is not None:
-        try:
-            max_concurrent_downloads_int = max(int(max_concurrent_downloads), 1)
-        except (TypeError, ValueError):
-            raise web.HTTPBadRequest(text='max_concurrent_downloads must be a positive integer')
-        config.MAX_CONCURRENT_DOWNLOADS = max_concurrent_downloads_int
-        setup_download_queue(config)
-        with open(os.path.join(config.STATE_DIR, 'settings.json'), 'w') as f:
-            json.dump({'max_concurrent_downloads': max_concurrent_downloads_int}, f)
-
-    return web.json_response({'max_concurrent_downloads': config.MAX_CONCURRENT_DOWNLOADS})
-
     cpu_percent = await asyncio.to_thread(psutil.cpu_percent, interval=0.1)
     memory = psutil.virtual_memory()
     swap = psutil.swap_memory()
@@ -2753,7 +2717,6 @@ if __name__ == '__main__':
     log.info(f"Listening on {config.HOST}:{config.PORT}")
 
     setup_auth(app, sio, config, user_store)
-    setup_download_queue(config)
 
     if config.HTTPS:
         ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)

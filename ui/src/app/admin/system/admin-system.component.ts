@@ -9,7 +9,6 @@ import { DownloadsService, SystemStats } from '../../downloads.service';
   standalone: false
 })
 export class AdminSystemComponent implements OnInit, OnDestroy {
-  maxConcurrentDownloads: number;
   systemStats: SystemStats | null = null;
   systemStatsError = '';
   systemStatsLoading = false;
@@ -23,15 +22,6 @@ export class AdminSystemComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.fetchSystemStats(true);
     this.systemStatsIntervalId = window.setInterval(() => this.fetchSystemStats(), 5000);
-    this.downloads.getConcurrentDownloads().subscribe(response => {
-      this.maxConcurrentDownloads = response.max_concurrent_downloads;
-    });
-  }
-
-  saveConcurrentDownloads(): void {
-    this.downloads.setConcurrentDownloads(this.maxConcurrentDownloads).subscribe(response => {
-      this.maxConcurrentDownloads = response.max_concurrent_downloads;
-    });
   }
 
   ngOnDestroy(): void {

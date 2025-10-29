@@ -20,7 +20,3 @@ services:
       - "YTDL_OPTIONS={}"
     env_file:
       - .env
-    deploy:
-      resources:
-        limits:
-          cpus: "${METUBE_CPU_LIMIT:-'0.5'}"
